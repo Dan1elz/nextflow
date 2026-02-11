@@ -4,6 +4,9 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>nextflow</AssemblyName>
+    <!-- Evita erro "No such file or directory" no Docker (Linux): não gera executável nativo -->
+    <UseAppHost>false</UseAppHost>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +20,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Scrutor" Version="6.1.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Newtonsoft" Version="7.2.0" />
     <PackageReference Include="Swashbuckle.AspNetCore.Filters" Version="8.0.2" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
   </ItemGroup>

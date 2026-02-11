@@ -39,6 +39,19 @@ public class Program
         // *** CONFIGURAÇÃO DO SWAGGER ***
         builder.Services.AddSwaggerGen(opt =>
         {
+            opt.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "Nextflow API",
+                Version = "v1",
+                Description = "API do sistema Nextflow"
+            });
+            // Evita conflito de schema entre DTOs com mesmo nome em assemblies diferentes
+            opt.CustomSchemaIds(type => type.FullName?.Replace("+", ".") ?? type.Name);
+            // Schema de upload de arquivo (evita erro 500 ao gerar swagger.json com IFormFile/IFileData)
+            opt.MapType(typeof(IFormFile), () => new OpenApiSchema { Type = "string", Format = "binary" });
+            opt.MapType(typeof(IFileData), () => new OpenApiSchema { Type = "string", Format = "binary" });
+            opt.MapType(typeof(DateOnly), () => new OpenApiSchema { Type = "string", Format = "date" });
+            opt.MapType(typeof(DateOnly?), () => new OpenApiSchema { Type = "string", Format = "date", Nullable = true });
             opt.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Description = "Standard Authorization header using the Bearer scheme (\"bearer {token}\")",
@@ -65,6 +78,7 @@ public class Program
                 }
             });
         });
+        builder.Services.AddSwaggerGenNewtonsoftSupport();
 
         // *** CONFIGURAÇÃO DE AUTENTICAÇÃO JWT ***
         var key = Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:Key"]!);
@@ -155,7 +169,7 @@ public class Program
             app.UseSwagger();
             app.UseSwaggerUI(c =>
             {
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Executa Financeiro API V2");
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Nextflow API V1");
                 c.RoutePrefix = string.Empty;
             });
         }

@@ -1,8 +1,9 @@
-using Nextflow.Domain.Dtos;
-
 namespace Nextflow.Dtos;
 
-public class ProductRequestDto : UpdateProductDto
+/// <summary>
+/// DTO para criação de produto (POST) com multipart/form-data. Herda de UpdateProductRequestDto e adiciona Image.
+/// </summary>
+public class ProductRequestDto : UpdateProductRequestDto
 {
-    public new IFormFile? Image { get; set; }
+    public IFormFile? Image { get; set; }
 }

@@ -28,9 +28,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.development
+    working_dir: /src
     volumes:
       - .:/src
       - nextflow_nuget_cache:/root/.nuget/packages
+      # Evita "Access denied" no build no Windows: bin/obj ficam em volumes do Docker
+      - nextflow_backend_bin:/src/nextflow/bin
+      - nextflow_backend_obj:/src/nextflow/obj
+      - nextflow_backend_app_bin:/src/nextflow.Application/bin
+      - nextflow_backend_app_obj:/src/nextflow.Application/obj
+      - nextflow_backend_domain_bin:/src/nextflow.Domain/bin
+      - nextflow_backend_domain_obj:/src/nextflow.Domain/obj
+      - nextflow_backend_infra_bin:/src/nextflow.Infrastructure/bin
+      - nextflow_backend_infra_obj:/src/nextflow.Infrastructure/obj
     env_file:
       - .env
     environment:
@@ -51,3 +61,11 @@ networks:
 volumes:
   nextflow_postgres_data_dev:
   nextflow_nuget_cache:
+  nextflow_backend_bin:
+  nextflow_backend_obj:
+  nextflow_backend_app_bin:
+  nextflow_backend_app_obj:
+  nextflow_backend_domain_bin:
+  nextflow_backend_domain_obj:
+  nextflow_backend_infra_bin:
+  nextflow_backend_infra_obj:

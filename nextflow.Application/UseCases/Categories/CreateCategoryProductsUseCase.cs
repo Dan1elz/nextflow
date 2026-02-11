@@ -28,7 +28,7 @@ public class CreateCategoryProductsUseCase(ICategoryProductRepository repository
         }))];
 
         await _repository.AddRangeAsync(newCategoryProducts, ct);
-        return [.. newCategoryProducts.Select(c => new CategoryResponseDto(c.Category!))];
+        return [.. categories.Select(c => new CategoryResponseDto(c))];
 
     }
 }

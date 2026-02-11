@@ -22,8 +22,10 @@ public class SuppliersController(
 {
     [HttpPost]
     [RoleAuthorize(RoleEnum.Admin)]
-    public async Task<IActionResult> Create([FromBody] CreateSupplierDto dto, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] CreateSupplierDto? dto, CancellationToken ct)
     {
+        if (dto is null)
+            return BadRequest("O corpo da requisição é obrigatório. Envie um JSON com Name e CNPJ.");
         var createdSupplier = await createUseCase.Execute(dto, ct);
         return CreatedAtAction(nameof(GetById), new { id = createdSupplier.Id }, createdSupplier);
     }

@@ -52,7 +52,12 @@ public class ProductResponseDto : BaseDto
 
     public ProductResponseDto() { }
 
-    public ProductResponseDto(Product entity)
+    public ProductResponseDto(Product entity) : this(entity, null) { }
+
+    /// <summary>
+    /// Construtor com categorias opcionais (ex.: após criar produto, quando CategoryProducts ainda não têm Category carregada).
+    /// </summary>
+    public ProductResponseDto(Product entity, List<CategoryResponseDto>? categoriesOverride)
     {
         Id = entity.Id;
         SupplierId = entity.SupplierId;
@@ -65,6 +70,8 @@ public class ProductResponseDto : BaseDto
         Price = entity.Price;
         Validity = entity.Validity;
         Image = entity.Image;
-        Categories = [.. entity.CategoryProducts.Select(cp => new CategoryResponseDto(cp.Category!))];
+        Categories = categoriesOverride ?? [.. entity.CategoryProducts
+            .Where(cp => cp.Category != null)
+            .Select(cp => new CategoryResponseDto(cp.Category!))];
     }
 }

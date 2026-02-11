@@ -69,7 +69,7 @@ public class ProductsController(
     }
 
     [HttpPut("{id:guid}/image")]
-    public async Task<IActionResult> UpdateImage([FromRoute] Guid id, [FromForm] IFormFile image, CancellationToken ct)
+    public async Task<IActionResult> UpdateImage([FromRoute] Guid id, IFormFile image, CancellationToken ct)
     {
         if (image == null)
             return BadRequest("Imagem é obrigatória.");

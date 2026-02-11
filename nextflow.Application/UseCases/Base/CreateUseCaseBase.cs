@@ -1,4 +1,5 @@
 using Nextflow.Domain.Dtos.Base;
+using Nextflow.Domain.Exceptions;
 using Nextflow.Domain.Interfaces.Repositories.Base;
 using Nextflow.Domain.Interfaces.UseCases.Base;
 
@@ -14,6 +15,9 @@ public abstract class CreateUseCaseBase<TEntity, TRepository, TRequest, TRespons
 
     public virtual async Task<TResponse> Execute(TRequest dto, CancellationToken ct)
     {
+        if (dto is null)
+            throw new BadRequestException("O corpo da requisição é obrigatório.");
+
         dto.Validate();
 
         await ValidateBusinessRules(dto, ct);

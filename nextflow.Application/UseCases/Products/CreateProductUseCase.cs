@@ -16,14 +16,17 @@ public class CreateProductUseCase(
 {
     protected readonly IStorageService _storageService = storageService;
     protected readonly ICreateCategoryProductsUseCase _createCategoryProductsUseCase = createCategoryProductsUseCase;
+    private List<CategoryResponseDto>? _lastCreatedCategories;
+
     protected override Product MapToEntity(CreateProductDto dto) => new(dto);
 
     protected override ProductResponseDto MapToResponseDto(Product entity)
     {
-        var dto = new ProductResponseDto(entity)
+        var dto = new ProductResponseDto(entity, _lastCreatedCategories)
         {
             Image = _storageService.GetFileUrl(entity.Image)
         };
+        _lastCreatedCategories = null;
         return dto;
     }
 
@@ -32,9 +35,14 @@ public class CreateProductUseCase(
         if (dto.Image != null)
             entity.UpdateImage(await _storageService.SaveAsync(dto.Image, ct));
     }
+
     protected override async Task AfterPersistence(Product entity, CreateProductDto dto, CancellationToken ct)
     {
         if (dto.CategoryIds != null && dto.CategoryIds.Count > 0)
-            entity.CategoryProducts = [.. (await _createCategoryProductsUseCase.Execute(entity.Id, dto.CategoryIds, ct)).Select(c => new CategoryProduct(new CreateCategoryProductDto { CategoryId = c.Id, ProductId = entity.Id }))];
+        {
+            var categories = await _createCategoryProductsUseCase.Execute(entity.Id, dto.CategoryIds, ct);
+            _lastCreatedCategories = categories;
+            entity.CategoryProducts = [.. categories.Select(c => new CategoryProduct(new CreateCategoryProductDto { CategoryId = c.Id, ProductId = entity.Id }))];
+        }
     }
 }

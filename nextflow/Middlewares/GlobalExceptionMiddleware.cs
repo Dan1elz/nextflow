@@ -1,13 +1,16 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Exceptions;
 
 namespace Nextflow.Middlewares;
 
-public class GlobalExceptionMiddleware(RequestDelegate next)
+public class GlobalExceptionMiddleware(RequestDelegate next, IWebHostEnvironment env)
 {
     private readonly RequestDelegate _next = next;
+    private readonly IWebHostEnvironment _env = env;
 
     public async Task Invoke(HttpContext context)
     {
@@ -20,7 +23,8 @@ public class GlobalExceptionMiddleware(RequestDelegate next)
             await HandleExceptionAsync(context, ex);
         }
     }
-    private static Task HandleExceptionAsync(HttpContext context, Exception ex)
+
+    private Task HandleExceptionAsync(HttpContext context, Exception ex)
     {
         var response = context.Response;
         response.ContentType = "application/json";
@@ -50,8 +54,9 @@ public class GlobalExceptionMiddleware(RequestDelegate next)
                 break;
             default:
                 statusCode = (int)HttpStatusCode.InternalServerError; // 500
-                message = "Erro interno do servidor. Contate o suporte.";
-                Console.WriteLine(ex.Message);
+                message = _env.IsDevelopment() ? ex.ToString() : "Erro interno do servidor. Contate o suporte.";
+                if (_env.IsDevelopment())
+                    Console.WriteLine("[GlobalExceptionMiddleware] " + ex.ToString());
                 break;
         }
         response.StatusCode = statusCode;

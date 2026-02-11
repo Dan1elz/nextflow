@@ -15,11 +15,16 @@ public class LocalStorageService : IStorageService
 
     public string BasePath { get; set; } = "assets/images/products";
 
+    /// <summary>
+    /// Retorna URL da imagem: absoluta se Storage:BaseUrl estiver configurado, caso contrário path relativo (ex.: /assets/images/products/xxx.jpg).
+    /// O frontend deve concatenar a URL da API quando o retorno for path relativo.
+    /// </summary>
     public string? GetFileUrl(string? fileName)
     {
         if (string.IsNullOrWhiteSpace(fileName)) return null;
-        if (string.IsNullOrWhiteSpace(_baseUrl)) return null;
-        return $"{_baseUrl.TrimEnd('/')}/assets/images/products/{fileName}";
+        var path = $"/assets/images/products/{fileName}";
+        if (string.IsNullOrWhiteSpace(_baseUrl)) return path;
+        return $"{_baseUrl.TrimEnd('/')}{path}";
     }
 
     public async Task<byte[]> GetAsync(string fileName, CancellationToken ct)

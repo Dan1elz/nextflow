@@ -9,6 +9,9 @@ using Nextflow.Utils;
 
 namespace Nextflow.Controllers;
 
+[Route("api/[controller]")]
+[ApiController]
+[Authorize]
 public class SuppliersController(
     ICreateUseCase<CreateSupplierDto, SupplierResponseDto> createUseCase,
     IUpdateUseCase<UpdateSupplierDto, SupplierResponseDto> updateUseCase,
@@ -46,7 +49,6 @@ public class SuppliersController(
         return NoContent();
     }
 
-    [Authorize]
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] int offset = 0, [FromQuery] int limit = 10, [FromQuery] string? filters = null, CancellationToken ct = default)
     {
@@ -59,7 +61,6 @@ public class SuppliersController(
         });
     }
 
-    [Authorize]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById([FromRoute] Guid id, CancellationToken ct)
     {

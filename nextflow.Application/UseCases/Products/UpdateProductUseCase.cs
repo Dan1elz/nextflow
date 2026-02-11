@@ -12,20 +12,13 @@ public class UpdateProductUseCase(IProductRepository repository, IStorageService
 {
     protected readonly IStorageService _storageService = storageService;
     protected readonly ICreateCategoryProductsUseCase _createCategoryProductsUseCase = createCategoryProductsUseCase;
-    protected override ProductResponseDto MapToResponseDto(Product entity) => new(entity);
-
-    protected override async Task BeforePersistence(Product entity, UpdateProductDto dto, CancellationToken ct)
+    protected override ProductResponseDto MapToResponseDto(Product entity)
     {
-        if (dto.Image != null)
-            entity.UpdateImage(await _storageService.SaveAsync(dto.Image, ct));
-        else
+        var dto = new ProductResponseDto(entity)
         {
-            if (entity.Image != null)
-            {
-                _storageService.DeleteAsync(entity.Image!);
-                entity.RemoveImage();
-            }
-        }
+            Image = _storageService.GetFileUrl(entity.Image)
+        };
+        return dto;
     }
     protected override async Task AfterPersistence(Product entity, UpdateProductDto dto, CancellationToken ct)
     {

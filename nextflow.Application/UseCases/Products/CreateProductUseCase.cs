@@ -18,7 +18,14 @@ public class CreateProductUseCase(
     protected readonly ICreateCategoryProductsUseCase _createCategoryProductsUseCase = createCategoryProductsUseCase;
     protected override Product MapToEntity(CreateProductDto dto) => new(dto);
 
-    protected override ProductResponseDto MapToResponseDto(Product entity) => new(entity);
+    protected override ProductResponseDto MapToResponseDto(Product entity)
+    {
+        var dto = new ProductResponseDto(entity)
+        {
+            Image = _storageService.GetFileUrl(entity.Image)
+        };
+        return dto;
+    }
 
     protected override async Task BeforePersistence(Product entity, CreateProductDto dto, CancellationToken ct)
     {

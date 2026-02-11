@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nextflow.Domain.Dtos;
+using Nextflow.Domain.Interfaces.UseCases;
 using Nextflow.Domain.Interfaces.UseCases.Base;
 using Nextflow.Domain.Models;
 using Nextflow.Dtos;
@@ -16,11 +17,13 @@ public class ProductsController(
     IUpdateUseCase<UpdateProductDto, ProductResponseDto> updateUseCase,
     IDeleteUseCase<Product> deleteUseCase,
     IGetAllUseCase<Product, ProductResponseDto> getAllProductsUseCase,
-    IGetByIdUseCase<ProductResponseDto> getProductByIdUseCase
+    IGetByIdUseCase<ProductResponseDto> getProductByIdUseCase,
+    IUpdateProductImageUseCase updateProductImageUseCase,
+    IRemoveProductImageUseCase removeProductImageUseCase
 ) : ControllerBase
 {
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] ProductRequestDto request, CancellationToken ct)
+    public async Task<IActionResult> Create([FromForm] ProductRequestDto request, CancellationToken ct)
     {
         var dto = new CreateProductDto
         {
@@ -41,7 +44,7 @@ public class ProductsController(
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] ProductRequestDto request, CancellationToken ct)
+    public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] UpdateProductRequestDto request, CancellationToken ct)
     {
         var dto = new UpdateProductDto
         {
@@ -49,7 +52,7 @@ public class ProductsController(
             ProductCode = request.ProductCode,
             Name = request.Name,
             Description = request.Description,
-            Image = request.Image != null ? new FormFileAdapter(request.Image) : null,
+            Image = null,
             CategoryIds = request.CategoryIds,
             Quantity = request.Quantity,
             UnitType = request.UnitType,
@@ -62,6 +65,32 @@ public class ProductsController(
             Status = 200,
             Message = "Produto atualizado com sucesso.",
             Data = await updateUseCase.Execute(id, dto, ct)
+        });
+    }
+
+    [HttpPut("{id:guid}/image")]
+    public async Task<IActionResult> UpdateImage([FromRoute] Guid id, [FromForm] IFormFile image, CancellationToken ct)
+    {
+        if (image == null)
+            return BadRequest("Imagem é obrigatória.");
+        var result = await updateProductImageUseCase.Execute(id, new FormFileAdapter(image), ct);
+        return Ok(new ApiResponse<ProductResponseDto>
+        {
+            Status = 200,
+            Message = "Imagem do produto atualizada com sucesso.",
+            Data = result
+        });
+    }
+
+    [HttpDelete("{id:guid}/image")]
+    public async Task<IActionResult> RemoveImage([FromRoute] Guid id, CancellationToken ct)
+    {
+        var result = await removeProductImageUseCase.Execute(id, ct);
+        return Ok(new ApiResponse<ProductResponseDto>
+        {
+            Status = 200,
+            Message = "Imagem do produto removida com sucesso.",
+            Data = result
         });
     }
 

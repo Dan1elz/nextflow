@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Nextflow.Domain.Exceptions;
 using Nextflow.Domain.Interfaces.Utils;
 
@@ -5,7 +6,22 @@ namespace Nextflow.Application.Utils;
 
 public class LocalStorageService : IStorageService
 {
+    private readonly string _baseUrl;
+
+    public LocalStorageService(IConfiguration configuration)
+    {
+        _baseUrl = configuration["Storage:BaseUrl"] ?? configuration["Urls:Application"] ?? "";
+    }
+
     public string BasePath { get; set; } = "assets/images/products";
+
+    public string? GetFileUrl(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName)) return null;
+        if (string.IsNullOrWhiteSpace(_baseUrl)) return null;
+        return $"{_baseUrl.TrimEnd('/')}/assets/images/products/{fileName}";
+    }
+
     public async Task<byte[]> GetAsync(string fileName, CancellationToken ct)
     {
         var filePath = Path.Combine(BasePath, fileName);
@@ -18,7 +34,7 @@ public class LocalStorageService : IStorageService
     {
         if (file == null) throw new BadRequestException("O arquivo é obrigatório");
 
-        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
         var extension = Path.GetExtension(file.FileName).ToLower();
         if (!allowedExtensions.Contains(extension)) throw new BadRequestException("Extensão não permitida");
 

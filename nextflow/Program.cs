@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Microsoft.Extensions.FileProviders;
 using Newtonsoft.Json;
 using Nextflow.Application.UseCases.Users;
 using Nextflow.Application.Utils;
@@ -166,6 +167,14 @@ public class Program
 
         app.UseHttpsRedirection();
         app.UseStaticFiles();
+        // Servir arquivos salvos em "assets/" (ex.: imagens de produtos)
+        var assetsRoot = Path.Combine(app.Environment.ContentRootPath, "assets");
+        Directory.CreateDirectory(assetsRoot);
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new PhysicalFileProvider(assetsRoot),
+            RequestPath = "/assets"
+        });
         app.UseCors();
         app.UseRouting();
 

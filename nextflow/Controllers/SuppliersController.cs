@@ -16,6 +16,7 @@ public class SuppliersController(
     ICreateUseCase<CreateSupplierDto, SupplierResponseDto> createUseCase,
     IUpdateUseCase<UpdateSupplierDto, SupplierResponseDto> updateUseCase,
     IDeleteUseCase<Supplier> deleteUseCase,
+    IReactivateUseCase<Supplier> reactivateSupplierUseCase,
     IGetAllUseCase<Supplier, SupplierResponseDto> getAllSuppliersUseCase,
     IGetByIdUseCase<SupplierResponseDto> getSupplierByIdUseCase
 ) : ControllerBase
@@ -51,10 +52,23 @@ public class SuppliersController(
         return NoContent();
     }
 
+    [HttpPatch("reactivate/{id:guid}")]
+    [RoleAuthorize(RoleEnum.Admin)]
+    public async Task<IActionResult> Reactivate([FromRoute] Guid id, CancellationToken ct)
+    {
+        await reactivateSupplierUseCase.Execute(id, ct);
+
+        return Ok(new ApiResponseMessage
+        {
+            Status = 200,
+            Message = "Fornecedor reativado com sucesso.",
+        });
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] int offset = 0, [FromQuery] int limit = 10, [FromQuery] string? filters = null, CancellationToken ct = default)
     {
-        var filtersDict = FilterHelper.EnsureDefault(FilterHelper.Parse(filters), "isActive", "true");
+        var filtersDict = FilterHelper.Parse(filters);
         return Ok(new ApiResponse<ApiResponseTable<SupplierResponseDto>>
         {
             Status = 200,

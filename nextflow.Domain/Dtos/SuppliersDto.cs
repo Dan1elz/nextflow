@@ -20,6 +20,7 @@ public class SupplierResponseDto : BaseDto
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string CNPJ { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
 
     public SupplierResponseDto() { }
 
@@ -28,5 +29,6 @@ public class SupplierResponseDto : BaseDto
         Id = entity.Id;
         Name = entity.Name;
         CNPJ = entity.CNPJ;
+        IsActive = entity.IsActive;
     }
 }

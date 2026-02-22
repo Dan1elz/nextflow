@@ -25,8 +25,8 @@ A estrutura baseia-se nos seguintes arquivos:
 
 * **Dockerfile:** Responsável por gerar a imagem do backend pronta para execução (produção/homologação).
 * **Dockerfile.development:** Imagem voltada para desenvolvimento local, com hot reload e ferramentas adicionais.
-* **docker-compose.staging.yml:** Orquestração do backend e dependências para ambientes de homologação/produção.
-* **docker-compose.development.yml:** Orquestração para ambiente de desenvolvimento local.
+* **compose.staging.yaml:** Orquestração do backend e dependências para ambientes de homologação/produção.
+* **compose.development.yaml:** Orquestração para ambiente de desenvolvimento local.
 
 ---
 
@@ -44,7 +44,7 @@ Certifique-se de possuir um arquivo `.env` na raiz do backend (copie do `.env.ex
 Para iniciar:
 
 ```bash
-docker compose -f docker-compose.development.yml up -d --build
+docker compose -f compose.development.yaml up -d --build
 ```
 
 > **Acesso:**
@@ -60,7 +60,7 @@ As variáveis sensíveis são injetadas **no momento da execução**, garantindo
 ### Comando de subida (Windows)
 
 ```bash
-docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Paulo & set POSTGRES_DB=nextflow_staging_db & set POSTGRES_USER=admin_staging & set POSTGRES_PASSWORD=senha_segura_staging_123 & set JWT_KEY=chave_jwt_muito_segura_para_staging_32_chars & set BACKEND_PORT=8082 & set POSTGRES_PORT=5434 & docker compose -f docker-compose.staging.yml up -d --build
+docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Paulo & set POSTGRES_DB=nextflow_staging_db & set POSTGRES_USER=admin_staging & set POSTGRES_PASSWORD=senha_segura_staging_123 & set JWT_KEY=chave_jwt_muito_segura_para_staging_32_chars & set BACKEND_PORT=8082 & set POSTGRES_PORT=5434 & docker compose -f compose.staging.yaml up -d --build
 
 ```
 
@@ -89,10 +89,10 @@ docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Pau
 
 ```bash
 # Desenvolvimento
-docker compose -f docker-compose.development.yml logs -f backend
+docker compose -f compose.development.yaml logs -f backend
 
 # Homologação
-docker compose -f docker-compose.staging.yml logs -f backend
+docker compose -f compose.staging.yaml logs -f backend
 ```
 
 ---
@@ -114,7 +114,7 @@ docker exec -it -e TERM=xterm nextflow-staging-backend-1 sh
 ### Parar o Ambiente
 
 ```bash
-docker compose -f docker-compose.development.yml down
+docker compose -f compose.development.yaml down
 ```
 
 *(Nota: O nome do container pode variar de acordo com a pasta raiz do projeto. Caso falhe, utilize `docker ps` para identificar o nome correto.)*

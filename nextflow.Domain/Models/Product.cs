@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Enums;
@@ -10,36 +10,57 @@ using Nextflow.Domain.Models;
 namespace Nextflow.Domain.Models;
 
 [Table("products")]
-public class Product : BaseModel, IUpdatable<UpdateProductDto>
+public class Product : BaseModel, IUpdatable<UpdateProductDto>, IDeletable
 {
-    [ForeignKey("suppliers"), Required(ErrorMessage = "O Fornecedor é obrigatório.")]
+    [ForeignKey("suppliers"), Required(ErrorMessage = "O Fornecedor Ã© obrigatÃ³rio.")]
     public Guid SupplierId { get; private set; }
     public virtual Supplier? Supplier { get; set; }
 
-    [Required(ErrorMessage = "O código é obrigatório")]
+    [Required(ErrorMessage = "O cÃ³digo Ã© obrigatÃ³rio")]
     public string ProductCode { get; private set; } = string.Empty;
 
-    [Required(ErrorMessage = "O nome é obrigatório"), StringLength(100, ErrorMessage = "O nome não pode exceder 100 caracteres")]
+    [Required(ErrorMessage = "O nome Ã© obrigatÃ³rio"), StringLength(100, ErrorMessage = "O nome nÃ£o pode exceder 100 caracteres")]
     public string Name { get; private set; } = string.Empty;
 
-    [Required(ErrorMessage = "A descrição é obrigatória"), StringLength(500, ErrorMessage = "A descrição não pode exceder 500 caracteres")]
+    [Required(ErrorMessage = "A descriÃ§Ã£o Ã© obrigatÃ³ria"), StringLength(500, ErrorMessage = "A descriÃ§Ã£o nÃ£o pode exceder 500 caracteres")]
     public string Description { get; private set; } = string.Empty;
 
-    [StringLength(255, ErrorMessage = "O caminho da imagem não pode exceder 255 caracteres")]
+    [StringLength(255, ErrorMessage = "O caminho da imagem nÃ£o pode exceder 255 caracteres")]
     public string? Image { get; private set; } = string.Empty;
 
-    [Required(ErrorMessage = "A quantidade em estoque é obrigatória"), Range(0, double.MaxValue, ErrorMessage = "A quantidade em estoque não pode ser negativa")]
+    [Required(ErrorMessage = "A quantidade em estoque Ã© obrigatÃ³ria"), Range(0, double.MaxValue, ErrorMessage = "A quantidade em estoque nÃ£o pode ser negativa")]
     public decimal Quantity { get; private set; }
 
-    [Required(ErrorMessage = "O tipo de unidade é obrigatório")]
+    [Required(ErrorMessage = "O tipo de unidade Ã© obrigatÃ³rio")]
     public UnitType UnitType { get; private set; }
 
-    [Required(ErrorMessage = "O preço é obrigatório"), Range(0.0, double.MaxValue, ErrorMessage = "O preço não pode ser negativo")]
+    [Required(ErrorMessage = "O preÃ§o Ã© obrigatÃ³rio"), Range(0.0, double.MaxValue, ErrorMessage = "O preÃ§o nÃ£o pode ser negativo")]
     public decimal Price { get; private set; }
     public DateOnly? Validity { get; private set; }
     public virtual ICollection<StockMovement> StockMovements { get; set; } = [];
     public virtual ICollection<CategoryProduct> CategoryProducts { get; set; } = [];
     public virtual ICollection<OrderItem> OrderItems { get; set; } = [];
+
+    public DateTime? UpdateAt { get; private set; }
+    public bool IsActive { get; set; } = true;
+
+    public void Update()
+    {
+        UpdateAt = DateTime.UtcNow;
+    }
+    public void Delete()
+    {
+        IsActive = false;
+        UpdateAt = DateTime.UtcNow;
+    }
+    public void Reactivate()
+    {
+        if (!IsActive)
+        {
+            IsActive = true;
+            UpdateAt = DateTime.UtcNow;
+        }
+    }
 
     public override string Preposition => "o";
     public override string Singular => "produto";
@@ -68,42 +89,44 @@ public class Product : BaseModel, IUpdatable<UpdateProductDto>
         UnitType = dto.UnitType;
         Price = dto.Price;
         Validity = dto.Validity;
-        base.Update();
+        Update();
     }
 
     public void UpdateImage(string? imagePath)
     {
         Image = imagePath;
-        base.Update();
+        Update();
     }
     public void RemoveImage()
     {
         Image = null;
-        base.Update();
+        Update();
     }
 
     public void SetMovementStock(StockMovementDto dto)
     {
-        if (dto.Quantity <= 0)
+        var quantity = (decimal)dto.Quantity;
+        if (quantity <= 0)
             throw new BadRequestException("A quantidade movimentada deve ser maior que zero.");
 
         switch (dto.MovementType)
         {
             case MovementType.Entry:
             case MovementType.Return:
-                Quantity += dto.Quantity;
+                Quantity += quantity;
                 break;
             case MovementType.Exit:
             case MovementType.Sales:
-                if (dto.Quantity > Quantity)
-                    throw new BadRequestException("A quantidade em estoque não pode ser negativa.");
-                Quantity -= dto.Quantity;
+                if (quantity > Quantity)
+                    throw new BadRequestException("A quantidade em estoque nÃ£o pode ser negativa.");
+                Quantity -= quantity;
                 break;
             case MovementType.Adjustment:
-                Quantity = dto.Quantity;
+                Quantity = quantity;
                 break;
             default:
-                throw new BadRequestException("Tipo de movimento inválido.");
+                throw new BadRequestException("Tipo de movimento invÃ¡lido.");
         }
     }
 }
+

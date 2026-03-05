@@ -12,7 +12,7 @@ public class StockMovementDto : BaseDto
     public Guid ProductId { get; set; }
 
     [Required(ErrorMessage = "A quantidade é obrigatória."), Range(0.01, double.MaxValue, ErrorMessage = "A quantidade deve ser maior que zero.")]
-    public decimal Quantity { get; set; }
+    public double Quantity { get; set; }
 
     [Required(ErrorMessage = "O tipo de movimento é obrigatório.")]
     public MovementType MovementType { get; set; }
@@ -27,18 +27,18 @@ public class CreateStockMovementDto : StockMovementDto
     public Guid UserId { get; set; }
 
     [Required(ErrorMessage = "A cotação é obrigatória."), Range(0.0, double.MaxValue, ErrorMessage = "A cotação não pode ser negativa.")]
-    public decimal Quotation { get; set; }
+    public decimal Quote { get; set; }
 
     public CreateStockMovementDto() : base() { }
 
-    public CreateStockMovementDto(StockMovementDto dto, Guid userId, decimal quotation) : base()
+    public CreateStockMovementDto(StockMovementDto dto, Guid userId, decimal quote) : base()
     {
         ProductId = dto.ProductId;
         Quantity = dto.Quantity;
         MovementType = dto.MovementType;
         Description = dto.Description;
         UserId = userId;
-        Quotation = quotation;
+        Quote = quote;
     }
 }
 
@@ -47,12 +47,12 @@ public class StockMovementResponseDto : BaseDto
     public Guid Id { get; set; }
     public Guid ProductId { get; set; }
     public ProductResponseDto? Product { get; set; }
-    public decimal Quantity { get; set; }
+    public double Quantity { get; set; }
     public MovementType MovementType { get; set; }
     public string? Description { get; set; } = string.Empty;
     public Guid UserId { get; set; }
     public UserResponseDto? User { get; set; }
-    public decimal Quotation { get; set; }
+    public decimal Quote { get; set; }
 
     public StockMovementResponseDto() { }
 
@@ -65,6 +65,6 @@ public class StockMovementResponseDto : BaseDto
         Description = entity.Description;
         UserId = entity.UserId;
         User = entity.User != null ? new UserResponseDto(entity.User) : null;
-        Quotation = entity.Quotation;
+        Quote = entity.Quote;
     }
 }

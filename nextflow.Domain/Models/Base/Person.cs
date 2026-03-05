@@ -3,7 +3,9 @@ using Nextflow.Domain.Dtos.Base;
 
 namespace Nextflow.Domain.Models.Base;
 
-public class Person : BaseModel
+using Nextflow.Domain.Interfaces.Models;
+
+public abstract class Person : BaseModel, IDeletable
 {
     [StringLength(25, MinimumLength = 2, ErrorMessage = "O Nome deve ter no máximo 25 caracteres e no mínimo 2 caracteres."), Required(ErrorMessage = "O Nome é obrigatório.")]
     public string Name { get; set; } = string.Empty;
@@ -17,7 +19,30 @@ public class Person : BaseModel
     [Required(ErrorMessage = "A Data de Nascimento é obrigatória.")]
     public DateOnly BirthDate { get; set; }
 
-    public Person() : base() { }
+    public DateTime? UpdateAt { get; private set; }
+    public bool IsActive { get; set; } = true;
+
+    public void Update()
+    {
+        UpdateAt = DateTime.UtcNow;
+    }
+
+    public void Delete()
+    {
+        IsActive = false;
+        UpdateAt = DateTime.UtcNow;
+    }
+
+    public void Reactivate()
+    {
+        if (!IsActive)
+        {
+            IsActive = true;
+            UpdateAt = DateTime.UtcNow;
+        }
+    }
+
+    protected Person() : base() { }
 
     protected Person(CreatePersonDto dto) : base()
     {
@@ -33,6 +58,6 @@ public class Person : BaseModel
         LastName = dto.LastName;
         CPF = dto.CPF;
         BirthDate = dto.BirthDate;
-        base.Update();
+        Update();
     }
 }

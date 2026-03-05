@@ -7,7 +7,7 @@ using Nextflow.Domain.Dtos;
 namespace Nextflow.Domain.Models;
 
 [Table("countries")]
-public class Country : BaseModel, IUpdatable<UpdateCountryDto>
+public class Country : BaseModel, IUpdatable<UpdateCountryDto>, IDeletable
 {
     [StringLength(100, MinimumLength = 2, ErrorMessage = "O Nome do país deve ter no máximo 100 caracteres e no mínimo 2 caracteres."), Required(ErrorMessage = "O Nome do país é obrigatório.")]
     public string Name { get; private set; } = string.Empty;
@@ -18,6 +18,27 @@ public class Country : BaseModel, IUpdatable<UpdateCountryDto>
     [StringLength(255, MinimumLength = 2, ErrorMessage = "O código do Bacen deve ter no máximo 255 caracteres e no mínimo 2 caracteres.")]
     public string? BacenCode { get; private set; } = string.Empty;
     public virtual ICollection<State> States { get; set; } = [];
+
+    public DateTime? UpdateAt { get; private set; }
+    public bool IsActive { get; set; } = true;
+
+    public void Update()
+    {
+        UpdateAt = DateTime.UtcNow;
+    }
+    public void Delete()
+    {
+        IsActive = false;
+        UpdateAt = DateTime.UtcNow;
+    }
+    public void Reactivate()
+    {
+        if (!IsActive)
+        {
+            IsActive = true;
+            UpdateAt = DateTime.UtcNow;
+        }
+    }
 
     public override string Preposition => "o";
     public override string Singular => "país";
@@ -37,7 +58,8 @@ public class Country : BaseModel, IUpdatable<UpdateCountryDto>
         Name = dto.Name;
         AcronymIso = dto.AcronymIso;
         BacenCode = dto.BacenCode;
-        base.Update();
+        Update();
     }
 
 }
+

@@ -27,7 +27,7 @@ public class DeleteOrderUseCase(
             var stockMovementDto = new CreateStockMovementDto
             {
                 ProductId = item.ProductId,
-                Quantity = item.Quantity,
+                Quantity = (double)item.Quantity,
                 MovementType = MovementType.Return,
                 Description = $"Estorno do pedido {entity.Id}",
                 UserId = userId.Value

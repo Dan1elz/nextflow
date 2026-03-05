@@ -2,6 +2,7 @@ using Nextflow.Domain.Exceptions;
 using Nextflow.Domain.Interfaces.Repositories.Base;
 using Nextflow.Domain.Interfaces.UseCases.Base;
 using Nextflow.Domain.Models.Base;
+using Nextflow.Domain.Interfaces.Models;
 
 namespace Nextflow.Application.UseCases.Base;
 
@@ -20,12 +21,15 @@ public abstract class ReactivateUseCaseBase<TEntity, TRepository>(TRepository re
         if (entity == null)
             throw new NotFoundException($"{entity?.Singular} com id {id} não encontrad{entity?.Preposition}.");
 
-        if (entity.IsActive)
+        if (entity is not IDeletable deletable)
+            throw new BadRequestException($"{entity.Singular} não suporta reativação.");
+
+        if (deletable.IsActive)
             throw new BadRequestException($"{entity.Singular} já está ativ{entity.Preposition}.");
 
         ValidateBusinessRules(entity);
 
-        entity.Reactivate();
+        deletable.Reactivate();
 
         await PerformSideEffects(entity, ct, userId);
 

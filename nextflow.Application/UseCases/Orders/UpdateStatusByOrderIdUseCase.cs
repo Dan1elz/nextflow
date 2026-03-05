@@ -43,7 +43,7 @@ public class UpdateStatusByOrderIdUseCase(IOrderRepository repository, ICreateSt
                 await _createStockMovementUseCase.Execute(new CreateStockMovementDto
                 {
                     ProductId = item.ProductId,
-                    Quantity = item.Quantity,
+                    Quantity = (double)item.Quantity,
                     MovementType = MovementType.Return,
                     Description = $"Estorno do pedido {entity.Id}",
                     UserId = userId

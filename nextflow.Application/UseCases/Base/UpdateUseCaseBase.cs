@@ -26,7 +26,7 @@ public abstract class UpdateUseCaseBase<TEntity, TRepository, TRequest, TRespons
         if (entity == null)
             throw new NotFoundException($"{typeof(TEntity).Name} com id {id} não encontrado.");
 
-        if (!entity.IsActive)
+        if (entity is IDeletable deletable && !deletable.IsActive)
             throw new BadRequestException($"{typeof(TEntity).Name} está inativo/cancelado e não pode ser editado.");
 
         await ValidateBusinessRules(entity, dto, ct);

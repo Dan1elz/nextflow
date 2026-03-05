@@ -14,7 +14,7 @@ public class StockMovement : BaseModel
     public virtual Product? Product { get; set; }
 
     [Required(ErrorMessage = "A quantidade é obrigatória."), Range(0.01, double.MaxValue, ErrorMessage = "A quantidade deve ser maior que zero.")]
-    public decimal Quantity { get; private set; }
+    public double Quantity { get; private set; }
 
     [Required(ErrorMessage = "O tipo de movimento é obrigatório.")]
     public MovementType MovementType { get; private set; }
@@ -27,7 +27,7 @@ public class StockMovement : BaseModel
     public virtual User? User { get; set; }
 
     [Required(ErrorMessage = "A cotação é obrigatória."), Range(0.0, double.MaxValue, ErrorMessage = "A cotação não pode ser negativa.")]
-    public decimal Quotation { get; private set; }
+    public decimal Quote { get; private set; }
 
     public override string Preposition => "a";
     public override string Singular => "movimentação de estoque";
@@ -42,6 +42,6 @@ public class StockMovement : BaseModel
         MovementType = dto.MovementType;
         Description = dto.Description;
         UserId = dto.UserId;
-        Quotation = dto.Quotation;
+        Quote = dto.Quote;
     }
 }

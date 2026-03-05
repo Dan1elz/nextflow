@@ -9,8 +9,6 @@ public class BaseModel : IEntityMetadata
     [Key]
     public Guid Id { get; private set; }
     public DateTime CreateAt { get; private set; }
-    public DateTime? UpdateAt { get; private set; }
-    public bool IsActive { get; set; } = true;
 
     public virtual string Preposition => throw new NotImplementedException();
     public virtual string Singular => throw new NotImplementedException();
@@ -20,23 +18,5 @@ public class BaseModel : IEntityMetadata
     {
         Id = Guid.NewGuid();
         CreateAt = DateTime.UtcNow;
-    }
-
-    public void Update()
-    {
-        UpdateAt = DateTime.UtcNow;
-    }
-    public void Delete()
-    {
-        IsActive = false;
-        UpdateAt = DateTime.UtcNow;
-    }
-    public void Reactivate()
-    {
-        if (!IsActive)
-        {
-            IsActive = true;
-            UpdateAt = DateTime.UtcNow;
-        }
     }
 }

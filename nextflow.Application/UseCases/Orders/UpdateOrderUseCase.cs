@@ -72,11 +72,11 @@ public class UpdateOrderUseCase(
                     _stockMovementsQueue.Add(new CreateStockMovementDto
                     {
                         ProductId = itemDto.ProductId,
-                        Quantity = Math.Abs(quantityDifference),
+                        Quantity = (double)Math.Abs(quantityDifference),
                         MovementType = movementType,
                         Description = $"Ajuste (Update) do pedido {entity.Id}",
                         UserId = dto.UserId,
-                        Quotation = product.Price
+                        Quote = product.Price
                     });
 
                     existingItem.Update(itemDto);
@@ -94,11 +94,11 @@ public class UpdateOrderUseCase(
                 _stockMovementsQueue.Add(new CreateStockMovementDto
                 {
                     ProductId = itemDto.ProductId,
-                    Quantity = itemDto.Quantity,
+                    Quantity = (double)itemDto.Quantity,
                     MovementType = MovementType.Sales,
                     Description = $"Adição (Update) ao pedido {entity.Id}",
                     UserId = dto.UserId,
-                    Quotation = product.Price
+                    Quote = product.Price
                 });
 
                 await _orderItemRepository.AddAsync(newItem, ct);
@@ -115,11 +115,11 @@ public class UpdateOrderUseCase(
             _stockMovementsQueue.Add(new CreateStockMovementDto
             {
                 ProductId = removed.ProductId,
-                Quantity = removed.Quantity,
+                Quantity = (double)removed.Quantity,
                 MovementType = MovementType.Return,
                 Description = $"Remoção (Update) do pedido {entity.Id}",
                 UserId = dto.UserId,
-                Quotation = removed.UnitPrice
+                Quote = removed.UnitPrice
             });
 
             await _orderItemRepository.RemoveAsync(removed, ct);

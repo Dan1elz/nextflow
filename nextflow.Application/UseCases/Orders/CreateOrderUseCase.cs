@@ -79,11 +79,11 @@ public class CreateOrderUseCase(
             await _createStockMovement.Execute(new CreateStockMovementDto
             {
                 ProductId = item.ProductId,
-                Quantity = item.Quantity,
+                Quantity = (double)item.Quantity,
                 MovementType = MovementType.Sales,
                 Description = $"Movimentação de estoque para o pedido {entity.Id}",
                 UserId = dto.UserId,
-                Quotation = item.UnitPrice
+                Quote = item.UnitPrice
             }, ct);
         }
     }

@@ -7,7 +7,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Nextflow.Domain.Models;
 
 [Table("addresses")]
-public class Address : BaseModel, IUpdatable<UpdateAddressDto>
+public class Address : BaseModel, IUpdatable<UpdateAddressDto>, IDeletable
 {
     [ForeignKey("clients")]
     public Guid? ClientId { get; private set; }
@@ -43,6 +43,27 @@ public class Address : BaseModel, IUpdatable<UpdateAddressDto>
     [StringLength(9, MinimumLength = 9, ErrorMessage = "O CEP deve ter 9 caracteres."), Required(ErrorMessage = "O CEP é obrigatório.")]
     public string ZipCode { get; private set; } = string.Empty;
 
+    public DateTime? UpdateAt { get; private set; }
+    public bool IsActive { get; set; } = true;
+
+    public void Update()
+    {
+        UpdateAt = DateTime.UtcNow;
+    }
+    public void Delete()
+    {
+        IsActive = false;
+        UpdateAt = DateTime.UtcNow;
+    }
+    public void Reactivate()
+    {
+        if (!IsActive)
+        {
+            IsActive = true;
+            UpdateAt = DateTime.UtcNow;
+        }
+    }
+
     public override string Preposition => "o";
     public override string Singular => "endereço";
     public override string Plural => "endereços";
@@ -75,3 +96,4 @@ public class Address : BaseModel, IUpdatable<UpdateAddressDto>
         ZipCode = dto.ZipCode;
     }
 }
+

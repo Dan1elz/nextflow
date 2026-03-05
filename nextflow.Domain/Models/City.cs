@@ -7,7 +7,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Nextflow.Domain.Models;
 
 [Table("cities")]
-public class City : BaseModel, IUpdatable<UpdateCityDto>
+public class City : BaseModel, IUpdatable<UpdateCityDto>, IDeletable
 {
     [StringLength(100, MinimumLength = 2, ErrorMessage = "O Nome da cidade deve ter no máximo 100 caracteres e no mínimo 2 caracteres."), Required(ErrorMessage = "O Nome da cidade é obrigatório.")]
     public string Name { get; private set; } = string.Empty;
@@ -19,6 +19,27 @@ public class City : BaseModel, IUpdatable<UpdateCityDto>
     public Guid StateId { get; private set; }
     public virtual State? State { get; set; }
     public virtual ICollection<Address> Addresses { get; set; } = [];
+
+    public DateTime? UpdateAt { get; private set; }
+    public bool IsActive { get; set; } = true;
+
+    public void Update()
+    {
+        UpdateAt = DateTime.UtcNow;
+    }
+    public void Delete()
+    {
+        IsActive = false;
+        UpdateAt = DateTime.UtcNow;
+    }
+    public void Reactivate()
+    {
+        if (!IsActive)
+        {
+            IsActive = true;
+            UpdateAt = DateTime.UtcNow;
+        }
+    }
 
     public override string Preposition => "a";
     public override string Singular => "cidade";
@@ -38,6 +59,7 @@ public class City : BaseModel, IUpdatable<UpdateCityDto>
         Name = dto.Name;
         IbgeCode = dto.IbgeCode;
         StateId = dto.StateId;
-        base.Update();
+        Update();
     }
 }
+

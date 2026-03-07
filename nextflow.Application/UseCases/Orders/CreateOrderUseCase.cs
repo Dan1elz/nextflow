@@ -83,7 +83,8 @@ public class CreateOrderUseCase(
                 MovementType = MovementType.Sales,
                 Description = $"Movimentação de estoque para o pedido {entity.Id}",
                 UserId = dto.UserId,
-                Quote = item.UnitPrice
+                Quote = item.UnitPrice,
+                IsSystemGenerated = true
             }, ct);
         }
     }

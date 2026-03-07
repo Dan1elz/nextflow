@@ -212,6 +212,72 @@ public sealed class FilterExpressionBuilder<TEntity>
         return And(Expression.Lambda<Func<TEntity, bool>>(orBody, p));
     }
 
+    public FilterExpressionBuilder<TEntity> WhereDoubleGte(
+        FilterSet filters,
+        string key,
+        Expression<Func<TEntity, double>> selector)
+    {
+        if (!filters.TryGetString(key, out var raw)) return this;
+        if (!FilterValueParsers.TryParseDecimal(raw, out var d)) return this;
+        return AndCompare(selector, ExpressionType.GreaterThanOrEqual, (double)d);
+    }
+
+    public FilterExpressionBuilder<TEntity> WhereDoubleLte(
+        FilterSet filters,
+        string key,
+        Expression<Func<TEntity, double>> selector)
+    {
+        if (!filters.TryGetString(key, out var raw)) return this;
+        if (!FilterValueParsers.TryParseDecimal(raw, out var d)) return this;
+        return AndCompare(selector, ExpressionType.LessThanOrEqual, (double)d);
+    }
+
+    public FilterExpressionBuilder<TEntity> WhereEnumEquals<TEnum>(
+        FilterSet filters,
+        string key,
+        Expression<Func<TEntity, TEnum>> selector) where TEnum : struct, Enum
+    {
+        if (!filters.TryGetString(key, out var raw)) return this;
+        if (!FilterValueParsers.TryParseInt(raw, out var i)) return this;
+        if (!Enum.IsDefined(typeof(TEnum), i)) return this;
+        var enumVal = (TEnum)Enum.ToObject(typeof(TEnum), i);
+        return AndEquals(selector, enumVal);
+    }
+
+    public FilterExpressionBuilder<TEntity> WhereNullableDateOnlyLte(
+        FilterSet filters,
+        string key,
+        Expression<Func<TEntity, DateOnly?>> selector)
+    {
+        if (!filters.TryGetString(key, out var raw)) return this;
+        if (!FilterValueParsers.TryParseDateOnly(raw, out var d)) return this;
+
+        var p = Expression.Parameter(typeof(TEntity), "e");
+        var body = new ReplaceParameterVisitor(selector.Parameters[0], p).Visit(selector.Body)!;
+        var hasValue = Expression.Property(body, "HasValue");
+        var value = Expression.Property(body, "Value");
+        var compare = Expression.LessThanOrEqual(value, Expression.Constant(d, typeof(DateOnly)));
+        var combined = Expression.AndAlso(hasValue, compare);
+        return And(Expression.Lambda<Func<TEntity, bool>>(combined, p));
+    }
+
+    public FilterExpressionBuilder<TEntity> WhereNullableDateOnlyGte(
+        FilterSet filters,
+        string key,
+        Expression<Func<TEntity, DateOnly?>> selector)
+    {
+        if (!filters.TryGetString(key, out var raw)) return this;
+        if (!FilterValueParsers.TryParseDateOnly(raw, out var d)) return this;
+
+        var p = Expression.Parameter(typeof(TEntity), "e");
+        var body = new ReplaceParameterVisitor(selector.Parameters[0], p).Visit(selector.Body)!;
+        var hasValue = Expression.Property(body, "HasValue");
+        var value = Expression.Property(body, "Value");
+        var compare = Expression.GreaterThanOrEqual(value, Expression.Constant(d, typeof(DateOnly)));
+        var combined = Expression.AndAlso(hasValue, compare);
+        return And(Expression.Lambda<Func<TEntity, bool>>(combined, p));
+    }
+
     private FilterExpressionBuilder<TEntity> AndEquals<TValue>(
         Expression<Func<TEntity, TValue>> selector,
         TValue value)

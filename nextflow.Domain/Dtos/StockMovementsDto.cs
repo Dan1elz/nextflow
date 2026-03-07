@@ -23,28 +23,31 @@ public class StockMovementDto : BaseDto
 
 public class CreateStockMovementDto : StockMovementDto
 {
-    [NotEmptyGuid(ErrorMessage = "O Usuário é obrigatório.")]
+    [System.Text.Json.Serialization.JsonIgnore]
     public Guid UserId { get; set; }
 
-    [Required(ErrorMessage = "A cotação é obrigatória."), Range(0.0, double.MaxValue, ErrorMessage = "A cotação não pode ser negativa.")]
-    public decimal Quote { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsSystemGenerated { get; set; } = false;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public decimal? Quote { get; set; }
 
     public CreateStockMovementDto() : base() { }
 
-    public CreateStockMovementDto(StockMovementDto dto, Guid userId, decimal quote) : base()
+    public CreateStockMovementDto(StockMovementDto dto, Guid userId) : base()
     {
         ProductId = dto.ProductId;
         Quantity = dto.Quantity;
         MovementType = dto.MovementType;
         Description = dto.Description;
         UserId = userId;
-        Quote = quote;
     }
 }
 
 public class StockMovementResponseDto : BaseDto
 {
     public Guid Id { get; set; }
+    public DateTime CreateAt { get; set; }
     public Guid ProductId { get; set; }
     public ProductResponseDto? Product { get; set; }
     public double Quantity { get; set; }
@@ -58,6 +61,8 @@ public class StockMovementResponseDto : BaseDto
 
     public StockMovementResponseDto(StockMovement entity)
     {
+        Id = entity.Id;
+        CreateAt = entity.CreateAt;
         ProductId = entity.ProductId;
         Product = entity.Product != null ? new ProductResponseDto(entity.Product) : null;
         Quantity = entity.Quantity;

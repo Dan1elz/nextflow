@@ -76,7 +76,8 @@ public class UpdateOrderUseCase(
                         MovementType = movementType,
                         Description = $"Ajuste (Update) do pedido {entity.Id}",
                         UserId = dto.UserId,
-                        Quote = product.Price
+                        Quote = product.Price,
+                        IsSystemGenerated = true
                     });
 
                     existingItem.Update(itemDto);
@@ -98,7 +99,8 @@ public class UpdateOrderUseCase(
                     MovementType = MovementType.Sales,
                     Description = $"Adição (Update) ao pedido {entity.Id}",
                     UserId = dto.UserId,
-                    Quote = product.Price
+                    Quote = product.Price,
+                    IsSystemGenerated = true
                 });
 
                 await _orderItemRepository.AddAsync(newItem, ct);
@@ -119,7 +121,8 @@ public class UpdateOrderUseCase(
                 MovementType = MovementType.Return,
                 Description = $"Remoção (Update) do pedido {entity.Id}",
                 UserId = dto.UserId,
-                Quote = removed.UnitPrice
+                Quote = removed.UnitPrice,
+                IsSystemGenerated = true
             });
 
             await _orderItemRepository.RemoveAsync(removed, ct);

@@ -128,5 +128,28 @@ public class Product : BaseModel, IUpdatable<UpdateProductDto>, IDeletable
                 throw new BadRequestException("Tipo de movimento invÃ¡lido.");
         }
     }
+
+    public void RevertMovementStock(StockMovement movement)
+    {
+        var quantity = (decimal)movement.Quantity;
+
+        switch (movement.MovementType)
+        {
+            case MovementType.Entry:
+            case MovementType.Return:
+                if (quantity > Quantity)
+                    throw new BadRequestException("Ao reverter esta entrada, o estoque ficaria negativo.");
+                Quantity -= quantity;
+                break;
+            case MovementType.Exit:
+            case MovementType.Sales:
+                Quantity += quantity;
+                break;
+            case MovementType.Adjustment:
+                throw new BadRequestException("Não é possível reverter movimentações do tipo Ajuste, pois o saldo anterior é desconhecido.");
+            default:
+                throw new BadRequestException("Tipo de movimento inválido.");
+        }
+    }
 }
 

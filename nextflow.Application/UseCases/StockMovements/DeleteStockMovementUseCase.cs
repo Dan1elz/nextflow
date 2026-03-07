@@ -7,9 +7,11 @@ using Nextflow.Domain.Models;
 
 namespace Nextflow.Application.UseCases.StockMovements;
 
-public class DeleteStockMovementUseCase(IStockMovementRepository repository)
+public class DeleteStockMovementUseCase(IStockMovementRepository repository, IProductRepository productRepository)
      : DeleteUseCaseBase<StockMovement, IStockMovementRepository>(repository)
 {
+    private readonly IProductRepository _productRepository = productRepository;
+
     protected override void ValidateBusinessRules(StockMovement entity)
     {
         if (entity.CreateAt.AddHours(24) < DateTime.UtcNow)
@@ -17,5 +19,14 @@ public class DeleteStockMovementUseCase(IStockMovementRepository repository)
 
         if (entity.MovementType == MovementType.Sales)
             throw new BadRequestException("Não é possível excluir movimentações do tipo venda.");
+    }
+
+    protected override async Task PerformSideEffects(StockMovement entity, CancellationToken ct, Guid? userId = null)
+    {
+        var product = await _productRepository.GetByIdAsync(entity.ProductId, ct)
+            ?? throw new NotFoundException("Produto não encontrado ao reverter a movimentação.");
+            
+        product.RevertMovementStock(entity);
+        await _productRepository.UpdateAsync(product, ct);
     }
 }

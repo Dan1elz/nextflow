@@ -30,7 +30,7 @@ public abstract class BaseRepository<TEntity>(AppDbContext context) : IBaseRepos
         if (includeExpression != null)
             query = includeExpression(query);
 
-        return await query.OrderBy(e => EF.Property<int>(e, "Id")).Skip(offset).Take(limit).ToListAsync(ct);
+        return await query.OrderByDescending(e => EF.Property<DateTime>(e, "CreateAt")).Skip(offset).Take(limit).ToListAsync(ct);
     }
     public virtual async Task<TEntity?> GetAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken ct, Func<IQueryable<TEntity>, IQueryable<TEntity>>? includeExpression = null)
     {

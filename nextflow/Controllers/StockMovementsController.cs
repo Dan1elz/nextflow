@@ -4,6 +4,7 @@ using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Interfaces.UseCases;
 using Nextflow.Domain.Interfaces.UseCases.Base;
 using Nextflow.Domain.Models;
+using Nextflow.Application.Utils;
 using Nextflow.Utils;
 
 namespace Nextflow.Controllers;
@@ -21,6 +22,8 @@ public class StockMovementsController(
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateStockMovementDto dto, CancellationToken ct)
     {
+        dto.UserId = TokenHelper.GetUserId(this.User);
+
         var entity = await createUseCase.Execute(dto, ct);
 
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, entity);

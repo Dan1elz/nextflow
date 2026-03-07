@@ -42,6 +42,11 @@ public class StockMovement : BaseModel
         MovementType = dto.MovementType;
         Description = dto.Description;
         UserId = dto.UserId;
-        Quote = dto.Quote;
+        Quote = dto.Quote ?? 0;
+    }
+
+    public void SetQuote(decimal quote)
+    {
+        Quote = quote;
     }
 }

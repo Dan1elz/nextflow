@@ -154,6 +154,9 @@ public class Program
                 UsersSeeder.Seed(dbContext);
                 CountriesSeeder.Seed(dbContext);
                 CitiesSeeder.Seed(dbContext);
+                SuppliersSeeder.Seed(dbContext);
+                CategoriesSeeder.Seed(dbContext);
+                ProductsSeeder.Seed(dbContext);
             }
             catch (Exception ex)
             {

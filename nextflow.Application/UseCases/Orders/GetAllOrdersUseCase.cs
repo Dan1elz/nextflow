@@ -32,9 +32,13 @@ public class GetAllOrdersUseCase(IOrderRepository repository) : GetAllUseCaseBas
                     // Vendas concluídas
                     builder.And(o => o.Status == OrderStatus.PaymentConfirmed && o.Type == OrderType.Sale);
                     break;
-                case "lost":
-                    // Perdidos
-                    builder.And(o => o.Status == OrderStatus.Canceled || o.Status == OrderStatus.Refunded);
+                case "canceled":
+                    // Cancelados
+                    builder.And(o => o.Status == OrderStatus.Canceled);
+                    break;
+                case "refunded":
+                    // Reembolsados
+                    builder.And(o => o.Status == OrderStatus.Refunded);
                     break;
                 case "expired":
                     // Expirados: pedidos em aberto com tempo de criação maior que 2 semanas

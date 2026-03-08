@@ -12,7 +12,7 @@ public class CreateOrderUseCase(
     IProductRepository productRepository,
     ICreateStockMovementUseCase createStockMovement
 )
-    : CreateUseCaseBase<Order, IOrderRepository, CreateOrderDto, OrderResponseDto>(repository)
+    : CreateUseCaseBase<Order, IOrderRepository, CreateOrderDto, OrderResponseDto>(repository), ICreateOrderUseCase
 {
     private readonly IProductRepository _productRepository = productRepository;
     private readonly ICreateStockMovementUseCase _createStockMovement = createStockMovement;

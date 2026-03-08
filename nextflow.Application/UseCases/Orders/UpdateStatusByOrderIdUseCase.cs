@@ -3,6 +3,7 @@ using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Exceptions;
 using Nextflow.Domain.Interfaces.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 namespace Nextflow.Application.UseCases.Orders;
 
@@ -17,7 +18,7 @@ public class UpdateStatusByOrderIdUseCase(
 
     public async Task<OrderResponseDto> Execute(Guid orderId, Guid userId, OrderStatus status, string? reason, CancellationToken ct)
     {
-        var entity = await _repository.GetByIdAsync(orderId, ct)
+        var entity = await _repository.GetByIdAsync(orderId, ct, q => q.Include(o => o.OrderItems))
             ?? throw new NotFoundException($"Pedido não encontrado com o Id: {orderId}");
 
         var previousStatus = entity.Status;
@@ -77,7 +78,8 @@ public class UpdateStatusByOrderIdUseCase(
                 Quantity = (double)item.Quantity,
                 MovementType = MovementType.Return,
                 Description = $"Estorno ({actionName}) do pedido {entity.Id}",
-                UserId = userId
+                UserId = userId,
+                IsSystemGenerated = true
             }, ct);
         }
     }

@@ -53,6 +53,21 @@ public class OrdersController(
         return NoContent();
     }
 
+    [HttpPatch("{id:guid}/refund")]
+    [RoleAuthorize(RoleEnum.Admin)]
+    public async Task<IActionResult> Refund([FromRoute] Guid id, [FromBody] CancelOrderDto dto, CancellationToken ct)
+    {
+        var userId = TokenHelper.GetUserId(this.User);
+        await updateStatusUseCase.Execute(id, userId, OrderStatus.Refunded, dto.Reason, ct);
+
+        return Ok(new ApiResponse<string>
+        {
+            Status = 200,
+            Message = "Pedido reembolsado com sucesso.",
+            Data = ""
+        });
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] int offset = 0, [FromQuery] int limit = 10, [FromQuery] string? filters = null, CancellationToken ct = default)
     {

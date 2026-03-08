@@ -77,4 +77,8 @@ public abstract class BaseRepository<TEntity>(AppDbContext context) : IBaseRepos
         _context.Set<TEntity>().UpdateRange(entities);
         await _context.SaveChangesAsync(ct);
     }
+    public virtual async Task SaveAsync(CancellationToken ct)
+    {
+        await _context.SaveChangesAsync(ct);
+    }
 }

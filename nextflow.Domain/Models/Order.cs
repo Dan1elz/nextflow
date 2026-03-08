@@ -48,7 +48,7 @@ public class Order : BaseModel
         ClientId = dto.ClientId;
         UserId = dto.UserId;
         Type = dto.Type;
-        Status = OrderStatus.Budget;
+        Status = dto.Type == OrderType.Sale ? OrderStatus.PendingPayment : OrderStatus.Budget;
         UpdateAt = DateTime.UtcNow;
     }
 

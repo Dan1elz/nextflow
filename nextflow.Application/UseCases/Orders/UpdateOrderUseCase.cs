@@ -11,12 +11,13 @@ namespace Nextflow.Application.UseCases.Orders;
 
 public class UpdateOrderUseCase(
     IOrderRepository repository,
-    // Removido o IOrderItemRepository, pois manipularemos tudo via Aggregate Root (Order)
+    IOrderItemRepository orderItemRepository,
     ICreateStockMovementUseCase createStockMovement,
     IProductRepository productRepository
 ) : IUpdateUseCase<UpdateOrderDto, OrderResponseDto>
 {
     private readonly IOrderRepository _repository = repository;
+    private readonly IOrderItemRepository _orderItemRepository = orderItemRepository;
     private readonly ICreateStockMovementUseCase _createStockMovement = createStockMovement;
     private readonly IProductRepository _productRepository = productRepository;
 
@@ -27,13 +28,13 @@ public class UpdateOrderUseCase(
         if (dto.Items == null || dto.Items.Count == 0)
             throw new BadRequestException("O pedido deve conter pelo menos um item.");
 
-        var entity = await _repository.GetByIdAsync(id, ct, x => x.Include(oi => oi.OrderItems).ThenInclude(p => p.Product))
+        var entity = await _repository.GetByIdAsync(id, ct, x => x.Include(oi => oi.OrderItems))
             ?? throw new NotFoundException($"Pedido com id {id} não encontrado.");
 
         if (entity.Status != OrderStatus.PendingPayment && entity.Status != OrderStatus.Budget)
             throw new BadRequestException("Apenas pedidos orçamentos ou aguardando pagamento podem ser atualizados.");
 
-        var requestedProductIds = dto.Items.Select(i => i.ProductId).ToHashSet(); // HashSet para buscas mais rápidas depois
+        var requestedProductIds = dto.Items.Select(i => i.ProductId).ToHashSet();
         var products = await _productRepository.GetAllAsync(p => requestedProductIds.Contains(p.Id), 0, int.MaxValue, ct);
 
         if (products.Count() != requestedProductIds.Count)
@@ -65,7 +66,11 @@ public class UpdateOrderUseCase(
         decimal totalAmount = 0;
         decimal totalDiscount = 0;
 
-        // 1. Atualizar existentes e adicionar novos
+        // Lists to track additions and removals (processed AFTER save to avoid tracker conflicts)
+        var itemsToAdd = new List<OrderItem>();
+        var itemsToRemove = new List<OrderItem>();
+
+        // 1. Update existing items and prepare new items
         foreach (var itemDto in dto.Items)
         {
             var product = productMap[itemDto.ProductId];
@@ -100,7 +105,7 @@ public class UpdateOrderUseCase(
             }
             else
             {
-                // Item Novo
+                // New item - will be added separately via repository
                 itemDto.OrderId = entity.Id;
                 var newItem = new OrderItem(itemDto);
                 newItem.SetPricing(product.Price);
@@ -119,16 +124,14 @@ public class UpdateOrderUseCase(
                     });
                 }
 
-                // Apenas adicionamos à coleção. O EF Core cuida do resto no UpdateAsync
-                entity.OrderItems.Add(newItem);
+                itemsToAdd.Add(newItem);
 
                 totalAmount += newItem.UnitPrice * newItem.Quantity;
                 totalDiscount += newItem.Discount;
             }
         }
 
-        // 2. Remover itens que não vieram no DTO
-        // O(1) na busca graças ao HashSet criado no início (requestedProductIds)
+        // 2. Identify items to remove
         var removedItems = existingItemsMap.Values
             .Where(i => !requestedProductIds.Contains(i.ProductId))
             .ToList();
@@ -149,23 +152,37 @@ public class UpdateOrderUseCase(
                 });
             }
 
-            // Apenas removemos da coleção. O EF Core vai gerar o DELETE correspondente
-            entity.OrderItems.Remove(removed);
+            itemsToRemove.Add(removed);
         }
 
-        // 3. Finalização
+        // 3. Finalize
         entity.SetTotals(totalAmount, totalDiscount);
 
-        // Este método deve idealmente commitar as mudanças do Order e dos OrderItems no banco.
-        await _repository.UpdateAsync(entity, ct);
+        // Save existing item modifications + order totals (tracked entities only)
+        await _repository.SaveAsync(ct);
 
-        // IMPORTANTE: Idealmente, garantir que isso rode numa mesma transação de banco de dados
-        // que o _repository.UpdateAsync, para evitar inconsistências em caso de falha.
+        // 4. Remove items via dedicated repository (separate SaveChanges)
+        if (itemsToRemove.Count > 0)
+        {
+            await _orderItemRepository.RemoveRangeAsync(itemsToRemove, ct);
+        }
+
+        // 5. Add new items via dedicated repository (separate SaveChanges)
+        if (itemsToAdd.Count > 0)
+        {
+            await _orderItemRepository.AddRangeAsync(itemsToAdd, ct);
+        }
+
+        // 6. Process stock movements
         foreach (var movementDto in stockMovementsQueue)
         {
             await _createStockMovement.Execute(movementDto, ct);
         }
 
-        return new OrderResponseDto(entity);
+        // Reload to return updated data
+        var updated = await _repository.GetByIdAsync(id, ct, x => x.Include(oi => oi.OrderItems))
+            ?? throw new NotFoundException($"Pedido com id {id} não encontrado.");
+
+        return new OrderResponseDto(updated);
     }
 }

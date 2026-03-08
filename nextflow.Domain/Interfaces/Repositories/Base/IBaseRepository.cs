@@ -17,4 +17,5 @@ public interface IBaseRepository<TEntity> where TEntity : class
     Task UpdateRangeAsync(IEnumerable<TEntity> entities, CancellationToken ct);
     Task RemoveAsync(TEntity entity, CancellationToken ct);
     Task RemoveRangeAsync(IEnumerable<TEntity> entities, CancellationToken ct);
+    Task SaveAsync(CancellationToken ct);
 }

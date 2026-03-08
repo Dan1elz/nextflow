@@ -13,6 +13,7 @@ public class GetOrderByIdUseCase(IOrderRepository repository)
 
     protected override Func<IQueryable<Order>, IQueryable<Order>>? GetInclude() => query => query
         .Include(c => c.Client)
+        .Include(u => u.User)
         .Include(oi => oi.OrderItems)
             .ThenInclude(p => p.Product);
 }

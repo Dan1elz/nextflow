@@ -46,6 +46,8 @@ public class OrderResponseDto : BaseDto
     public Guid Id { get; set; }
     public Guid ClientId { get; set; }
     public ClientResponseDto? Client { get; set; }
+    public Guid UserId { get; set; }
+    public UserResponseDto? User { get; set; }
     public OrderStatus Status { get; set; }
     public OrderType Type { get; set; }
     public string? LossReason { get; set; }
@@ -58,6 +60,8 @@ public class OrderResponseDto : BaseDto
         Id = entity.Id;
         ClientId = entity.ClientId;
         Client = entity.Client != null ? new ClientResponseDto(entity.Client) : null;
+        UserId = entity.UserId;
+        User = entity.User != null ? new UserResponseDto(entity.User) : null;
         Status = entity.Status;
         Type = entity.Type;
         LossReason = entity.LossReason;

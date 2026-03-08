@@ -14,6 +14,10 @@ public class Order : BaseModel
     public Guid ClientId { get; private set; }
     public virtual Client? Client { get; private set; }
 
+    [ForeignKey("users"), Required(ErrorMessage = "O Vendedor é obrigatório.")]
+    public Guid UserId { get; private set; }
+    public virtual User? User { get; private set; }
+
     [Required(ErrorMessage = "O status do pedido é obrigatório.")]
     public OrderStatus Status { get; private set; } = OrderStatus.Budget;
 
@@ -42,6 +46,7 @@ public class Order : BaseModel
     public Order(CreateOrderDto dto) : base()
     {
         ClientId = dto.ClientId;
+        UserId = dto.UserId;
         Type = dto.Type;
         Status = OrderStatus.Budget;
         UpdateAt = DateTime.UtcNow;

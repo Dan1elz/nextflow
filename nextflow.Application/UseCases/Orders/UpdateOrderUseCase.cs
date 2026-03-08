@@ -1,144 +1,171 @@
 using Microsoft.EntityFrameworkCore;
-using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Exceptions;
 using Nextflow.Domain.Interfaces.Repositories;
 using Nextflow.Domain.Interfaces.UseCases;
 using Nextflow.Domain.Models;
+using Nextflow.Domain.Interfaces.UseCases.Base;
 
 namespace Nextflow.Application.UseCases.Orders;
 
 public class UpdateOrderUseCase(
     IOrderRepository repository,
-    IOrderItemRepository orderItemRepository,
+    // Removido o IOrderItemRepository, pois manipularemos tudo via Aggregate Root (Order)
     ICreateStockMovementUseCase createStockMovement,
     IProductRepository productRepository
-) : UpdateUseCaseBase<Order, IOrderRepository, UpdateOrderDto, OrderResponseDto>(repository)
+) : IUpdateUseCase<UpdateOrderDto, OrderResponseDto>
 {
-    private readonly IOrderItemRepository _orderItemRepository = orderItemRepository;
+    private readonly IOrderRepository _repository = repository;
     private readonly ICreateStockMovementUseCase _createStockMovement = createStockMovement;
     private readonly IProductRepository _productRepository = productRepository;
 
-    private Dictionary<Guid, ProductResponseDto>? _productMap;
-    private readonly List<CreateStockMovementDto> _stockMovementsQueue = [];
-
-    protected override OrderResponseDto MapToResponseDto(Order entity) => new(entity);
-
-    protected override Func<IQueryable<Order>, IQueryable<Order>>? GetInclude()
+    public async Task<OrderResponseDto> Execute(Guid id, UpdateOrderDto dto, CancellationToken ct)
     {
-        return x => x.Include(oi => oi.OrderItems).ThenInclude(p => p.Product);
-    }
+        dto.Validate();
 
-    protected override async Task ValidateBusinessRules(Order entity, UpdateOrderDto dto, CancellationToken ct)
-    {
-        if (entity.Status != OrderStatus.PendingPayment)
-            throw new BadRequestException("Apenas pedidos com status 'Aguardando Pagamento' podem ser atualizados.");
+        if (dto.Items == null || dto.Items.Count == 0)
+            throw new BadRequestException("O pedido deve conter pelo menos um item.");
 
-        var productIds = dto.Items.Select(i => i.ProductId).Distinct().ToList();
-        var products = await _productRepository.GetAllAsync(p => productIds.Contains(p.Id), 0, int.MaxValue, ct);
-        var productDtos = products.Select(p => new ProductResponseDto(p)).ToList();
+        var entity = await _repository.GetByIdAsync(id, ct, x => x.Include(oi => oi.OrderItems).ThenInclude(p => p.Product))
+            ?? throw new NotFoundException($"Pedido com id {id} não encontrado.");
 
-        if (productDtos.Count != productIds.Count)
+        if (entity.Status != OrderStatus.PendingPayment && entity.Status != OrderStatus.Budget)
+            throw new BadRequestException("Apenas pedidos orçamentos ou aguardando pagamento podem ser atualizados.");
+
+        var requestedProductIds = dto.Items.Select(i => i.ProductId).ToHashSet(); // HashSet para buscas mais rápidas depois
+        var products = await _productRepository.GetAllAsync(p => requestedProductIds.Contains(p.Id), 0, int.MaxValue, ct);
+
+        if (products.Count() != requestedProductIds.Count)
             throw new BadRequestException("Um ou mais produtos não foram encontrados.");
 
-        _productMap = productDtos.ToDictionary(p => p.Id);
+        var productMap = products.ToDictionary(p => p.Id);
 
+        // Validação de Estoque
         foreach (var item in dto.Items)
         {
-            if (!_productMap.TryGetValue(item.ProductId, out ProductResponseDto? product))
-                throw new BadRequestException($"Produto com ID {item.ProductId} não encontrado.");
+            var product = productMap[item.ProductId];
 
-            if (item.Quantity <= 0 || item.Quantity > product.Quantity)
-                throw new BadRequestException($"Quantidade inválida ou estoque insuficiente para o produto {product.Name}.");
+            if (item.Quantity <= 0)
+                throw new BadRequestException($"Quantidade inválida para o produto {product.Name}. A quantidade deve ser maior que zero.");
+
+            if (entity.Type != OrderType.Budget)
+            {
+                var existingQty = entity.OrderItems.FirstOrDefault(oi => oi.ProductId == item.ProductId)?.Quantity ?? 0;
+                var additionalRequested = item.Quantity - existingQty;
+
+                if (additionalRequested > 0 && additionalRequested > product.Quantity)
+                    throw new BadRequestException($"Estoque insuficiente para o produto {product.Name}.");
+            }
         }
-    }
 
-    protected override async Task BeforePersistence(Order entity, UpdateOrderDto dto, CancellationToken ct)
-    {
-        var existingItems = entity.OrderItems.ToDictionary(i => i.ProductId);
+        var existingItemsMap = entity.OrderItems.ToDictionary(i => i.ProductId);
+        var stockMovementsQueue = new List<CreateStockMovementDto>();
 
+        decimal totalAmount = 0;
+        decimal totalDiscount = 0;
+
+        // 1. Atualizar existentes e adicionar novos
         foreach (var itemDto in dto.Items)
         {
-            var product = _productMap![itemDto.ProductId];
+            var product = productMap[itemDto.ProductId];
 
-            if (existingItems.TryGetValue(itemDto.ProductId, out OrderItem? existingItem))
+            if (existingItemsMap.TryGetValue(itemDto.ProductId, out OrderItem? existingItem))
             {
-                if (existingItem.Quantity != itemDto.Quantity)
+                if (existingItem.Quantity != itemDto.Quantity || existingItem.Discount != itemDto.Discount)
                 {
-                    var quantityDifference = itemDto.Quantity - existingItem.Quantity;
-                    var movementType = quantityDifference > 0 ? MovementType.Sales : MovementType.Return;
+                    if (entity.Type != OrderType.Budget && existingItem.Quantity != itemDto.Quantity)
+                    {
+                        var quantityDifference = itemDto.Quantity - existingItem.Quantity;
+                        var movementType = quantityDifference > 0 ? MovementType.Sales : MovementType.Return;
 
-                    _stockMovementsQueue.Add(new CreateStockMovementDto
+                        stockMovementsQueue.Add(new CreateStockMovementDto
+                        {
+                            ProductId = itemDto.ProductId,
+                            Quantity = (double)Math.Abs(quantityDifference),
+                            MovementType = movementType,
+                            Description = $"Ajuste (Update) do pedido {entity.Id}",
+                            UserId = dto.UserId,
+                            Quote = product.Price,
+                            IsSystemGenerated = true
+                        });
+                    }
+
+                    existingItem.UpdateDetails(itemDto.Quantity, itemDto.Discount);
+                    existingItem.SetPricing(product.Price);
+                }
+
+                totalAmount += existingItem.UnitPrice * existingItem.Quantity;
+                totalDiscount += existingItem.Discount;
+            }
+            else
+            {
+                // Item Novo
+                itemDto.OrderId = entity.Id;
+                var newItem = new OrderItem(itemDto);
+                newItem.SetPricing(product.Price);
+
+                if (entity.Type != OrderType.Budget)
+                {
+                    stockMovementsQueue.Add(new CreateStockMovementDto
                     {
                         ProductId = itemDto.ProductId,
-                        Quantity = (double)Math.Abs(quantityDifference),
-                        MovementType = movementType,
-                        Description = $"Ajuste (Update) do pedido {entity.Id}",
+                        Quantity = (double)itemDto.Quantity,
+                        MovementType = MovementType.Sales,
+                        Description = $"Adição (Update) ao pedido {entity.Id}",
                         UserId = dto.UserId,
                         Quote = product.Price,
                         IsSystemGenerated = true
                     });
-
-                    existingItem.Update(itemDto);
-                    existingItem.SetPricing(product.Price, product.Price * itemDto.Quantity);
-
-                    await _orderItemRepository.UpdateAsync(existingItem, ct);
                 }
-            }
-            else
-            {
-                itemDto.OrderId = entity.Id;
-                var newItem = new OrderItem(itemDto);
-                newItem.SetPricing(product.Price, product.Price * itemDto.Quantity);
 
-                _stockMovementsQueue.Add(new CreateStockMovementDto
-                {
-                    ProductId = itemDto.ProductId,
-                    Quantity = (double)itemDto.Quantity,
-                    MovementType = MovementType.Sales,
-                    Description = $"Adição (Update) ao pedido {entity.Id}",
-                    UserId = dto.UserId,
-                    Quote = product.Price,
-                    IsSystemGenerated = true
-                });
-
-                await _orderItemRepository.AddAsync(newItem, ct);
+                // Apenas adicionamos à coleção. O EF Core cuida do resto no UpdateAsync
                 entity.OrderItems.Add(newItem);
+
+                totalAmount += newItem.UnitPrice * newItem.Quantity;
+                totalDiscount += newItem.Discount;
             }
         }
 
-        var removedItems = existingItems.Values
-            .Where(i => !dto.Items.Any(x => x.ProductId == i.ProductId))
+        // 2. Remover itens que não vieram no DTO
+        // O(1) na busca graças ao HashSet criado no início (requestedProductIds)
+        var removedItems = existingItemsMap.Values
+            .Where(i => !requestedProductIds.Contains(i.ProductId))
             .ToList();
 
         foreach (var removed in removedItems)
         {
-            _stockMovementsQueue.Add(new CreateStockMovementDto
+            if (entity.Type != OrderType.Budget)
             {
-                ProductId = removed.ProductId,
-                Quantity = (double)removed.Quantity,
-                MovementType = MovementType.Return,
-                Description = $"Remoção (Update) do pedido {entity.Id}",
-                UserId = dto.UserId,
-                Quote = removed.UnitPrice,
-                IsSystemGenerated = true
-            });
+                stockMovementsQueue.Add(new CreateStockMovementDto
+                {
+                    ProductId = removed.ProductId,
+                    Quantity = (double)removed.Quantity,
+                    MovementType = MovementType.Return,
+                    Description = $"Remoção (Update) do pedido {entity.Id}",
+                    UserId = dto.UserId,
+                    Quote = removed.UnitPrice,
+                    IsSystemGenerated = true
+                });
+            }
 
-            await _orderItemRepository.RemoveAsync(removed, ct);
+            // Apenas removemos da coleção. O EF Core vai gerar o DELETE correspondente
             entity.OrderItems.Remove(removed);
         }
 
-        var totalAmount = entity.OrderItems.Sum(i => i.TotalPrice);
-        var totalDiscount = entity.OrderItems.Sum(i => i.Discount);
+        // 3. Finalização
         entity.SetTotals(totalAmount, totalDiscount);
-    }
 
-    protected override async Task AfterPersistence(Order entity, UpdateOrderDto dto, CancellationToken ct)
-    {
-        foreach (var movementDto in _stockMovementsQueue)
+        // Este método deve idealmente commitar as mudanças do Order e dos OrderItems no banco.
+        await _repository.UpdateAsync(entity, ct);
+
+        // IMPORTANTE: Idealmente, garantir que isso rode numa mesma transação de banco de dados
+        // que o _repository.UpdateAsync, para evitar inconsistências em caso de falha.
+        foreach (var movementDto in stockMovementsQueue)
         {
             await _createStockMovement.Execute(movementDto, ct);
         }
+
+        return new OrderResponseDto(entity);
     }
 }

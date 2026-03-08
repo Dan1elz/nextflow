@@ -25,7 +25,7 @@ public class DeleteStockMovementUseCase(IStockMovementRepository repository, IPr
     {
         var product = await _productRepository.GetByIdAsync(entity.ProductId, ct)
             ?? throw new NotFoundException("Produto não encontrado ao reverter a movimentação.");
-            
+
         product.RevertMovementStock(entity);
         await _productRepository.UpdateAsync(product, ct);
     }

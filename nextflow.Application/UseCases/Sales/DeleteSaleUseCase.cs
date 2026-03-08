@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Enums;
-using Nextflow.Domain.Exceptions;
 using Nextflow.Domain.Interfaces.Repositories;
 using Nextflow.Domain.Interfaces.UseCases;
 using Nextflow.Domain.Models;
@@ -24,6 +23,6 @@ public class DeleteSaleUseCase(
         foreach (var p in entity.Payments) p.Delete();
         await paymentRepository.UpdateRangeAsync(entity.Payments, ct);
         if (userId.HasValue)
-            await updateOrderStatus.Execute(entity.OrderId, userId.Value, OrderStatus.Returned, ct);
+            await updateOrderStatus.Execute(entity.OrderId, userId!.Value, OrderStatus.Refunded, "Venda estornada", ct);
     }
 }

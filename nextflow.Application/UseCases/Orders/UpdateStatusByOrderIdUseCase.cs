@@ -3,40 +3,39 @@ using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Exceptions;
 using Nextflow.Domain.Interfaces.Repositories;
+
 namespace Nextflow.Application.UseCases.Orders;
 
-public class UpdateStatusByOrderIdUseCase(IOrderRepository repository, ICreateStockMovementUseCase createStockMovementUseCase) : IUpdateStatusByOrderIdUseCase
+public class UpdateStatusByOrderIdUseCase(
+    IOrderRepository repository,
+    ICreateStockMovementUseCase createStockMovementUseCase,
+    IProductRepository productRepository) : IUpdateStatusByOrderIdUseCase
 {
     private readonly IOrderRepository _repository = repository;
     private readonly ICreateStockMovementUseCase _createStockMovementUseCase = createStockMovementUseCase;
+    private readonly IProductRepository _productRepository = productRepository;
 
-    public async Task<OrderResponseDto> Execute(Guid orderId, Guid userId, OrderStatus status, CancellationToken ct)
+    public async Task<OrderResponseDto> Execute(Guid orderId, Guid userId, OrderStatus status, string? reason, CancellationToken ct)
     {
         var entity = await _repository.GetByIdAsync(orderId, ct)
             ?? throw new NotFoundException($"Pedido não encontrado com o Id: {orderId}");
 
-        if (entity.Status == status)
-            throw new BadRequestException($"O pedido já está com o status {status}.");
+        var previousStatus = entity.Status;
 
-        // 🔒 Regra 1 — Permitir mudar de Pendente para Pago
-        if (entity.Status == OrderStatus.PendingPayment && status == OrderStatus.PaymentConfirmed)
+        if (status == OrderStatus.PaymentConfirmed && entity.Type == OrderType.Budget)
         {
-            entity.UpdateStatus(status);
-            await _repository.UpdateAsync(entity, ct);
+            var productIds = entity.OrderItems.Select(x => x.ProductId).Distinct().ToList();
+            var products = await _productRepository.GetAllAsync(p => productIds.Contains(p.Id), 0, int.MaxValue, ct);
+            var productMap = products.ToDictionary(p => p.Id);
 
-            return new OrderResponseDto(entity);
-        }
+            foreach (var item in entity.OrderItems)
+            {
+                if (!productMap.TryGetValue(item.ProductId, out var product))
+                    throw new BadRequestException($"Produto com ID {item.ProductId} não encontrado.");
 
-        // 🔒 Regra 2 — Permitir reestorno de pedidos pagos em até 7 dias
-        if (entity.Status == OrderStatus.PaymentConfirmed && status == OrderStatus.Returned)
-        {
-            if (!entity.UpdateAt.HasValue)
-                throw new BadRequestException("Data de pagamento não informada para este pedido.");
-
-            var daysSincePayment = (DateTime.UtcNow - entity.UpdateAt.Value).TotalDays;
-
-            if (daysSincePayment > 7)
-                throw new BadRequestException("O pedido só pode ser retornado até 7 dias após o pagamento.");
+                if (item.Quantity > product.Quantity)
+                    throw new BadRequestException($"Estoque insuficiente para o produto {product.Name}. Quantidade requerida: {item.Quantity}, Estoque atual: {product.Quantity}");
+            }
 
             foreach (var item in entity.OrderItems)
             {
@@ -44,16 +43,42 @@ public class UpdateStatusByOrderIdUseCase(IOrderRepository repository, ICreateSt
                 {
                     ProductId = item.ProductId,
                     Quantity = (double)item.Quantity,
-                    MovementType = MovementType.Return,
-                    Description = $"Estorno do pedido {entity.Id}",
-                    UserId = userId
+                    MovementType = MovementType.Sales,
+                    Description = $"Efetivação do orçamento {entity.Id}",
+                    UserId = userId,
+                    Quote = item.UnitPrice,
+                    IsSystemGenerated = true
                 }, ct);
             }
-            entity.UpdateStatus(status);
-            await _repository.UpdateAsync(entity, ct);
-
-            return new OrderResponseDto(entity);
         }
-        throw new BadRequestException($"Não é possível alterar o status de {entity.Status} para {status}.");
+
+        entity.UpdateStatus(status, reason);
+
+        bool shouldReturnStock = status == OrderStatus.Refunded || (status == OrderStatus.Canceled && entity.Type != OrderType.Budget);
+
+        if (shouldReturnStock)
+        {
+            var actionName = status == OrderStatus.Refunded ? "Reembolso" : "Cancelamento";
+            await ReturnStock(entity, userId, actionName, ct);
+        }
+
+        await _repository.UpdateAsync(entity, ct);
+
+        return new OrderResponseDto(entity);
+    }
+
+    private async Task ReturnStock(Nextflow.Domain.Models.Order entity, Guid userId, string actionName, CancellationToken ct)
+    {
+        foreach (var item in entity.OrderItems)
+        {
+            await _createStockMovementUseCase.Execute(new CreateStockMovementDto
+            {
+                ProductId = item.ProductId,
+                Quantity = (double)item.Quantity,
+                MovementType = MovementType.Return,
+                Description = $"Estorno ({actionName}) do pedido {entity.Id}",
+                UserId = userId
+            }, ct);
+        }
     }
 }

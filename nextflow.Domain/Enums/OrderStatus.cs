@@ -2,9 +2,9 @@ namespace Nextflow.Domain.Enums;
 
 public enum OrderStatus : byte
 {
-    PendingPayment = 1,   // Aguardando pagamento
-    PaymentConfirmed = 2, // Pagamento confirmado
-    Canceled = 3,         // Pedido cancelado
-    Refunded = 4,         // Pedido reembolsado
-    Returned = 5          // Pedido devolvido
+    Budget = 1,           // Orçamento
+    PendingPayment = 2,   // Aguardando pagamento
+    PaymentConfirmed = 3, // Pagamento confirmado
+    Canceled = 4,         // Pedido cancelado
+    Refunded = 5          // Pedido reembolsado
 }

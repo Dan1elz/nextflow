@@ -17,7 +17,7 @@ namespace Nextflow.Controllers;
 public class OrdersController(
     ICreateOrderUseCase createUseCase,
     IUpdateUseCase<UpdateOrderDto, OrderResponseDto> updateUseCase,
-    IDeleteOrderUseCase deleteUseCase,
+    IUpdateStatusByOrderIdUseCase updateStatusUseCase,
     IGetAllUseCase<Order, OrderResponseDto> getAllOrdersUseCase,
     IGetByIdUseCase<OrderResponseDto> getOrderByIdUseCase
 ) : ControllerBase
@@ -45,11 +45,10 @@ public class OrdersController(
 
     [HttpDelete("{id:guid}")]
     [RoleAuthorize(RoleEnum.Admin)]
-    public async Task<IActionResult> Delete([FromRoute] Guid id, CancellationToken ct)
+    public async Task<IActionResult> Delete([FromRoute] Guid id, [FromQuery] string reason, CancellationToken ct)
     {
-
         var userId = TokenHelper.GetUserId(this.User);
-        await deleteUseCase.Execute(id, userId, ct);
+        await updateStatusUseCase.Execute(id, userId, OrderStatus.Canceled, reason, ct);
 
         return NoContent();
     }

@@ -50,6 +50,6 @@ public class CreateSaleUseCase(
 
     protected override async Task AfterPersistence(Sale entity, CreateSaleDto dto, CancellationToken ct)
     {
-        await _updateOrderStatusByOrderIdUseCase.Execute(_fetchedOrder!.Id, dto.UserId, OrderStatus.PaymentConfirmed, ct);
+        await _updateOrderStatusByOrderIdUseCase.Execute(_fetchedOrder!.Id, dto.UserId, OrderStatus.PaymentConfirmed, "Venda gerada", ct);
     }
 }

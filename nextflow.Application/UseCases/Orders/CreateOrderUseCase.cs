@@ -24,6 +24,9 @@ public class CreateOrderUseCase(
 
     protected override async Task ValidateBusinessRules(CreateOrderDto dto, CancellationToken ct)
     {
+        if (dto.Items == null || dto.Items.Count == 0)
+            throw new BadRequestException("O pedido deve conter pelo menos um item.");
+
         var productsId = dto.Items.Select(i => i.ProductId).Distinct().ToList();
 
         var products = await _productRepository.GetAllAsync(p => productsId.Contains(p.Id), 0, int.MaxValue, ct);
@@ -39,8 +42,11 @@ public class CreateOrderUseCase(
             if (!_productMap.TryGetValue(item.ProductId, out var product))
                 throw new BadRequestException($"Produto com ID {item.ProductId} não encontrado.");
 
-            if (item.Quantity <= 0 || item.Quantity > product.Quantity)
-                throw new BadRequestException($"Quantidade inválida ou estoque insuficiente para o produto {product.Name}.");
+            if (item.Quantity <= 0)
+                throw new BadRequestException($"Quantidade inválida para o produto {product.Name}. A quantidade deve ser maior que zero.");
+
+            if (dto.Type != OrderType.Budget && item.Quantity > product.Quantity)
+                throw new BadRequestException($"Estoque insuficiente para o produto {product.Name}.");
         }
     }
 
@@ -62,7 +68,7 @@ public class CreateOrderUseCase(
             totalAmount += totalPrice;
             totalDiscount += itemDto.Discount;
 
-            orderItem.SetPricing(unitPrice, totalPrice);
+            orderItem.SetPricing(unitPrice);
 
             entity.OrderItems.Add(orderItem);
         }
@@ -74,6 +80,9 @@ public class CreateOrderUseCase(
 
     protected override async Task AfterPersistence(Order entity, CreateOrderDto dto, CancellationToken ct)
     {
+        if (entity.Type == OrderType.Budget)
+            return;
+
         foreach (var item in entity.OrderItems)
         {
             await _createStockMovement.Execute(new CreateStockMovementDto

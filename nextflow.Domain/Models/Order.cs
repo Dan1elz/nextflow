@@ -3,81 +3,97 @@ using System.ComponentModel.DataAnnotations.Schema;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Exceptions;
-using Nextflow.Domain.Interfaces.Models;
 using Nextflow.Domain.Models.Base;
 
 namespace Nextflow.Domain.Models;
 
-
 [Table("orders")]
-public class Order : BaseModel, IUpdatable<UpdateOrderDto>, IDeletable
+public class Order : BaseModel
 {
-    [ForeignKey("clients"), Required(ErrorMessage = "O Cliente Ã© obrigatÃ³rio.")]
+    [ForeignKey("clients"), Required(ErrorMessage = "O Cliente é obrigatório.")]
     public Guid ClientId { get; private set; }
     public virtual Client? Client { get; private set; }
 
-    [Required(ErrorMessage = "O status do pedido Ã© obrigatÃ³rio.")]
-    public OrderStatus Status { get; private set; } = OrderStatus.PendingPayment;
+    [Required(ErrorMessage = "O status do pedido é obrigatório.")]
+    public OrderStatus Status { get; private set; } = OrderStatus.Budget;
 
-    [Range(0.0, double.MaxValue, ErrorMessage = "O valor total nÃ£o pode ser negativo."), Required(ErrorMessage = "O valor total Ã© obrigatÃ³rio.")]
-    public decimal TotalAmount { get; private set; }
-    [Range(0.0, double.MaxValue, ErrorMessage = "O valor do desconto nÃ£o pode ser negativo.")]
-    public decimal DiscountAmount { get; private set; }
-    public virtual ICollection<OrderItem> OrderItems { get; set; } = [];
-    public virtual ICollection<Sale> Sales { get; set; } = [];
+    [Required(ErrorMessage = "O tipo de pedido é obrigatório.")]
+    public OrderType Type { get; private set; }
+
+    public string? LossReason { get; private set; }
 
     public DateTime? UpdateAt { get; private set; }
-    public bool IsActive { get; set; } = true;
 
-    public void Update()
-    {
-        UpdateAt = DateTime.UtcNow;
-    }
-    public void Delete()
-    {
-        if (Status != OrderStatus.PendingPayment)
-            throw new BadRequestException("Apenas pedidos com status 'Aguardando Pagamento' podem ser cancelados.");
+    [Range(0.0, double.MaxValue, ErrorMessage = "O valor total não pode ser negativo."), Required(ErrorMessage = "O valor total é obrigatório.")]
+    public decimal TotalAmount { get; private set; }
 
-        IsActive = false;
-        UpdateAt = DateTime.UtcNow;
-        Status = OrderStatus.Canceled;
-    }
-    public void Reactivate()
-    {
-        if (!IsActive)
-        {
-            IsActive = true;
-            UpdateAt = DateTime.UtcNow;
-        }
-    }
+    [Range(0.0, double.MaxValue, ErrorMessage = "O valor do desconto não pode ser negativo.")]
+    public decimal TotalDiscount { get; private set; }
+
+    public virtual ICollection<OrderItem> OrderItems { get; set; } = [];
+    public virtual ICollection<Sale> Sales { get; set; } = [];
 
     public override string Preposition => "o";
     public override string Singular => "pedido";
     public override string Plural => "pedidos";
 
     private Order() : base() { }
+
     public Order(CreateOrderDto dto) : base()
     {
         ClientId = dto.ClientId;
-
+        Type = dto.Type;
+        Status = OrderStatus.Budget;
+        UpdateAt = DateTime.UtcNow;
     }
-    public void Update(UpdateOrderDto dto)
+
+    public void UpdateStatus(OrderStatus newStatus, string? reason = null)
     {
-        // A lÃ³gica de atualizaÃ§Ã£o estÃ¡ nos hooks do UpdateOrderUseCase
-        // Este mÃ©todo apenas marca a entidade como atualizada
-        Update();
+        if (Status == newStatus)
+            throw new BadRequestException($"O pedido já está com o status {newStatus}.");
+
+        if (Status == OrderStatus.Canceled || Status == OrderStatus.Refunded)
+            throw new BadRequestException("Não é possível atualizar o status de um pedido que já foi cancelado ou reembolsado.");
+
+        if (newStatus == OrderStatus.Canceled)
+        {
+            if (Status != OrderStatus.PendingPayment && Status != OrderStatus.Budget)
+                throw new BadRequestException("Apenas pedidos pendentes ou orçamentos podem ser cancelados.");
+
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new BadRequestException("É obrigatório informar o motivo ao cancelar um pedido.");
+        }
+        else if (newStatus == OrderStatus.Refunded)
+        {
+            if (Status != OrderStatus.PaymentConfirmed)
+                throw new BadRequestException("Apenas pedidos finalizados podem ser reembolsados.");
+
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new BadRequestException("É obrigatório informar o motivo ao reembolsar um pedido.");
+
+            if (UpdateAt.HasValue)
+            {
+                var daysSincePayment = (DateTime.UtcNow - UpdateAt.Value).TotalDays;
+                if (daysSincePayment > 7)
+                    throw new BadRequestException("O pedido só pode ser reembolsado até 7 dias após o pagamento.");
+            }
+        }
+
+        else if (newStatus == OrderStatus.PaymentConfirmed)
+        {
+            if (Status != OrderStatus.PendingPayment && Status != OrderStatus.Budget)
+                throw new BadRequestException("Apenas pedidos pendentes ou orçamentos podem ter o pagamento confirmado.");
+        }
+
+        Status = newStatus;
+        LossReason = reason;
+        UpdateAt = DateTime.UtcNow;
     }
 
-    public void UpdateStatus(OrderStatus status)
-    {
-        Status = status;
-        Update();
-    }
-
-    public void SetTotals(decimal totalAmount, decimal discountAmount)
+    public void SetTotals(decimal totalAmount, decimal totalDiscount)
     {
         TotalAmount = totalAmount;
-        DiscountAmount = discountAmount;
+        TotalDiscount = totalDiscount;
+        UpdateAt = DateTime.UtcNow;
     }
 }
-

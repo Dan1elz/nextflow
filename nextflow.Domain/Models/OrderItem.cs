@@ -1,5 +1,4 @@
-﻿using Nextflow.Domain.Interfaces.Models;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Models.Base;
@@ -7,48 +6,24 @@ using Nextflow.Domain.Models.Base;
 namespace Nextflow.Domain.Models;
 
 [Table("order_items")]
-public class OrderItem : BaseModel, IDeletable
+public class OrderItem : BaseModel
 {
-    [ForeignKey("orders"), Required(ErrorMessage = "A Ordem de Venda Ã© obrigatÃ³ria.")]
+    [ForeignKey("orders"), Required(ErrorMessage = "A Ordem de Venda é obrigatória.")]
     public Guid OrderId { get; private set; }
     public virtual Order? Order { get; set; }
 
-    [ForeignKey("products"), Required(ErrorMessage = "O Produto Ã© obrigatÃ³rio.")]
+    [ForeignKey("products"), Required(ErrorMessage = "O Produto é obrigatório.")]
     public Guid ProductId { get; private set; }
     public virtual Product? Product { get; set; }
 
-    [Range(0.01, double.MaxValue, ErrorMessage = "A quantidade deve ser maior que zero."), Required(ErrorMessage = "A quantidade Ã© obrigatÃ³ria.")]
+    [Range(0.01, double.MaxValue, ErrorMessage = "A quantidade deve ser maior que zero."), Required(ErrorMessage = "A quantidade é obrigatória.")]
     public decimal Quantity { get; private set; }
 
-    [Range(0.0, double.MaxValue, ErrorMessage = "O preÃ§o unitÃ¡rio nÃ£o pode ser negativo."), Required(ErrorMessage = "O preÃ§o unitÃ¡rio Ã© obrigatÃ³rio.")]
-    public decimal UnitPrice { get; private set; }
-
-    [Range(0.0, double.MaxValue, ErrorMessage = "O desconto nÃ£o pode ser negativo."), Required(ErrorMessage = "O desconto Ã© obrigatÃ³rio.")]
+    [Range(0.0, double.MaxValue, ErrorMessage = "O desconto não pode ser negativo."), Required(ErrorMessage = "O desconto é obrigatório.")]
     public decimal Discount { get; private set; }
 
-    [Range(0.0, double.MaxValue, ErrorMessage = "O valor total nÃ£o pode ser negativo."), Required(ErrorMessage = "O valor total Ã© obrigatÃ³rio.")]
-    public decimal TotalPrice { get; private set; }
-
-    public DateTime? UpdateAt { get; private set; }
-    public bool IsActive { get; set; } = true;
-
-    public void Update()
-    {
-        UpdateAt = DateTime.UtcNow;
-    }
-    public void Delete()
-    {
-        IsActive = false;
-        UpdateAt = DateTime.UtcNow;
-    }
-    public void Reactivate()
-    {
-        if (!IsActive)
-        {
-            IsActive = true;
-            UpdateAt = DateTime.UtcNow;
-        }
-    }
+    [Range(0.0, double.MaxValue, ErrorMessage = "O preço unitário não pode ser negativo."), Required(ErrorMessage = "O preço unitário é obrigatório.")]
+    public decimal UnitPrice { get; private set; }
 
     public override string Preposition => "o";
     public override string Singular => "item de pedido";
@@ -63,16 +38,15 @@ public class OrderItem : BaseModel, IDeletable
         Quantity = dto.Quantity;
         Discount = dto.Discount;
     }
-    public void Update(UpdateOrderItemDto dto)
+
+    public void UpdateDetails(decimal quantity, decimal discount)
     {
-        Quantity = dto.Quantity;
-        Discount = dto.Discount;
-        Update();
+        Quantity = quantity;
+        Discount = discount;
     }
 
-    public void SetPricing(decimal unitPrice, decimal totalPrice)
+    public void SetPricing(decimal unitPrice)
     {
         UnitPrice = unitPrice;
-        TotalPrice = totalPrice;
     }
 }

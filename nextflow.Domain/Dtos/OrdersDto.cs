@@ -1,4 +1,3 @@
-
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Nextflow.Domain.Attributes;
@@ -15,6 +14,10 @@ public class CreateOrderDto : BaseDto
 
     [Required(ErrorMessage = "O Id do cliente é obrigatório.")]
     public Guid ClientId { get; set; }
+
+    [Required(ErrorMessage = "O Tipo de Pedido é obrigatório.")]
+    public OrderType Type { get; set; }
+
     public List<CreateOrderItemDto> Items { get; set; } = [];
 }
 
@@ -44,8 +47,10 @@ public class OrderResponseDto : BaseDto
     public Guid ClientId { get; set; }
     public ClientResponseDto? Client { get; set; }
     public OrderStatus Status { get; set; }
+    public OrderType Type { get; set; }
+    public string? LossReason { get; set; }
     public decimal TotalAmount { get; set; }
-    public decimal DiscountAmount { get; set; }
+    public decimal TotalDiscount { get; set; }
     public List<OrderItemResponseDto> OrderItems { get; set; } = [];
     public OrderResponseDto() { }
     public OrderResponseDto(Order entity)
@@ -54,8 +59,10 @@ public class OrderResponseDto : BaseDto
         ClientId = entity.ClientId;
         Client = entity.Client != null ? new ClientResponseDto(entity.Client) : null;
         Status = entity.Status;
+        Type = entity.Type;
+        LossReason = entity.LossReason;
         TotalAmount = entity.TotalAmount;
-        DiscountAmount = entity.DiscountAmount;
+        TotalDiscount = entity.TotalDiscount;
         OrderItems = [.. entity.OrderItems.Select(oi => new OrderItemResponseDto(oi))];
     }
 }
@@ -69,7 +76,6 @@ public class OrderItemResponseDto : BaseDto
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Discount { get; set; }
-    public decimal TotalPrice { get; set; }
 
     public OrderItemResponseDto() { }
     public OrderItemResponseDto(OrderItem entity)
@@ -81,6 +87,5 @@ public class OrderItemResponseDto : BaseDto
         Quantity = entity.Quantity;
         UnitPrice = entity.UnitPrice;
         Discount = entity.Discount;
-        TotalPrice = entity.TotalPrice;
     }
 }

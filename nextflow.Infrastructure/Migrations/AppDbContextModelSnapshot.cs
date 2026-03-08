@@ -89,7 +89,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("SupplierId");
 
-                    b.ToTable("addresses");
+                    b.ToTable("addresses", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Category", b =>
@@ -114,7 +114,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("categories");
+                    b.ToTable("categories", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.CategoryProduct", b =>
@@ -144,7 +144,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("category_products");
+                    b.ToTable("category_products", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.City", b =>
@@ -179,7 +179,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("StateId");
 
-                    b.ToTable("cities");
+                    b.ToTable("cities", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Client", b =>
@@ -220,7 +220,7 @@ namespace Nextflow.Infrastructure.Migrations
                     b.HasIndex("CPF")
                         .IsUnique();
 
-                    b.ToTable("clients");
+                    b.ToTable("clients", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Contact", b =>
@@ -258,7 +258,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("SupplierId");
 
-                    b.ToTable("contacts");
+                    b.ToTable("contacts", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Country", b =>
@@ -292,7 +292,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("countries");
+                    b.ToTable("countries", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>
@@ -334,7 +334,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("orders");
+                    b.ToTable("orders", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.OrderItem", b =>
@@ -367,7 +367,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("order_items");
+                    b.ToTable("order_items", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Payment", b =>
@@ -398,7 +398,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("SaleId");
 
-                    b.ToTable("payments");
+                    b.ToTable("payments", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Product", b =>
@@ -453,7 +453,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("SupplierId");
 
-                    b.ToTable("products");
+                    b.ToTable("products", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Sale", b =>
@@ -483,7 +483,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("sales");
+                    b.ToTable("sales", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.State", b =>
@@ -523,7 +523,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("CountryId");
 
-                    b.ToTable("states");
+                    b.ToTable("states", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.StockMovement", b =>
@@ -560,7 +560,7 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("stock_movements");
+                    b.ToTable("stock_movements", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Supplier", b =>
@@ -592,7 +592,7 @@ namespace Nextflow.Infrastructure.Migrations
                     b.HasIndex("CNPJ")
                         .IsUnique();
 
-                    b.ToTable("suppliers");
+                    b.ToTable("suppliers", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.User", b =>
@@ -651,7 +651,7 @@ namespace Nextflow.Infrastructure.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("users");
+                    b.ToTable("users", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Address", b =>

@@ -41,6 +41,12 @@ public class UpdateOrderDto : BaseDto
     public List<UpdateOrderItemDto> Items { get; set; } = [];
 }
 public class UpdateOrderItemDto : CreateOrderItemDto { }
+public class CancelOrderDto : BaseDto
+{
+    [Required(ErrorMessage = "O motivo do cancelamento é obrigatório.")]
+    public string Reason { get; set; } = string.Empty;
+}
+
 public class OrderResponseDto : BaseDto
 {
     public Guid Id { get; set; }

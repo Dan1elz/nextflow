@@ -45,10 +45,10 @@ public class OrdersController(
 
     [HttpDelete("{id:guid}")]
     [RoleAuthorize(RoleEnum.Admin)]
-    public async Task<IActionResult> Delete([FromRoute] Guid id, [FromQuery] string reason, CancellationToken ct)
+    public async Task<IActionResult> Delete([FromRoute] Guid id, [FromBody] CancelOrderDto dto, CancellationToken ct)
     {
         var userId = TokenHelper.GetUserId(this.User);
-        await updateStatusUseCase.Execute(id, userId, OrderStatus.Canceled, reason, ct);
+        await updateStatusUseCase.Execute(id, userId, OrderStatus.Canceled, dto.Reason, ct);
 
         return NoContent();
     }

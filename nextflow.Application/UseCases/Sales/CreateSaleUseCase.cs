@@ -10,11 +10,13 @@ namespace Nextflow.Application.UseCases.Sales;
 
 public class CreateSaleUseCase(
     ISaleRepository repository,
+    IPaymentRepository paymentRepository,
     IUpdateStatusByOrderIdUseCase updateOrderStatusByOrderIdUseCase,
     IOrderRepository orderRepository
 )
     : CreateUseCaseBase<Sale, ISaleRepository, CreateSaleDto, SaleResponseDto>(repository)
 {
+    private readonly IPaymentRepository _paymentRepository = paymentRepository;
     private readonly IUpdateStatusByOrderIdUseCase _updateOrderStatusByOrderIdUseCase = updateOrderStatusByOrderIdUseCase;
     private readonly IOrderRepository _orderRepository = orderRepository;
     private Order? _fetchedOrder;
@@ -27,29 +29,28 @@ public class CreateSaleUseCase(
         _fetchedOrder = await _orderRepository.GetByIdAsync(dto.OrderId, ct)
             ?? throw new NotFoundException("Pedido não encontrado");
 
-        var exists = await _repository.ExistsAsync(x => x.OrderId == dto.OrderId && x.IsActive, ct);
+        var exists = await _repository.ExistsAsync(x => x.OrderId == dto.OrderId, ct);
         if (exists)
             throw new BadRequestException("Já existe uma venda para este pedido.");
 
+        if (_fetchedOrder.Status != OrderStatus.PaymentConfirmed)
+            throw new BadRequestException("A venda só pode ser publicada se o status do pedido for 'Pagamento Confirmado'.");
+
         var totalPayments = dto.Payments.Sum(p => p.Amount);
-        if (totalPayments != _fetchedOrder.TotalAmount)
+        if (Math.Abs(totalPayments - (double)_fetchedOrder.TotalAmount) > 0.001)
             throw new BadRequestException($"Valores divergentes: Pago {totalPayments:C} vs Pedido {_fetchedOrder.TotalAmount:C}");
-    }
-
-    protected override Task BeforePersistence(Sale entity, CreateSaleDto dto, CancellationToken ct)
-    {
-        entity.Payments = [.. dto.Payments
-            .Select(p =>
-            {
-                p.SaleId = entity.Id;
-                return new Payment(p);
-            })];
-
-        return Task.CompletedTask;
     }
 
     protected override async Task AfterPersistence(Sale entity, CreateSaleDto dto, CancellationToken ct)
     {
-        await _updateOrderStatusByOrderIdUseCase.Execute(_fetchedOrder!.Id, dto.UserId, OrderStatus.PaymentConfirmed, "Venda gerada", ct);
+        var payments = dto.Payments.Select(p =>
+        {
+            p.SaleId = entity.Id;
+            return new Payment(p);
+        }).ToList();
+
+        await _paymentRepository.AddRangeAsync(payments, ct);
+
+        await _updateOrderStatusByOrderIdUseCase.Execute(_fetchedOrder!.Id, dto.UserId, OrderStatus.PaymentConfirmed, "Venda finalizada", ct);
     }
 }

@@ -20,5 +20,11 @@ public sealed class FilterSet(IReadOnlyDictionary<string, string>? filters)
         value = v;
         return true;
     }
+
+    public bool TryGetGuid(string key, out Guid guid)
+    {
+        guid = Guid.Empty;
+        return TryGetString(key, out var raw) && FilterValueParsers.TryParseGuid(raw, out guid);
+    }
 }
 

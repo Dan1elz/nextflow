@@ -22,10 +22,10 @@ public class CreatePaymentDto : BaseDto
     [JsonIgnore] public Guid SaleId { get; set; } = Guid.NewGuid();
 
     [Range(0.01, double.MaxValue, ErrorMessage = "O valor do pagamento deve ser maior que zero."), Required(ErrorMessage = "O valor do pagamento é obrigatório.")]
-    public decimal Amount { get; set; }
+    public double Amount { get; set; }
 
     [Required(ErrorMessage = "O método de pagamento é obrigatório.")]
-    public PaymentMethod Method { get; set; }
+    public PaymentMethod PaymentMethod { get; set; }
 }
 public class SaleResponseDto : BaseDto
 {
@@ -45,15 +45,14 @@ public class SaleResponseDto : BaseDto
         User = entity.User != null ? new UserResponseDto(entity.User) : null;
         OrderId = entity.OrderId;
         Order = entity.Order != null ? new OrderResponseDto(entity.Order) : null;
-        Payments = [.. entity.Payments.Select(p => new PaymentResponseDto(p))];
     }
 }
 public class PaymentResponseDto : BaseDto
 {
     public Guid Id { get; set; }
     public Guid SaleId { get; set; }
-    public decimal Amount { get; set; }
-    public PaymentMethod Method { get; set; }
+    public double Amount { get; set; }
+    public PaymentMethod PaymentMethod { get; set; }
 
     public PaymentResponseDto() { }
 
@@ -62,6 +61,6 @@ public class PaymentResponseDto : BaseDto
         Id = entity.Id;
         SaleId = entity.SaleId;
         Amount = entity.Amount;
-        Method = entity.Method;
+        PaymentMethod = entity.PaymentMethod;
     }
 }

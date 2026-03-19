@@ -1,43 +1,20 @@
-﻿using Nextflow.Domain.Interfaces.Models;
+using Nextflow.Domain.Models.Base;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Nextflow.Domain.Dtos;
-using Nextflow.Domain.Models.Base;
 
 namespace Nextflow.Domain.Models;
 
 [Table("sales")]
-public class Sale : BaseModel, IDeletable
+public class Sale : BaseModel
 {
-    [ForeignKey("user"), Required(ErrorMessage = "O UsuÃ¡rio Ã© obrigatÃ³rio.")]
+    [ForeignKey("user"), Required(ErrorMessage = "O Usuário é obrigatório.")]
     public Guid UserId { get; private set; }
     public virtual User? User { get; set; }
 
-    [ForeignKey("orders"), Required(ErrorMessage = "A Ordem de Venda Ã© obrigatÃ³ria.")]
+    [ForeignKey("orders"), Required(ErrorMessage = "A Ordem de Venda é obrigatória.")]
     public Guid OrderId { get; private set; }
     public virtual Order? Order { get; set; }
-    public virtual ICollection<Payment> Payments { get; set; } = [];
-
-    public DateTime? UpdateAt { get; private set; }
-    public bool IsActive { get; set; } = true;
-
-    public void Update()
-    {
-        UpdateAt = DateTime.UtcNow;
-    }
-    public void Delete()
-    {
-        IsActive = false;
-        UpdateAt = DateTime.UtcNow;
-    }
-    public void Reactivate()
-    {
-        if (!IsActive)
-        {
-            IsActive = true;
-            UpdateAt = DateTime.UtcNow;
-        }
-    }
 
     public override string Preposition => "a";
     public override string Singular => "venda";
@@ -51,4 +28,3 @@ public class Sale : BaseModel, IDeletable
         OrderId = dto.OrderId;
     }
 }
-

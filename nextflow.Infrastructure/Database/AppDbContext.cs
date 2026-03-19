@@ -17,6 +17,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<OrderItem> OrderItems { get; set; }
     public DbSet<Payment> Payments { get; set; }
     public DbSet<Product> Products { get; set; }
+    public DbSet<PurchaseOrder> PurchaseOrders { get; set; }
+    public DbSet<PurchaseItem> PurchaseItems { get; set; }
     public DbSet<Sale> Sales { get; set; }
     public DbSet<State> States { get; set; }
     public DbSet<StockMovement> StockMovements { get; set; }

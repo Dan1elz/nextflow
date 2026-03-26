@@ -1,4 +1,4 @@
-name: nextflow-staging
+name: nextflow-backend-staging
 services:
   postgres:
     image: nextflow-postgres:staging
@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile.postgres
       args:
-        DB_TIMEZONE: ${DB_TIMEZONE}
+        DB_TIMEZONE: ${DB_TIMEZONE:-America/Sao_Paulo}
     restart: unless-stopped
     ports:
       - "${POSTGRES_PORT:-5432}:5432"

@@ -52,4 +52,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD curl --fail --silent --max-time 2 http://localhost:8080/health || exit 1
 
-CMD ["dotnet", "Nextflow.dll"]
+CMD ["dotnet", "nextflow.dll"]

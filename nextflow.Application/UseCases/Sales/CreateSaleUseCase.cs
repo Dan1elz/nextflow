@@ -14,7 +14,7 @@ public class CreateSaleUseCase(
     IUpdateStatusByOrderIdUseCase updateOrderStatusByOrderIdUseCase,
     IOrderRepository orderRepository
 )
-    : CreateUseCaseBase<Sale, ISaleRepository, CreateSaleDto, SaleResponseDto>(repository)
+    : CreateUseCaseBase<Sale, ISaleRepository, CreateSaleDto, SaleResponseDto>(repository), ICreateSaleUseCase
 {
     private readonly IPaymentRepository _paymentRepository = paymentRepository;
     private readonly IUpdateStatusByOrderIdUseCase _updateOrderStatusByOrderIdUseCase = updateOrderStatusByOrderIdUseCase;
@@ -29,12 +29,15 @@ public class CreateSaleUseCase(
         _fetchedOrder = await _orderRepository.GetByIdAsync(dto.OrderId, ct)
             ?? throw new NotFoundException("Pedido não encontrado");
 
-        var exists = await _repository.ExistsAsync(x => x.OrderId == dto.OrderId, ct);
-        if (exists)
-            throw new BadRequestException("Já existe uma venda para este pedido.");
+        if (_fetchedOrder.Status != OrderStatus.PendingPayment && _fetchedOrder.Status != OrderStatus.Budget)
+            throw new BadRequestException("A venda só pode ser publicada se o status do pedido for 'Aguardando Pagamento' ou 'Orçamento'.");
 
-        if (_fetchedOrder.Status != OrderStatus.PaymentConfirmed)
-            throw new BadRequestException("A venda só pode ser publicada se o status do pedido for 'Pagamento Confirmado'.");
+        // Clean up any orphaned sales from previously failed transactions
+        var existingSales = await _repository.GetAllAsync(x => x.OrderId == dto.OrderId, 0, 10, ct);
+        if (existingSales.Any())
+        {
+            await _repository.RemoveRangeAsync(existingSales, ct);
+        }
 
         var totalPayments = dto.Payments.Sum(p => p.Amount);
         if (Math.Abs(totalPayments - (double)_fetchedOrder.TotalAmount) > 0.001)

@@ -12,7 +12,7 @@ public class DeleteSaleUseCase(
     ISaleRepository repository,
     IPaymentRepository paymentRepository,
     IUpdateStatusByOrderIdUseCase updateOrderStatus
-    ) : DeleteUseCaseBase<Sale, ISaleRepository>(repository)
+    ) : DeleteUseCaseBase<Sale, ISaleRepository>(repository), IDeleteSaleUseCase
 {
     protected override Func<IQueryable<Sale>, IQueryable<Sale>>? GetInclude()
     {

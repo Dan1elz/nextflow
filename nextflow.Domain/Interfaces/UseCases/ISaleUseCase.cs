@@ -8,5 +8,5 @@ public interface ICreateSaleUseCase
 }
 public interface IDeleteSaleUseCase
 {
-    Task Execute(Guid id, Guid userId, CancellationToken ct);
+    Task Execute(Guid id, CancellationToken ct, Guid? userId = null);
 }

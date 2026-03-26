@@ -33,7 +33,7 @@ public class SalesController(
     {
 
         var userId = TokenHelper.GetUserId(this.User);
-        await deleteUseCase.Execute(id, userId, ct);
+        await deleteUseCase.Execute(id, ct, userId);
 
         return NoContent();
     }

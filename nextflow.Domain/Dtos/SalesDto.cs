@@ -45,6 +45,7 @@ public class SaleResponseDto : BaseDto
         User = entity.User != null ? new UserResponseDto(entity.User) : null;
         OrderId = entity.OrderId;
         Order = entity.Order != null ? new OrderResponseDto(entity.Order) : null;
+        Payments = [.. entity.Payments.Select(p => new PaymentResponseDto(p))];
     }
 }
 public class PaymentResponseDto : BaseDto

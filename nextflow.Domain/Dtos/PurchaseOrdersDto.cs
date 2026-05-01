@@ -39,6 +39,9 @@ public class UpdatePurchaseOrderDto : BaseDto
     public PurchaseStatus? Status { get; set; }
     public string? Note { get; set; }
     public List<CreatePurchaseItemDto>? Items { get; set; }
+
+    [JsonIgnore]
+    public Guid UserId;
 }
 
 public class PurchaseOrderResponseDto : BaseDto

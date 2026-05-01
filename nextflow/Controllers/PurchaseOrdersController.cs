@@ -57,6 +57,7 @@ public class PurchaseOrdersController(
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] UpdatePurchaseOrderDto dto, CancellationToken ct)
     {
+        dto.UserId = TokenHelper.GetUserId(User);
         var result = await updateUseCase.Execute(id, dto, ct);
         return Ok(new ApiResponse<PurchaseOrderResponseDto>
         {

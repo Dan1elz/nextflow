@@ -9,7 +9,7 @@ using Nextflow.Domain.Models.Base;
 namespace Nextflow.Domain.Models;
 
 [Table("purchase_orders")]
-public class PurchaseOrder : BaseModel, IUpdatable<UpdatePurchaseOrderDto>
+public class PurchaseOrder : BaseModel, IUpdatable<UpdatePurchaseOrderDto>, IDeletable
 {
     [ForeignKey("suppliers"), Required(ErrorMessage = "O Fornecedor é obrigatório.")]
     public Guid SupplierId { get; private set; }
@@ -57,6 +57,7 @@ public class PurchaseOrder : BaseModel, IUpdatable<UpdatePurchaseOrderDto>
     public void Delete()
     {
         Active = false;
+        PurchaseStatus = PurchaseStatus.Canceled;
         UpdateAt = DateTime.UtcNow;
     }
 

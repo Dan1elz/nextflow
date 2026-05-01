@@ -25,7 +25,7 @@ public class GetAllPurchaseOrdersUseCase(IPurchaseOrderRepository repository)
         if (filters.TryGetString("status", out var statusStr) && Enum.TryParse<PurchaseStatus>(statusStr, true, out var status))
             builder.And(x => x.PurchaseStatus == status);
 
-        if (filters.TryGetString("active", out var activeStr) && bool.TryParse(activeStr, out var active))
+        if (filters.TryGetString("active", out var activeStr) && FilterValueParsers.TryParseBool(activeStr, out var active))
             builder.And(x => x.Active == active);
     }
 }

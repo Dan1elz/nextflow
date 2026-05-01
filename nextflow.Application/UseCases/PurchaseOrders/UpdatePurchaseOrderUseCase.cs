@@ -73,7 +73,8 @@ public class UpdatePurchaseOrderUseCase(
                     MovementType = MovementType.Entry,
                     Description = $"Entrada de estoque via Pedido de Compra {entity.Id}",
                     Quote = item.CostPrice,
-                    IsSystemGenerated = true
+                    IsSystemGenerated = true,
+                    UserId = dto.UserId
                 }, ct);
             }
         }

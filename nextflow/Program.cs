@@ -1,6 +1,8 @@
+using System.Net;
 using System.Security.Claims; // <<-- MUDANÇA 1: Adicionar este using
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -28,13 +30,37 @@ public class Program
             options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
         // *** CONFIGURAÇÃO DE CORS ***
+        // Cors:AllowedOrigins (env Cors__AllowedOrigins): origens separadas por vírgula,
+        // ex. "https://nextflow.zanni.tech". Vazio = qualquer origem (dev local)
+        var allowedOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
         {
+            if (allowedOrigins.Length > 0)
+                policy.WithOrigins(allowedOrigins);
+            else
+                policy.AllowAnyOrigin();
+
             policy
-            .AllowAnyOrigin()
             .AllowAnyHeader()
             .AllowAnyMethod();
         }));
+
+        // *** ATRÁS DO PROXY DE BORDA (nginx) ***
+        // Quem conecta no container é o proxy. Lendo X-Forwarded-For/Proto, a aplicação
+        // enxerga o IP do visitante e Request.Scheme = https (e o UseHttpsRedirection
+        // não tenta redirecionar). Só confia no cabeçalho vindo de rede privada (Docker):
+        // o padrão do ASP.NET confia só em loopback e ignoraria o proxy
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            options.KnownNetworks.Clear();
+            options.KnownProxies.Clear();
+            options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("10.0.0.0"), 8));
+            options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("172.16.0.0"), 12));
+            options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("192.168.0.0"), 16));
+            options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Loopback, 8));
+        });
 
         // *** CONFIGURAÇÃO DO SWAGGER ***
         builder.Services.AddSwaggerGen(opt =>
@@ -142,6 +168,9 @@ public class Program
 
         // *** CONFIGURAÇÃO DO APP ***
         var app = builder.Build();
+
+        // Primeiro middleware: os demais (HTTPS redirect, HSTS, logs) já enxergam o esquema e o IP reais
+        app.UseForwardedHeaders();
 
         // *** VERIFICAÇÃO DE MIGRAÇÕES ***
         using (var scope = app.Services.CreateScope())

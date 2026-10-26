@@ -100,6 +100,9 @@ docker-compose.override.yml
 # Arquivo local do desenvolvedor (não versionar)
 .env
 .env.local
+# Backups feitos à mão (podem ter segredos)
+.env.bak*
+*.bak-*
 
 # Arquivos versionados (manter no git)
 # .env.example

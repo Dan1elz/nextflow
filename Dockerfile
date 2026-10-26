@@ -34,6 +34,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/* \
   && adduser --disabled-password --gecos '' appuser \
+  # assets/ já existe e é do appuser: o volume do compose herda esse dono
+  # (sem isso o Docker cria a pasta como root e o upload de imagem falha)
+  && mkdir -p /app/assets \
   && chown -R appuser /app
 
 USER appuser

@@ -11,8 +11,9 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    # Só em 127.0.0.1: abre no seu PC, mas ninguém de fora alcança
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - nextflow_postgres_data_dev:/var/lib/postgresql/data
     networks:
@@ -47,7 +48,7 @@ services:
       JwtSettings__Key: ${JWT_KEY}
       ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=${POSTGRES_DB:-nextflow_db};User Id=${POSTGRES_USER:-nextflow_user};Password=${POSTGRES_PASSWORD};Pooling=true;"
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     networks:
       - nextflow-development-network
     depends_on:

@@ -8,8 +8,9 @@ services:
       args:
         DB_TIMEZONE: ${DB_TIMEZONE:-America/Sao_Paulo}
     restart: unless-stopped
+    # Só em 127.0.0.1: de fora da máquina, só por túnel SSH
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -33,10 +34,21 @@ services:
     environment:
       ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=${POSTGRES_DB};User Id=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Pooling=true;"
       JwtSettings__Key: ${JWT_KEY}
-    ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      # Endereço público da API: monta a URL absoluta das imagens dos produtos.
+      # Sem isso as imagens voltam como http://localhost:8080/... (quebradas para quem está fora)
+      Storage__BaseUrl: "${PUBLIC_API_URL:?defina PUBLIC_API_URL no .env, ex. https://nextflow-api.zanni.tech}"
+      # Origens do front liberadas no CORS, separadas por vírgula. Vazio = qualquer origem
+      Cors__AllowedOrigins: ${CORS_ORIGINS:-}
+    # Sem "ports": quem recebe de fora é o proxy de borda (nextflow-api.zanni.tech)
+    volumes:
+      # Imagens enviadas (LocalStorageService grava em /app/assets): sobrevivem a recriar o container
+      - nextflow_assets:/app/assets
     networks:
-      - nextflow-staging-network
+      # Rede privada: fala com o postgres
+      nextflow-staging-network:
+      # Rede do proxy de borda. Alias único: o nginx usa nextflow-api:8080
+      proxy-net:
+        aliases: [nextflow-api]
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,6 +56,9 @@ services:
 networks:
   nextflow-staging-network:
     external: true
+  proxy-net:
+    external: true
 
 volumes:
   nextflow_postgres_data:
+  nextflow_assets:

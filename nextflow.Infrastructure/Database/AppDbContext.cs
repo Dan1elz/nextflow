@@ -25,6 +25,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Supplier> Suppliers { get; set; }
     public DbSet<User> Users { get; set; }
 
+    // *** Módulo de Previsão de Demanda (IA) ***
+    public DbSet<Promotion> Promotions { get; set; }
+    public DbSet<ProductSalesMonthly> ProductSalesMonthly { get; set; }
+    public DbSet<ProductSeasonality> ProductSeasonalities { get; set; }
+    public DbSet<ForecastRun> ForecastRuns { get; set; }
+    public DbSet<ForecastRecommendation> ForecastRecommendations { get; set; }
+    public DbSet<ForecastProjection> ForecastProjections { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
@@ -33,12 +41,39 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Client>().HasIndex(u => u.CPF).IsUnique();
 
         modelBuilder.Entity<Supplier>().HasIndex(u => u.CNPJ).IsUnique();
+
+        modelBuilder.Entity<Product>().HasIndex(p => p.ProductCode).IsUnique();
+
+        // Consultas por período (dashboard, histórico de vendas da previsão, lead time de compras)
+        modelBuilder.Entity<Order>().HasIndex(o => new { o.Status, o.CreateAt });
+        modelBuilder.Entity<Sale>().HasIndex(s => new { s.IsActive, s.CreateAt });
+        modelBuilder.Entity<PurchaseOrder>().HasIndex(p => new { p.PurchaseStatus, p.ReceivedAt });
+
+        // *** Módulo de Previsão de Demanda (IA) ***
+        modelBuilder.Entity<Promotion>().HasIndex(p => new { p.ProductId, p.StartDate, p.EndDate });
+
+        modelBuilder.Entity<ProductSalesMonthly>().HasIndex(s => new { s.ProductId, s.Year, s.Month }).IsUnique();
+
+        modelBuilder.Entity<ProductSeasonality>().HasIndex(s => new { s.ProductId, s.Month }).IsUnique();
+
+        modelBuilder.Entity<ForecastRecommendation>().HasIndex(r => r.Status);
+        modelBuilder.Entity<ForecastRecommendation>()
+            .HasOne(r => r.PurchaseOrder)
+            .WithMany()
+            .HasForeignKey(r => r.PurchaseOrderId)
+            .OnDelete(DeleteBehavior.SetNull);
+        modelBuilder.Entity<ForecastRecommendation>()
+            .HasOne(r => r.Promotion)
+            .WithMany()
+            .HasForeignKey(r => r.PromotionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         base.OnModelCreating(modelBuilder);
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        optionsBuilder.LogTo(Console.WriteLine, LogLevel.Information); //tirar depois 
+        optionsBuilder.LogTo(Console.WriteLine, LogLevel.Warning); //tirar depois
         optionsBuilder.EnableSensitiveDataLogging(); // tirar depois
         base.OnConfiguring(optionsBuilder);
     }

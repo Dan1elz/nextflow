@@ -1,0 +1,13 @@
+{
+  "enabledPlugins": {
+    "csharp-lsp@anthropic-plugin-directory": true
+  },
+  "permissions": {
+    "deny": [
+      "Read(./**/bin/**)",
+      "Read(./**/obj/**)",
+      "Read(./**/node_modules/**)",
+      "Read(./**/dist/**)"
+    ]
+  }
+}

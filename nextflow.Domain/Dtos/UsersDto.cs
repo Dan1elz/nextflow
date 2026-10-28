@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Nextflow.Domain.Dtos.Base;
+using Nextflow.Domain.Enums;
 using Nextflow.Domain.Models;
 
 namespace Nextflow.Domain.Dtos;
@@ -28,6 +29,7 @@ public class UpdatePasswordDto : BaseDto
 public class UserResponseDto : PersonResponseDto
 {
     public string Email { get; set; } = string.Empty;
+    public RoleEnum Role { get; set; }
     public UserResponseDto() : base() { }
     public UserResponseDto(User dto) : base()
     {
@@ -35,6 +37,7 @@ public class UserResponseDto : PersonResponseDto
         Name = dto.Name;
         LastName = dto.LastName;
         Email = dto.Email;
+        Role = dto.Role;
         CPF = dto.CPF;
         BirthDate = dto.BirthDate;
         IsActive = dto.IsActive;

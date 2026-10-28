@@ -14,6 +14,10 @@ public class Supplier : BaseModel, IUpdatable<UpdateSupplierDto>, IDeletable
 
     [Required(ErrorMessage = "O CNPJ do forncedor é obrigatório.")]
     public string CNPJ { get; private set; } = string.Empty;
+
+    [Range(1, 180, ErrorMessage = "O prazo de entrega deve estar entre 1 e 180 dias.")]
+    public int LeadTimeDays { get; private set; } = 7;
+
     public virtual ICollection<Address> Addresses { get; set; } = [];
     public virtual ICollection<Contact> Contacts { get; set; } = [];
     public virtual ICollection<Product> Products { get; set; } = [];
@@ -49,12 +53,14 @@ public class Supplier : BaseModel, IUpdatable<UpdateSupplierDto>, IDeletable
     {
         Name = dto.Name;
         CNPJ = dto.CNPJ;
+        LeadTimeDays = dto.LeadTimeDays;
     }
 
     public void Update(UpdateSupplierDto dto)
     {
         Name = dto.Name;
         CNPJ = dto.CNPJ;
+        LeadTimeDays = dto.LeadTimeDays;
         Update();
     }
 }

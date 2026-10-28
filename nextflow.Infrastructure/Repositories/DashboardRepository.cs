@@ -48,9 +48,9 @@ public class DashboardRepository(AppDbContext context) : IDashboardRepository
             })
             .ToListAsync(ct);
 
-        // 4. Alertas de Estoque (Produtos com estoque abaixo de 15 unidades)
+        // 4. Alertas de Estoque (abaixo do estoque mínimo do produto; sem mínimo definido, abaixo de 15 unidades)
         var stockAlerts = await _context.Products
-            .Where(p => p.IsActive && p.Quantity < 15)
+            .Where(p => p.IsActive && p.Quantity < (p.MinStock > 0 ? p.MinStock : 15))
             .OrderBy(p => p.Quantity)
             .Take(5)
             .Select(p => new StockAlertDto
@@ -59,6 +59,7 @@ public class DashboardRepository(AppDbContext context) : IDashboardRepository
                 ProductName = p.Name,
                 ProductCode = p.ProductCode,
                 CurrentStock = p.Quantity,
+                MinStock = p.MinStock,
                 UnitType = p.UnitType.ToString()
             })
             .ToListAsync(ct);

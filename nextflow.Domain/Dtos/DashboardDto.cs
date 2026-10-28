@@ -33,6 +33,7 @@ public class StockAlertDto
     public string ProductName { get; set; } = string.Empty;
     public string ProductCode { get; set; } = string.Empty;
     public decimal CurrentStock { get; set; }
+    public decimal MinStock { get; set; }
     public string UnitType { get; set; } = string.Empty;
 }
 

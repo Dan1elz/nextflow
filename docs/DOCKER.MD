@@ -51,7 +51,9 @@ docker compose -f compose.development.yaml up -d --build
 ```
 
 > **Acesso:**
-> API em `http://localhost:8080` e Postgres em `localhost:5432`, publicados só em `127.0.0.1` (não são alcançáveis de fora da máquina).
+> API em `http://localhost:8080`, Postgres em `localhost:5432`, storage S3 em `http://localhost:9000` (imagens) e painel do storage em `http://localhost:9001` (login `STORAGE_ROOT_USER` / `STORAGE_ROOT_PASSWORD`), todos publicados só em `127.0.0.1` (não são alcançáveis de fora da máquina).
+>
+> O `storage-initial-setup` roda a cada `up`, cria buckets e usuário da API e encerra: `Exited (0)` com o log terminando em **"Storage pronto."** é o normal. O backend só sobe depois dele.
 
 ---
 
@@ -63,7 +65,7 @@ As variáveis sensíveis são injetadas **no momento da execução**, garantindo
 ### Comando de subida (Windows)
 
 ```bash
-docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Paulo & set POSTGRES_DB=nextflow_staging_db & set POSTGRES_USER=admin_staging & set POSTGRES_PASSWORD=senha_segura_staging_123 & set JWT_KEY=chave_jwt_muito_segura_para_staging_32_chars & set PUBLIC_API_URL=https://nextflow-api.zanni.tech & set CORS_ORIGINS=https://nextflow.zanni.tech & set POSTGRES_PORT=5434 & docker compose -f compose.staging.yaml up -d --build
+docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Paulo & set POSTGRES_DB=nextflow_staging_db & set POSTGRES_USER=admin_staging & set POSTGRES_PASSWORD=senha_segura_staging_123 & set JWT_KEY=chave_jwt_muito_segura_para_staging_32_chars & set STORAGE_ROOT_USER=nextflow-admin & set STORAGE_ROOT_PASSWORD=senha_admin_storage_staging & set STORAGE_ACCESS_KEY=nextflow-api & set STORAGE_SECRET_KEY=senha_api_storage_staging & set STORAGE_PUBLIC_URL=https://nextflow-s3.zanni.tech & set CORS_ORIGINS=https://nextflow.zanni.tech & set POSTGRES_PORT=5434 & docker compose -f compose.staging.yaml up -d --build
 
 ```
 
@@ -77,8 +79,21 @@ docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Pau
 | `POSTGRES_PASSWORD` | Senha do banco              |
 | `JWT_KEY`           | Chave de assinatura JWT     |
 | `POSTGRES_PORT`     | Porta do PostgreSQL no `127.0.0.1` |
-| `PUBLIC_API_URL`    | **Obrigatória.** Endereço público da API; monta a URL absoluta das imagens dos produtos (`Storage__BaseUrl`). Na VM: `https://nextflow-api.zanni.tech` |
+| `STORAGE_ROOT_USER` / `STORAGE_ROOT_PASSWORD` | **Obrigatórias.** Admin do storage (senha com 8+ caracteres). Só o `storage` e o `storage-initial-setup` usam |
+| `STORAGE_ACCESS_KEY` / `STORAGE_SECRET_KEY` | **Obrigatórias.** Usuário que a API usa, criado pelo `storage/init.sh` com acesso só aos buckets |
+| `STORAGE_PUBLIC_URL` | **Obrigatória.** Endereço público do storage, usado nas URLs das imagens e na assinatura de URLs. Na VM: `https://nextflow-s3.zanni.tech` (exato, sem porta) |
+| `STORAGE_BUCKET_PUBLIC` / `STORAGE_BUCKET_PRIVATE` | Nomes dos buckets (padrão `nextflow-public` / `nextflow-private`) |
+| `STORAGE_CONSOLE_PORT` | Porta do painel do storage no `127.0.0.1` (padrão `9001`; de fora, túnel SSH) |
+| `SEED_DEMO_ENABLED` | Liga o seed de demonstração (padrão `true` nos compose) → `Seed__Demo__Enabled` |
+| `SEED_DEMO_ANCHOR_DATE` | Data-âncora da simulação (`yyyy-MM-dd`; vazio = hoje) → `Seed__Demo__AnchorDate` |
 | `CORS_ORIGINS`      | Origens do front liberadas no CORS, separadas por vírgula (vazio = qualquer). Na VM: `https://nextflow.zanni.tech` |
+| `AI_PROVIDER`       | Provedor de IA da previsão de demanda (default `Gemini`) → `Ai__Provider` |
+| `AI_API_KEY`        | Chave da API de IA (vazio = previsão só com o cálculo, status "Concluída sem IA") → `Ai__ApiKey` |
+| `AI_MODEL`          | Modelo (default `gemini-flash-latest`) → `Ai__Model` |
+| `AI_TIMEOUT_SECONDS`| Tempo máximo da chamada à IA em segundos (default `60`) → `Ai__TimeoutSeconds` |
+
+> As variáveis `AI_*` são opcionais e valem também para o ambiente de desenvolvimento (lidas do `.env`).
+> A chave de IA nunca deve ser versionada nem logada.
 
 > **Acesso:**
 > A API **não publica porta**: fica na rede `proxy-net` com o alias `nextflow-api`, e o proxy de borda da VM a entrega em [https://nextflow-api.zanni.tech](https://nextflow-api.zanni.tech). Health check: `/health`.
@@ -86,7 +101,7 @@ docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Pau
 ### Atrás do proxy
 
 * O container escuta só HTTP (8080); o HTTPS termina no proxy. O `UseForwardedHeaders` (primeiro middleware do `Program.cs`) lê `X-Forwarded-For`/`X-Forwarded-Proto` vindos de rede privada, então a aplicação enxerga o IP do visitante e `Request.Scheme = https`.
-* As imagens enviadas ficam no volume `nextflow_assets` (`/app/assets`): recriar o container não apaga mais.
+* As imagens ficam no storage (volume `nextflow_storage_data`). O `storage` entra na `proxy-net` com o alias `nextflow-s3`: o proxy de borda precisa de um site `nextflow-s3.zanni.tech` → `nextflow-s3:9000`, repassando host e caminho intactos (a URL assinada depende deles).
 
 ---
 

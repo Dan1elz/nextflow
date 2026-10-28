@@ -295,6 +295,178 @@ namespace Nextflow.Infrastructure.Migrations
                     b.ToTable("countries");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastProjection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreateAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ForecastRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ProjectedQuantity")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ForecastRunId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("forecast_projections");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastRecommendation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<byte>("Action")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime?>("AppliedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AppliedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte>("Confidence")
+                        .HasColumnType("smallint");
+
+                    b.Property<decimal?>("CoverageDays")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("CreateAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("CurrentStock")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateOnly?>("Deadline")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DismissReason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid>("ForecastRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("IncomingStock")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("NextMonthDemand")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("NextMonthSeasonalIndex")
+                        .HasColumnType("numeric");
+
+                    b.Property<byte>("Priority")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ProjectedDemand")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid?>("PromotionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PurchaseOrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<decimal?>("SuggestedDiscountPercent")
+                        .HasColumnType("numeric");
+
+                    b.Property<int?>("SuggestedPromotionDays")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("SuggestedQuantity")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ForecastRunId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PromotionId");
+
+                    b.HasIndex("PurchaseOrderId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("forecast_recommendations");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AiModel")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AiProvider")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreateAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<int>("HorizonMonths")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InputSnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ProductsAnalyzed")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.ToTable("forecast_runs");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>
                 {
                     b.Property<Guid>("Id")
@@ -333,6 +505,8 @@ namespace Nextflow.Infrastructure.Migrations
                     b.HasIndex("ClientId");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "CreateAt");
 
                     b.ToTable("orders");
                 });
@@ -405,6 +579,13 @@ namespace Nextflow.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Brand")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<decimal?>("CostPrice")
+                        .HasColumnType("numeric");
+
                     b.Property<DateTime>("CreateAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -419,6 +600,9 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
+
+                    b.Property<decimal>("MinStock")
+                        .HasColumnType("numeric");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -449,9 +633,131 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ProductCode")
+                        .IsUnique();
+
                     b.HasIndex("SupplierId");
 
                     b.ToTable("products");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductSalesMonthly", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreateAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OrdersCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("QuantitySold")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("Revenue")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "Year", "Month")
+                        .IsUnique();
+
+                    b.ToTable("product_sales_monthly");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductSeasonality", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreateAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MonthsOfHistory")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("SeasonalIndex")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "Month")
+                        .IsUnique();
+
+                    b.ToTable("product_seasonality");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Promotion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreateAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("DiscountPercent")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("ForecastRecommendationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<byte>("Source")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("UpdateAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("ProductId", "StartDate", "EndDate");
+
+                    b.ToTable("promotions");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.PurchaseItem", b =>
@@ -505,6 +811,9 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Property<byte>("PurchaseStatus")
                         .HasColumnType("smallint");
 
+                    b.Property<DateTime?>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("SupplierId")
                         .HasColumnType("uuid");
 
@@ -517,6 +826,8 @@ namespace Nextflow.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("SupplierId");
+
+                    b.HasIndex("PurchaseStatus", "ReceivedAt");
 
                     b.ToTable("purchase_orders");
                 });
@@ -544,6 +855,8 @@ namespace Nextflow.Infrastructure.Migrations
                     b.HasIndex("OrderId");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("IsActive", "CreateAt");
 
                     b.ToTable("sales");
                 });
@@ -640,6 +953,9 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("LeadTimeDays")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -792,6 +1108,69 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("Supplier");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastProjection", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.ForecastRun", "ForecastRun")
+                        .WithMany("Projections")
+                        .HasForeignKey("ForecastRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Nextflow.Domain.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ForecastRun");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastRecommendation", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.ForecastRun", "ForecastRun")
+                        .WithMany("Recommendations")
+                        .HasForeignKey("ForecastRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Nextflow.Domain.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Nextflow.Domain.Models.Promotion", "Promotion")
+                        .WithMany()
+                        .HasForeignKey("PromotionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Nextflow.Domain.Models.PurchaseOrder", "PurchaseOrder")
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ForecastRun");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Promotion");
+
+                    b.Navigation("PurchaseOrder");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastRun", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.User", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RequestedByUser");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>
                 {
                     b.HasOne("Nextflow.Domain.Models.Client", "Client")
@@ -850,6 +1229,47 @@ namespace Nextflow.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductSalesMonthly", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductSeasonality", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Promotion", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Nextflow.Domain.Models.Product", "Product")
+                        .WithMany("Promotions")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.PurchaseItem", b =>
@@ -955,6 +1375,13 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("States");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastRun", b =>
+                {
+                    b.Navigation("Projections");
+
+                    b.Navigation("Recommendations");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>
                 {
                     b.Navigation("OrderItems");
@@ -967,6 +1394,8 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("CategoryProducts");
 
                     b.Navigation("OrderItems");
+
+                    b.Navigation("Promotions");
 
                     b.Navigation("StockMovements");
                 });

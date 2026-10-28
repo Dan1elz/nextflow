@@ -1,11 +1,14 @@
 using Microsoft.EntityFrameworkCore;
+using Nextflow.Application.Utils;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Exceptions;
 using Nextflow.Domain.Interfaces.Repositories;
 using Nextflow.Domain.Interfaces.UseCases;
+using Nextflow.Domain.Interfaces.Utils;
 using Nextflow.Domain.Models;
 using Nextflow.Domain.Interfaces.UseCases.Base;
+using Nextflow.Domain.Utils;
 
 namespace Nextflow.Application.UseCases.Orders;
 
@@ -13,13 +16,15 @@ public class UpdateOrderUseCase(
     IOrderRepository repository,
     IOrderItemRepository orderItemRepository,
     ICreateStockMovementUseCase createStockMovement,
-    IProductRepository productRepository
+    IProductRepository productRepository,
+    IProductPricingService pricingService
 ) : IUpdateUseCase<UpdateOrderDto, OrderResponseDto>
 {
     private readonly IOrderRepository _repository = repository;
     private readonly IOrderItemRepository _orderItemRepository = orderItemRepository;
     private readonly ICreateStockMovementUseCase _createStockMovement = createStockMovement;
     private readonly IProductRepository _productRepository = productRepository;
+    private readonly IProductPricingService _pricingService = pricingService;
 
     public async Task<OrderResponseDto> Execute(Guid id, UpdateOrderDto dto, CancellationToken ct)
     {
@@ -35,7 +40,9 @@ public class UpdateOrderUseCase(
             throw new BadRequestException("Apenas pedidos orçamentos ou aguardando pagamento podem ser atualizados.");
 
         var requestedProductIds = dto.Items.Select(i => i.ProductId).ToHashSet();
-        var products = await _productRepository.GetAllAsync(p => requestedProductIds.Contains(p.Id), 0, int.MaxValue, ct);
+        var pricingDate = BusinessClock.Today;
+        var products = await _productRepository.GetAllAsync(p => requestedProductIds.Contains(p.Id), 0, int.MaxValue, ct,
+            query => query.IncludeCurrentPromotions(pricingDate));
 
         if (products.Count() != requestedProductIds.Count)
             throw new BadRequestException("Um ou mais produtos não foram encontrados.");
@@ -74,6 +81,8 @@ public class UpdateOrderUseCase(
         foreach (var itemDto in dto.Items)
         {
             var product = productMap[itemDto.ProductId];
+            // Preço efetivo: aplica a promoção vigente (se houver)
+            var effectivePrice = _pricingService.GetEffectivePrice(product, pricingDate);
 
             if (existingItemsMap.TryGetValue(itemDto.ProductId, out OrderItem? existingItem))
             {
@@ -91,13 +100,13 @@ public class UpdateOrderUseCase(
                             MovementType = movementType,
                             Description = $"Ajuste (Update) do pedido {entity.Id}",
                             UserId = dto.UserId,
-                            Quote = product.Price,
+                            Quote = effectivePrice,
                             IsSystemGenerated = true
                         });
                     }
 
                     existingItem.UpdateDetails(itemDto.Quantity, itemDto.Discount);
-                    existingItem.SetPricing(product.Price);
+                    existingItem.SetPricing(effectivePrice);
                 }
 
                 totalAmount += existingItem.UnitPrice * existingItem.Quantity;
@@ -108,7 +117,7 @@ public class UpdateOrderUseCase(
                 // New item - will be added separately via repository
                 itemDto.OrderId = entity.Id;
                 var newItem = new OrderItem(itemDto);
-                newItem.SetPricing(product.Price);
+                newItem.SetPricing(effectivePrice);
 
                 if (entity.Type != OrderType.Budget)
                 {
@@ -119,7 +128,7 @@ public class UpdateOrderUseCase(
                         MovementType = MovementType.Sales,
                         Description = $"Adição (Update) ao pedido {entity.Id}",
                         UserId = dto.UserId,
-                        Quote = product.Price,
+                        Quote = effectivePrice,
                         IsSystemGenerated = true
                     });
                 }

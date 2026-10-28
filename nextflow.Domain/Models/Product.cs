@@ -26,7 +26,8 @@ public class Product : BaseModel, IUpdatable<UpdateProductDto>, IDeletable
     public string Description { get; private set; } = string.Empty;
 
     [StringLength(255, ErrorMessage = "O caminho da imagem nÃ£o pode exceder 255 caracteres")]
-    public string? Image { get; private set; } = string.Empty;
+    /// <summary>Chave do arquivo no storage (ex.: products/{guid}.webp); a URL é montada na leitura.</summary>
+    public string? Image { get; private set; }
 
     [Required(ErrorMessage = "A quantidade em estoque Ã© obrigatÃ³ria"), Range(0, double.MaxValue, ErrorMessage = "A quantidade em estoque nÃ£o pode ser negativa")]
     public decimal Quantity { get; private set; }
@@ -37,9 +38,20 @@ public class Product : BaseModel, IUpdatable<UpdateProductDto>, IDeletable
     [Required(ErrorMessage = "O preÃ§o Ã© obrigatÃ³rio"), Range(0.0, double.MaxValue, ErrorMessage = "O preÃ§o nÃ£o pode ser negativo")]
     public decimal Price { get; private set; }
     public DateOnly? Validity { get; private set; }
+
+    [StringLength(60, ErrorMessage = "A marca não pode exceder 60 caracteres")]
+    public string? Brand { get; private set; }
+
+    [Range(0.0, double.MaxValue, ErrorMessage = "O preço de custo não pode ser negativo")]
+    public decimal? CostPrice { get; private set; }
+
+    [Range(0.0, double.MaxValue, ErrorMessage = "O estoque mínimo não pode ser negativo")]
+    public decimal MinStock { get; private set; }
+
     public virtual ICollection<StockMovement> StockMovements { get; set; } = [];
     public virtual ICollection<CategoryProduct> CategoryProducts { get; set; } = [];
     public virtual ICollection<OrderItem> OrderItems { get; set; } = [];
+    public virtual ICollection<Promotion> Promotions { get; set; } = [];
 
     public DateTime? UpdateAt { get; private set; }
     public bool IsActive { get; set; } = true;
@@ -78,6 +90,9 @@ public class Product : BaseModel, IUpdatable<UpdateProductDto>, IDeletable
         UnitType = dto.UnitType;
         Price = dto.Price;
         Validity = dto.Validity;
+        Brand = NormalizeBrand(dto.Brand);
+        CostPrice = dto.CostPrice;
+        MinStock = dto.MinStock;
     }
     public void Update(UpdateProductDto dto)
     {
@@ -89,8 +104,38 @@ public class Product : BaseModel, IUpdatable<UpdateProductDto>, IDeletable
         UnitType = dto.UnitType;
         Price = dto.Price;
         Validity = dto.Validity;
+        Brand = NormalizeBrand(dto.Brand);
+        CostPrice = dto.CostPrice;
+        MinStock = dto.MinStock;
         Update();
     }
+
+    /// <summary>Atualiza o custo de referência (último custo), ex.: ao receber um pedido de compra.</summary>
+    public void UpdateCostPrice(decimal costPrice)
+    {
+        if (costPrice < 0)
+            throw new BadRequestException("O preço de custo não pode ser negativo.");
+
+        CostPrice = costPrice;
+        Update();
+    }
+
+    /// <summary>
+    /// Promoção vigente na data informada, considerando apenas as promoções carregadas em <see cref="Promotions"/>.
+    /// Sem promoções carregadas, retorna null (preço efetivo = <see cref="Price"/>).
+    /// </summary>
+    public Promotion? GetActivePromotion(DateOnly date) => Promotions
+        .Where(p => p.IsCurrent(date))
+        .OrderByDescending(p => p.DiscountPercent)
+        .ThenByDescending(p => p.CreateAt)
+        .FirstOrDefault();
+
+    /// <summary>Preço com a promoção vigente aplicada (= <see cref="Price"/> se não houver).</summary>
+    public decimal GetEffectivePrice(DateOnly date)
+        => GetActivePromotion(date)?.CalculatePromotionalPrice(Price) ?? Price;
+
+    private static string? NormalizeBrand(string? brand)
+        => string.IsNullOrWhiteSpace(brand) ? null : brand.Trim();
 
     public void UpdateImage(string? imagePath)
     {

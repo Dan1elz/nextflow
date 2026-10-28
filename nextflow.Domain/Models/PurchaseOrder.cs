@@ -23,6 +23,9 @@ public class PurchaseOrder : BaseModel, IUpdatable<UpdatePurchaseOrderDto>, IDel
 
     public string? Note { get; private set; }
 
+    /// <summary>Data/hora (UTC) em que o pedido mudou para Recebido. Usado para medir o lead time real.</summary>
+    public DateTime? ReceivedAt { get; private set; }
+
     public DateTime? UpdateAt { get; private set; }
     public bool Active { get; private set; } = true;
 
@@ -45,6 +48,14 @@ public class PurchaseOrder : BaseModel, IUpdatable<UpdatePurchaseOrderDto>, IDel
     {
         if (dto.Status.HasValue) PurchaseStatus = dto.Status.Value;
         if (dto.Note != null) Note = dto.Note;
+        UpdateAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Registra o recebimento (UTC). Chamado quando o status muda para Recebido.</summary>
+    public void MarkAsReceived()
+    {
+        PurchaseStatus = PurchaseStatus.Received;
+        ReceivedAt = DateTime.UtcNow;
         UpdateAt = DateTime.UtcNow;
     }
 

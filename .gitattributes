@@ -1,0 +1,2 @@
+# Scripts rodam dentro de containers Linux: CRLF quebra o /bin/sh
+*.sh text eol=lf

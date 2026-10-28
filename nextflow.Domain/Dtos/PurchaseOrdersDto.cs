@@ -54,6 +54,7 @@ public class PurchaseOrderResponseDto : BaseDto
     public string? Note { get; set; }
     public DateTime CreateAt { get; set; }
     public DateTime? UpdateAt { get; set; }
+    public DateTime? ReceivedAt { get; set; }
     public bool Active { get; set; }
     public List<PurchaseItemResponseDto> Items { get; set; } = [];
 
@@ -69,6 +70,7 @@ public class PurchaseOrderResponseDto : BaseDto
         Note = entity.Note;
         CreateAt = entity.CreateAt;
         UpdateAt = entity.UpdateAt;
+        ReceivedAt = entity.ReceivedAt;
         Active = entity.Active;
         Items = [.. entity.PurchaseItems.Select(i => new PurchaseItemResponseDto(i))];
     }

@@ -11,6 +11,9 @@ public class CreateSupplierDto : BaseDto
 
     [Required(ErrorMessage = "O CNPJ do forncedor é obrigatório.")]
     public string CNPJ { get; set; } = string.Empty;
+
+    [Range(1, 180, ErrorMessage = "O prazo de entrega deve estar entre 1 e 180 dias.")]
+    public int LeadTimeDays { get; set; } = 7;
 }
 
 public class UpdateSupplierDto : CreateSupplierDto { }
@@ -20,6 +23,7 @@ public class SupplierResponseDto : BaseDto
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string CNPJ { get; set; } = string.Empty;
+    public int LeadTimeDays { get; set; }
     public bool IsActive { get; set; }
 
     public SupplierResponseDto() { }
@@ -29,6 +33,7 @@ public class SupplierResponseDto : BaseDto
         Id = entity.Id;
         Name = entity.Name;
         CNPJ = entity.CNPJ;
+        LeadTimeDays = entity.LeadTimeDays;
         IsActive = entity.IsActive;
     }
 }

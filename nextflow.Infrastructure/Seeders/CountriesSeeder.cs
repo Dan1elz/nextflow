@@ -1,16 +1,19 @@
 
 
+using Microsoft.EntityFrameworkCore;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Models;
 using Nextflow.Infrastructure.Database;
 
 namespace Nextflow.Infrastructure.Seeders;
 
-public class CountriesSeeder
+public class CountriesSeeder(AppDbContext context) : ISeeder
 {
-    public static void Seed(AppDbContext context)
+    public int Order => 20;
+
+    public async Task SeedAsync(CancellationToken ct)
     {
-        if (context.Countries.Any())
+        if (await context.Countries.AnyAsync(ct))
         {
             return;
         }
@@ -201,6 +204,6 @@ public class CountriesSeeder
 
         context.Countries.AddRange(countries);
 
-        context.SaveChanges();
+        await context.SaveChangesAsync(ct);
     }
 }

@@ -3,11 +3,13 @@ using Nextflow.Infrastructure.Database;
 
 namespace Nextflow.Infrastructure.Seeders;
 
-public class CitiesSeeder
+public class CitiesSeeder(AppDbContext context) : ISeeder
 {
-    public static void Seed(AppDbContext context)
+    public int Order => 30;
+
+    public async Task SeedAsync(CancellationToken ct)
     {
-        if (context.Cities.Any())
+        if (await context.Cities.AnyAsync(ct))
         {
             return;
         }
@@ -5584,6 +5586,6 @@ public class CitiesSeeder
             (gen_random_uuid(), 'Zé Doca','2114007', (SELECT ""Id"" FROM public.states WHERE ""IbgeCode"" = '21'),'NOW()' ,'true'),
             (gen_random_uuid(), 'Zortéa','4219853',(SELECT ""Id"" FROM public.states WHERE ""IbgeCode"" = '42'),'NOW()','true');";
 
-        context.Database.ExecuteSqlRaw(sql);
+        await context.Database.ExecuteSqlRawAsync(sql, ct);
     }
 }

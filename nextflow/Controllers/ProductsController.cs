@@ -36,7 +36,10 @@ public class ProductsController(
             Quantity = request.Quantity,
             UnitType = request.UnitType,
             Price = request.Price,
-            Validity = request.Validity
+            Validity = request.Validity,
+            Brand = request.Brand,
+            CostPrice = request.CostPrice,
+            MinStock = request.MinStock
         };
         var entity = await createUseCase.Execute(dto, ct);
 
@@ -57,7 +60,10 @@ public class ProductsController(
             Quantity = request.Quantity,
             UnitType = request.UnitType,
             Price = request.Price,
-            Validity = request.Validity
+            Validity = request.Validity,
+            Brand = request.Brand,
+            CostPrice = request.CostPrice,
+            MinStock = request.MinStock
         };
 
         return Ok(new ApiResponse<ProductResponseDto>
@@ -69,11 +75,9 @@ public class ProductsController(
     }
 
     [HttpPut("{id:guid}/image")]
-    public async Task<IActionResult> UpdateImage([FromRoute] Guid id, IFormFile image, CancellationToken ct)
+    public async Task<IActionResult> UpdateImage([FromRoute] Guid id, IFormFile? image, CancellationToken ct)
     {
-        if (image == null)
-            return BadRequest("Imagem é obrigatória.");
-        var result = await updateProductImageUseCase.Execute(id, new FormFileAdapter(image), ct);
+        var result = await updateProductImageUseCase.Execute(id, image != null ? new FormFileAdapter(image) : null, ct);
         return Ok(new ApiResponse<ProductResponseDto>
         {
             Status = 200,

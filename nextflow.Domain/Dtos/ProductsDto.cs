@@ -4,6 +4,7 @@ using Nextflow.Domain.Dtos.Base;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Utils;
 using Nextflow.Domain.Models;
+using Nextflow.Domain.Utils;
 
 namespace Nextflow.Domain.Dtos;
 
@@ -32,6 +33,15 @@ public class CreateProductDto : BaseDto
     [Required(ErrorMessage = "O preço é obrigatório"), Range(0.0, double.MaxValue, ErrorMessage = "O preço não pode ser negativo")]
     public decimal Price { get; set; }
     public DateOnly? Validity { get; set; }
+
+    [StringLength(60, ErrorMessage = "A marca não pode exceder 60 caracteres")]
+    public string? Brand { get; set; }
+
+    [Range(0.0, double.MaxValue, ErrorMessage = "O preço de custo não pode ser negativo")]
+    public decimal? CostPrice { get; set; }
+
+    [Range(0.0, double.MaxValue, ErrorMessage = "O estoque mínimo não pode ser negativo")]
+    public decimal MinStock { get; set; }
 }
 public class UpdateProductDto : CreateProductDto { }
 
@@ -48,6 +58,16 @@ public class ProductResponseDto : BaseDto
     public UnitType UnitType { get; set; }
     public decimal Price { get; set; }
     public DateOnly? Validity { get; set; }
+    public string? Brand { get; set; }
+    public decimal? CostPrice { get; set; }
+    public decimal MinStock { get; set; }
+
+    /// <summary>Preço com a promoção vigente aplicada (= Price se não houver promoção vigente carregada).</summary>
+    public decimal EffectivePrice { get; set; }
+
+    /// <summary>Promoção vigente hoje, se houver (somente quando as promoções do produto foram carregadas).</summary>
+    public PromotionSummaryDto? ActivePromotion { get; set; }
+
     public List<CategoryResponseDto>? Categories { get; set; }
 
     public ProductResponseDto() { }
@@ -69,7 +89,15 @@ public class ProductResponseDto : BaseDto
         UnitType = entity.UnitType;
         Price = entity.Price;
         Validity = entity.Validity;
+        Brand = entity.Brand;
+        CostPrice = entity.CostPrice;
+        MinStock = entity.MinStock;
         Image = entity.Image;
+
+        var activePromotion = entity.GetActivePromotion(BusinessClock.Today);
+        EffectivePrice = activePromotion?.CalculatePromotionalPrice(entity.Price) ?? entity.Price;
+        ActivePromotion = activePromotion != null ? new PromotionSummaryDto(activePromotion, entity.Price) : null;
+
         Categories = categoriesOverride ?? [.. entity.CategoryProducts
             .Where(cp => cp.Category != null)
             .Select(cp => new CategoryResponseDto(cp.Category!))];

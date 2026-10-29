@@ -4,26 +4,33 @@
 > Detalhes de homologação e variáveis: `docs/DOCKER.MD`.
 
 ## Pré-requisitos
-Docker Desktop; .NET 8 SDK (para rodar fora do Docker). Rede compartilhada, uma vez:
-`docker network inspect nextflow-development-network >/dev/null 2>&1 || docker network create nextflow-development-network`
+Docker Desktop; .NET 10 SDK (para rodar fora do Docker e para os testes, que sobem um Postgres pelo Testcontainers).
 
 ## Subir
+O compose de dev da API nova (`nextflow-v2-development`) tem projeto, portas e volumes próprios: roda ao lado do dev
+antigo (`nextflow-development`, Postgres em 5432) sem tocar no banco dele. O `.env` é opcional; sem ele valem os padrões.
 ```
-cp .env.example .env
 docker compose -f compose.development.yaml up -d --build
 ```
-API em `http://localhost:8080` (health `/health`, Swagger em `/swagger`), PostgreSQL em `localhost:5432`,
-storage S3 em `http://localhost:9000` (painel `:9001`). O `storage-initial-setup` termina com `Exited (0)` e
-"Storage pronto.": é o normal. Migrations e seeders rodam no startup; o seed demo (`Seed:Demo:Enabled`) leva ~30 s.
+API em `http://localhost:8081` (health `/health`, Swagger em `/swagger`), PostgreSQL em `localhost:5435`
+(`nextflow_db`, `nextflow_user`, `nextflow_password`), storage S3 em `http://localhost:9010` (painel `:9011`).
+O `storage-initial-setup` termina com `Exited (0)` e "Storage pronto.": é o normal. Migrations e seeders rodam no startup.
 
-Fora do Docker (com banco e storage do compose no ar): `dotnet run --project nextflow/Nextflow.csproj`.
+Fora do Docker (só o banco do compose no ar):
+```
+docker compose -f compose.development.yaml up -d postgres
+dotnet run --project nextflow/Nextflow.csproj      # http://localhost:5145
+```
+
+Recriar o banco de dev do zero: `docker compose -f compose.development.yaml down -v` e subir de novo.
 
 ## Comandos úteis
 ```
 docker compose -f compose.development.yaml logs -f
 docker compose -f compose.development.yaml exec <serviço> sh
-docker compose -f compose.development.yaml down
 dotnet build nextflow-erp.sln
+dotnet test nextflow-erp.sln
+dotnet ef migrations add <Nome> --project nextflow.Infrastructure --startup-project nextflow
 ```
 
 ## IA

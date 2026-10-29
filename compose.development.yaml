@@ -1,47 +1,54 @@
-name: nextflow-development
+# Ambiente de dev da API nova (ADR 0010, branch feat/arquitetura-atrena).
+# Projeto, portas e volumes SEPARADOS do dev antigo (nextflow-development, Postgres em 5432): os dois podem rodar
+# juntos e subir este não toca no banco antigo.
+#   docker compose -f compose.development.yaml up -d postgres   # só o banco (API rodando com dotnet run)
+#   docker compose -f compose.development.yaml up -d            # banco + storage + API em watch
+name: nextflow-v2-development
 
-services:    
+services:
   postgres:
-    image: nextflow-postgres:development
+    image: nextflow-v2-postgres:development
     build:
       context: .
       dockerfile: Dockerfile.postgres
       args:
         DB_TIMEZONE: ${DB_TIMEZONE:-America/Sao_Paulo}
     env_file:
-      - .env
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nextflow_db}
+      POSTGRES_USER: ${POSTGRES_USER:-nextflow_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nextflow_password}
     restart: unless-stopped
     # Só em 127.0.0.1: abre no seu PC, mas ninguém de fora alcança
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5435}:5432"
     volumes:
-      - nextflow_postgres_data_dev:/var/lib/postgresql/data
+      - nextflow_v2_postgres_data_dev:/var/lib/postgresql/data
     networks:
-      - nextflow-development-network
+      - nextflow-v2-development-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nextflow_user} -d ${POSTGRES_DB:-nextflow_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # Storage de arquivos compatível com S3 (imagens de produtos). Programa: Silo, fork comunitário do MinIO.
-  # Os outros serviços só falam S3 com http://storage:9000: trocar de produto mexe só aqui.
+  # Storage compatível com S3 (imagens de produtos, a partir da F1.3). Programa: Silo, fork comunitário do MinIO.
   storage:
     image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     restart: unless-stopped
-    # Só em 127.0.0.1. A porta 9000 é a que o navegador usa para abrir as imagens (Storage__PublicUrl)
     ports:
-      - "127.0.0.1:${STORAGE_PORT:-9000}:9000"           # API S3
-      - "127.0.0.1:${STORAGE_CONSOLE_PORT:-9001}:9001"   # painel web
+      - "127.0.0.1:${STORAGE_PORT:-9010}:9000"           # API S3
+      - "127.0.0.1:${STORAGE_CONSOLE_PORT:-9011}:9001"   # painel web
     environment:
-      # Esquerda: nome que o Silo lê. Errado, ele sobe com minioadmin:minioadmin
       MINIO_ROOT_USER: ${STORAGE_ROOT_USER:-nextflow-admin}
       MINIO_ROOT_PASSWORD: ${STORAGE_ROOT_PASSWORD:-nextflow-admin-secret}
     command: server /data --console-address ":9001"
     volumes:
-      - nextflow_storage_data_dev:/data
+      - nextflow_v2_storage_data_dev:/data
     networks:
-      - nextflow-development-network
+      - nextflow-v2-development-network
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
@@ -63,73 +70,70 @@ services:
       STORAGE_BUCKET_PUBLIC: ${STORAGE_BUCKET_PUBLIC:-nextflow-public}
       STORAGE_BUCKET_PRIVATE: ${STORAGE_BUCKET_PRIVATE:-nextflow-private}
     networks:
-      - nextflow-development-network
+      - nextflow-v2-development-network
     depends_on:
       storage:
         condition: service_healthy
 
   backend:
-    image: nextflow-backend:development
+    image: nextflow-v2-backend:development
     build:
       context: .
       dockerfile: Dockerfile.development
     working_dir: /src
     volumes:
       - .:/src
-      - nextflow_nuget_cache:/root/.nuget/packages
+      - nextflow_v2_nuget_cache:/root/.nuget/packages
       # Evita "Access denied" no build no Windows: bin/obj ficam em volumes do Docker
-      - nextflow_backend_bin:/src/nextflow/bin
-      - nextflow_backend_obj:/src/nextflow/obj
-      - nextflow_backend_app_bin:/src/nextflow.Application/bin
-      - nextflow_backend_app_obj:/src/nextflow.Application/obj
-      - nextflow_backend_domain_bin:/src/nextflow.Domain/bin
-      - nextflow_backend_domain_obj:/src/nextflow.Domain/obj
-      - nextflow_backend_infra_bin:/src/nextflow.Infrastructure/bin
-      - nextflow_backend_infra_obj:/src/nextflow.Infrastructure/obj
+      - nextflow_v2_backend_bin:/src/nextflow/bin
+      - nextflow_v2_backend_obj:/src/nextflow/obj
+      - nextflow_v2_backend_app_bin:/src/nextflow.Application/bin
+      - nextflow_v2_backend_app_obj:/src/nextflow.Application/obj
+      - nextflow_v2_backend_domain_bin:/src/nextflow.Domain/bin
+      - nextflow_v2_backend_domain_obj:/src/nextflow.Domain/obj
+      - nextflow_v2_backend_infra_bin:/src/nextflow.Infrastructure/bin
+      - nextflow_v2_backend_infra_obj:/src/nextflow.Infrastructure/obj
+      - nextflow_v2_backend_tests_bin:/src/nextflow.Tests/bin
+      - nextflow_v2_backend_tests_obj:/src/nextflow.Tests/obj
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
-      JwtSettings__Key: ${JWT_KEY}
-      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=${POSTGRES_DB:-nextflow_db};User Id=${POSTGRES_USER:-nextflow_user};Password=${POSTGRES_PASSWORD};Pooling=true;"
-      # IA (Previsão de demanda) — sem AI_API_KEY o módulo roda só com o cálculo
-      Ai__Provider: ${AI_PROVIDER:-Gemini}
-      Ai__ApiKey: ${AI_API_KEY:-}
-      Ai__Model: ${AI_MODEL:-gemini-flash-latest}
-      Ai__TimeoutSeconds: ${AI_TIMEOUT_SECONDS:-60}
-      # Seed de demonstração (loja de doces e presentes, 36 meses). AnchorDate vazio = hoje
+      # Sem JWT_KEY no .env vale a chave de desenvolvimento do appsettings.Development.json
+      JwtSettings__Key: ${JWT_KEY:-nextflow-chave-de-desenvolvimento-nao-use-fora-do-dev-0001}
+      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=${POSTGRES_DB:-nextflow_db};User Id=${POSTGRES_USER:-nextflow_user};Password=${POSTGRES_PASSWORD:-nextflow_password};Pooling=true;"
       Seed__Demo__Enabled: ${SEED_DEMO_ENABLED:-true}
       Seed__Demo__AnchorDate: ${SEED_DEMO_ANCHOR_DATE:-}
-      # Storage (S3): a API fala pela rede interna; o navegador abre as imagens pelo endereço público
       Storage__Endpoint: http://storage:9000
-      Storage__PublicUrl: ${STORAGE_PUBLIC_URL:-http://localhost:9000}
+      Storage__PublicUrl: ${STORAGE_PUBLIC_URL:-http://localhost:9010}
       Storage__AccessKey: ${STORAGE_ACCESS_KEY:-nextflow}
       Storage__SecretKey: ${STORAGE_SECRET_KEY:-nextflow-secret}
       Storage__Buckets__Public: ${STORAGE_BUCKET_PUBLIC:-nextflow-public}
       Storage__Buckets__Private: ${STORAGE_BUCKET_PRIVATE:-nextflow-private}
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${BACKEND_PORT:-8081}:8080"
     networks:
-      - nextflow-development-network
+      - nextflow-v2-development-network
     depends_on:
       postgres:
         condition: service_healthy
-      # Os seeders sobem imagens: buckets e usuário precisam existir antes
       storage-initial-setup:
         condition: service_completed_successfully
 
 networks:
-  nextflow-development-network:
-    external: true
+  nextflow-v2-development-network:
 
 volumes:
-  nextflow_postgres_data_dev:
-  nextflow_storage_data_dev:
-  nextflow_nuget_cache:
-  nextflow_backend_bin:
-  nextflow_backend_obj:
-  nextflow_backend_app_bin:
-  nextflow_backend_app_obj:
-  nextflow_backend_domain_bin:
-  nextflow_backend_domain_obj:
-  nextflow_backend_infra_bin:
-  nextflow_backend_infra_obj:
+  nextflow_v2_postgres_data_dev:
+  nextflow_v2_storage_data_dev:
+  nextflow_v2_nuget_cache:
+  nextflow_v2_backend_bin:
+  nextflow_v2_backend_obj:
+  nextflow_v2_backend_app_bin:
+  nextflow_v2_backend_app_obj:
+  nextflow_v2_backend_domain_bin:
+  nextflow_v2_backend_domain_obj:
+  nextflow_v2_backend_infra_bin:
+  nextflow_v2_backend_infra_obj:
+  nextflow_v2_backend_tests_bin:
+  nextflow_v2_backend_tests_obj:

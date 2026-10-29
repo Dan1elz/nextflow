@@ -1,11 +1,19 @@
-using System.Collections.Generic;
 using System.Globalization;
-using Newtonsoft.Json;
+using System.Text.Json;
 
 namespace Nextflow.Utils;
 
+/// <summary>
+/// Helper utilitário para converter payloads JSON de filtros em dicionários legíveis pela camada de Application.
+/// </summary>
 public static class FilterHelper
 {
+    /// <summary>
+    /// Realiza o Parsing de uma string JSON para um dicionário de strings.
+    /// Ignora valores nulos ou vazios e limpa os espaços em branco.
+    /// </summary>
+    /// <param name="filtersJson">O JSON bruto (geralmente enviado via Query string encodeada).</param>
+    /// <returns>Um dicionário IReadOnlyDictionary ou null se o JSON for inválido/vazio.</returns>
     public static IReadOnlyDictionary<string, string>? Parse(string? filtersJson)
     {
         if (string.IsNullOrWhiteSpace(filtersJson))
@@ -13,8 +21,7 @@ public static class FilterHelper
 
         try
         {
-            // Aceita valores que venham como number/bool/date no JSON e converte para string.
-            var raw = JsonConvert.DeserializeObject<Dictionary<string, object?>>(filtersJson);
+            var raw = JsonSerializer.Deserialize<Dictionary<string, object?>>(filtersJson);
             if (raw == null || raw.Count == 0) return null;
 
             var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -22,9 +29,18 @@ public static class FilterHelper
             {
                 if (string.IsNullOrWhiteSpace(k) || v is null) continue;
 
-                var s = v is IFormattable f
-                    ? f.ToString(null, CultureInfo.InvariantCulture)
-                    : v.ToString();
+                var s = string.Empty;
+                if (v is JsonElement je)
+                {
+                    if (je.ValueKind == JsonValueKind.String)
+                        s = je.GetString();
+                    else
+                        s = je.ToString();
+                }
+                else
+                {
+                    s = v is IFormattable f ? f.ToString(null, CultureInfo.InvariantCulture) : v.ToString();
+                }
 
                 if (string.IsNullOrWhiteSpace(s)) continue;
                 result[k] = s.Trim();
@@ -38,6 +54,14 @@ public static class FilterHelper
         }
     }
 
+    /// <summary>
+    /// Garante que uma chave de filtro exista no dicionário, aplicando o valor padrão quando ausente.
+    /// Útil para forçar filtros obrigatórios de rota (ex: id do recurso pai).
+    /// </summary>
+    /// <param name="filters">O dicionário de filtros original (pode ser null).</param>
+    /// <param name="key">A chave a garantir.</param>
+    /// <param name="value">O valor padrão aplicado quando a chave não existe.</param>
+    /// <returns>Um novo dicionário com a chave garantida.</returns>
     public static IReadOnlyDictionary<string, string>? EnsureDefault(
         IReadOnlyDictionary<string, string>? filters,
         string key,

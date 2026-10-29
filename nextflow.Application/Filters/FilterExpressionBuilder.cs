@@ -3,13 +3,29 @@ using Nextflow.Application.Utils;
 
 namespace Nextflow.Application.Filters;
 
+/// <summary>
+/// Construtor de Árvores de Expressão dinâmicas para filtragem de IQueryable baseada em strings.
+/// </summary>
+/// <typeparam name="TEntity">O tipo da entidade que será filtrada.</typeparam>
 public sealed class FilterExpressionBuilder<TEntity>
 {
     private Expression<Func<TEntity, bool>> _expr = _ => true;
+
+    /// <summary>
+    /// Indica se algum filtro foi adicionado à composição.
+    /// </summary>
     public bool HasAny { get; private set; }
 
+    /// <summary>
+    /// A expressão Predicate final resultante da composição de todas as cláusulas.
+    /// </summary>
     public Expression<Func<TEntity, bool>> Predicate => _expr;
 
+    /// <summary>
+    /// Adiciona uma cláusula manual ao conjunto de filtros através de AND.
+    /// </summary>
+    /// <param name="clause">A expressão lambda de filtro.</param>
+    /// <returns>A própria instância do Builder.</returns>
     public FilterExpressionBuilder<TEntity> And(Expression<Func<TEntity, bool>> clause)
     {
         _expr = _expr.AndAlso(clause);
@@ -17,6 +33,13 @@ public sealed class FilterExpressionBuilder<TEntity>
         return this;
     }
 
+    /// <summary>
+    /// Adiciona um filtro de igualdade de Guid se a chave existir no FilterSet.
+    /// </summary>
+    /// <param name="filters">O conjunto de filtros da entrada.</param>
+    /// <param name="key">A chave do mapa de filtros.</param>
+    /// <param name="selector">A propriedade da entidade a ser comparada.</param>
+    /// <returns>O Builder.</returns>
     public FilterExpressionBuilder<TEntity> WhereGuidEquals(
         FilterSet filters,
         string key,
@@ -28,6 +51,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndEquals(selector, guid);
     }
 
+    /// <summary>
+    /// Adiciona um filtro de igualdade de Guid (Nullable) se a chave existir no FilterSet.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereGuidEquals(
         FilterSet filters,
         string key,
@@ -43,6 +69,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return And(Expression.Lambda<Func<TEntity, bool>>(Expression.AndAlso(notNull, equals), p));
     }
 
+    /// <summary>
+    /// Adiciona um filtro booleano se a chave existir no FilterSet.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereBoolEquals(
         FilterSet filters,
         string key,
@@ -54,6 +83,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndEquals(selector, b);
     }
 
+    /// <summary>
+    /// Adiciona um filtro de igualdade de Inteiro.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereIntEquals(
         FilterSet filters,
         string key,
@@ -65,6 +97,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndEquals(selector, i);
     }
 
+    /// <summary>
+    /// Adiciona um filtro de "Maior ou Igual" (GTE) para Inteiro.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereIntGte(
         FilterSet filters,
         string key,
@@ -75,6 +110,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndCompare(selector, ExpressionType.GreaterThanOrEqual, i);
     }
 
+    /// <summary>
+    /// Adiciona um filtro de "Menor ou Igual" (LTE) para Inteiro.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereIntLte(
         FilterSet filters,
         string key,
@@ -85,6 +123,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndCompare(selector, ExpressionType.LessThanOrEqual, i);
     }
 
+    /// <summary>
+    /// Filtro de igualdade para Decimal.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereDecimalEquals(
         FilterSet filters,
         string key,
@@ -96,6 +137,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndEquals(selector, d);
     }
 
+    /// <summary>
+    /// Filtro de Maior ou Igual (GTE) para Decimal.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereDecimalGte(
         FilterSet filters,
         string key,
@@ -106,6 +150,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndCompare(selector, ExpressionType.GreaterThanOrEqual, d);
     }
 
+    /// <summary>
+    /// Filtro de Menor ou Igual (LTE) para Decimal.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereDecimalLte(
         FilterSet filters,
         string key,
@@ -116,6 +163,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndCompare(selector, ExpressionType.LessThanOrEqual, d);
     }
 
+    /// <summary>
+    /// Filtro de data (DateOnly) Maior ou Igual (GTE).
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereDateOnlyGte(
         FilterSet filters,
         string key,
@@ -126,6 +176,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndCompare(selector, ExpressionType.GreaterThanOrEqual, d);
     }
 
+    /// <summary>
+    /// Filtro de data (DateOnly) Menor ou Igual (LTE).
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereDateOnlyLte(
         FilterSet filters,
         string key,
@@ -136,6 +189,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndCompare(selector, ExpressionType.LessThanOrEqual, d);
     }
 
+    /// <summary>
+    /// Filtro de data/hora (DateTime) Maior ou Igual (GTE).
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereDateTimeGte(
         FilterSet filters,
         string key,
@@ -146,6 +202,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndCompare(selector, ExpressionType.GreaterThanOrEqual, d);
     }
 
+    /// <summary>
+    /// Filtro de data/hora (DateTime) Menor ou Igual (LTE).
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereDateTimeLte(
         FilterSet filters,
         string key,
@@ -156,6 +215,14 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndCompare(selector, ExpressionType.LessThanOrEqual, d);
     }
 
+    /// <summary>
+    /// Adiciona um filtro de busca parcial de string (Contains).
+    /// </summary>
+    /// <param name="filters">Filtros de entrada.</param>
+    /// <param name="key">A chave buscada.</param>
+    /// <param name="selector">O campo da entidade.</param>
+    /// <param name="ignoreCase">Se deve ignorar maiúsculas/minúsculas.</param>
+    /// <returns>Builder.</returns>
     public FilterExpressionBuilder<TEntity> WhereStringContains(
         FilterSet filters,
         string key,
@@ -167,7 +234,7 @@ public sealed class FilterExpressionBuilder<TEntity>
         if (value.Length == 0) return this;
 
         var p = Expression.Parameter(typeof(TEntity), "e");
-        var body = new ReplaceParameterVisitor(selector.Parameters[0], p).Visit(selector.Body)!; // string
+        var body = new ReplaceParameterVisitor(selector.Parameters[0], p).Visit(selector.Body)!;
 
         Expression haystack = body;
         Expression needle = Expression.Constant(ignoreCase ? value.ToLowerInvariant() : value);
@@ -184,6 +251,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return And(Expression.Lambda<Func<TEntity, bool>>(containsCall, p));
     }
 
+    /// <summary>
+    /// Adiciona uma cláusula OR que verifica se o termo de busca está contido em QUALQUER um dos seletores informados.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereStringContainsAny(
         FilterSet filters,
         string key,
@@ -212,6 +282,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return And(Expression.Lambda<Func<TEntity, bool>>(orBody, p));
     }
 
+    /// <summary>
+    /// Filtro de Maior ou Igual (GTE) para Double.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereDoubleGte(
         FilterSet filters,
         string key,
@@ -222,6 +295,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndCompare(selector, ExpressionType.GreaterThanOrEqual, (double)d);
     }
 
+    /// <summary>
+    /// Filtro de Menor ou Igual (LTE) para Double.
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereDoubleLte(
         FilterSet filters,
         string key,
@@ -232,18 +308,25 @@ public sealed class FilterExpressionBuilder<TEntity>
         return AndCompare(selector, ExpressionType.LessThanOrEqual, (double)d);
     }
 
+    /// <summary>
+    /// Filtro de Igualdade para Enums (baseado no valor inteiro).
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereEnumEquals<TEnum>(
         FilterSet filters,
         string key,
         Expression<Func<TEntity, TEnum>> selector) where TEnum : struct, Enum
     {
         if (!filters.TryGetString(key, out var raw)) return this;
-        if (!FilterValueParsers.TryParseInt(raw, out var i)) return this;
-        if (!Enum.IsDefined(typeof(TEnum), i)) return this;
-        var enumVal = (TEnum)Enum.ToObject(typeof(TEnum), i);
+        if (!FilterValueParsers.TryParseEnum<TEnum>(raw, out var enumVal)) return this;
+        // Enum.TryParse aceita qualquer número (inclusive fora do enum) — sem essa checagem
+        // um valor inválido viraria filtro por um status inexistente e zeraria a listagem.
+        if (!Enum.IsDefined(enumVal)) return this;
         return AndEquals(selector, enumVal);
     }
 
+    /// <summary>
+    /// Filtro de data (DateOnly Nullable) Menor ou Igual (LTE).
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereNullableDateOnlyLte(
         FilterSet filters,
         string key,
@@ -261,6 +344,9 @@ public sealed class FilterExpressionBuilder<TEntity>
         return And(Expression.Lambda<Func<TEntity, bool>>(combined, p));
     }
 
+    /// <summary>
+    /// Filtro de data (DateOnly Nullable) Maior ou Igual (GTE).
+    /// </summary>
     public FilterExpressionBuilder<TEntity> WhereNullableDateOnlyGte(
         FilterSet filters,
         string key,
@@ -316,4 +402,3 @@ public sealed class FilterExpressionBuilder<TEntity>
             => node == from ? to : base.VisitParameter(node);
     }
 }
-

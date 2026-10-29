@@ -2,8 +2,19 @@ using System.Linq.Expressions;
 
 namespace Nextflow.Application.Utils;
 
+/// <summary>
+/// Coleção de métodos de extensão para manipulação dinâmica de <see cref="Expression"/>.
+/// </summary>
 public static class ExpressionExtensions
 {
+    /// <summary>
+    /// Combina duas expressões Predicate (Func de T para bool) utilizando o operador lógico AND (AndAlso).
+    /// Realiza o mapeamento de parâmetros para garantir que ambas usem a mesma referência de entrada.
+    /// </summary>
+    /// <typeparam name="T">O tipo da entidade.</typeparam>
+    /// <param name="left">A expressão base (esquerda).</param>
+    /// <param name="right">A nova expressão a ser anexada (direita).</param>
+    /// <returns>Uma nova expressão composta.</returns>
     public static Expression<Func<T, bool>> AndAlso<T>(
         this Expression<Func<T, bool>> left,
         Expression<Func<T, bool>> right)
@@ -22,4 +33,3 @@ public static class ExpressionExtensions
             => node == from ? to : base.VisitParameter(node);
     }
 }
-

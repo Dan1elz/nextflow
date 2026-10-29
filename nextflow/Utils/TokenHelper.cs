@@ -1,24 +1,19 @@
 using System.Security.Claims;
-using Nextflow.Domain.Exceptions;
 
-namespace Nextflow.Application.Utils;
+namespace Nextflow.Utils;
 
 public static class TokenHelper
 {
-    public static Guid GetUserId(ClaimsPrincipal user)
+    public static Guid GetUserId(ClaimsPrincipal? user)
     {
-        if (user?.Identity?.IsAuthenticated != true)
-        {
-            throw new NotAuthorizedException("Usuário não autenticado.");
-        }
+        if (user == null || !user.Identity?.IsAuthenticated == true)
+            throw new InvalidOperationException("Usuário não autenticado.");
 
-        var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        string? userIdClaim = user.Claims
+            .FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
 
-        if (!Guid.TryParse(userIdClaim, out var userId))
-        {
-            throw new NotAuthorizedException("O ID do usuário no token é inválido ou não está presente.");
-        }
-
-        return userId;
+        return !Guid.TryParse(userIdClaim, out Guid userId)
+            ? throw new InvalidOperationException("O ID do usuário no token é inválido ou não está presente.")
+            : userId;
     }
 }

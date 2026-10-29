@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0
+FROM mcr.microsoft.com/dotnet/sdk:10.0
 
 WORKDIR /src
 
@@ -20,6 +20,7 @@ COPY nextflow/*.csproj ./nextflow/
 COPY nextflow.Application/*.csproj ./nextflow.Application/
 COPY nextflow.Domain/*.csproj ./nextflow.Domain/
 COPY nextflow.Infrastructure/*.csproj ./nextflow.Infrastructure/
+COPY nextflow.Tests/*.csproj ./nextflow.Tests/
 
 RUN dotnet restore
 
@@ -30,4 +31,4 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=5 \
 
 # Comando de entrada: dotnet watch run
 # O "--non-interactive" é importante para não travar logs
-CMD ["dotnet", "watch", "run", "--project", "nextflow/nextflow.csproj", "--urls", "http://0.0.0.0:8080", "--non-interactive"]
+CMD ["dotnet", "watch", "run", "--project", "nextflow/Nextflow.csproj", "--urls", "http://0.0.0.0:8080", "--non-interactive"]

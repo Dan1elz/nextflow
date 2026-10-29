@@ -1,7 +1,7 @@
 # ============================
 # Estágio de Build (SDK)
 # ============================
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copiar solução e projetos para restore otimizado (cache layer)
@@ -10,6 +10,7 @@ COPY nextflow/*.csproj ./nextflow/
 COPY nextflow.Application/*.csproj ./nextflow.Application/
 COPY nextflow.Domain/*.csproj ./nextflow.Domain/
 COPY nextflow.Infrastructure/*.csproj ./nextflow.Infrastructure/
+COPY nextflow.Tests/*.csproj ./nextflow.Tests/
 
 # Configurar diretório de pacotes para o restore
 ENV NUGET_PACKAGES=/root/.nuget/packages
@@ -27,7 +28,7 @@ RUN dotnet publish nextflow/Nextflow.csproj -c Release -o /app/publish /p:UseApp
 # ============================
 # Estágio de Runtime (Imagem final)
 # ============================
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 # Instalar curl para o healthcheck e criar usuário sem privilégios (segurança)

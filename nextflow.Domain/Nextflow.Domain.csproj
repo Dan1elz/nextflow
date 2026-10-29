@@ -1,21 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RootNamespace>Nextflow.Domain</RootNamespace>
   </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Dtos\Base\" />
-    <Folder Include="Interfaces\Repositories\Base\" />
-    <Folder Include="Interfaces\UseCases\" />
-    <Folder Include="Enums\" />
-    <Folder Include="Exceptions\" />
-    <Folder Include="Models\Base\" />
-    <Folder Include="Attributes\" />
+    <PackageReference Include="FluentValidation" Version="12.1.1" />
   </ItemGroup>
 
 </Project>

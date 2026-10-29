@@ -2,7 +2,7 @@ namespace Nextflow.Infrastructure.Seeders;
 
 /// <summary>
 /// Dados iniciais aplicados no startup, depois das migrations.
-/// Toda classe que implementa esta interface é registrada automaticamente (Program.cs) e executada pelo <see cref="SeederRunner"/>.
+/// Toda classe que implementa esta interface é registrada automaticamente (DependencyInjection.cs) e executada pelo <see cref="SeederRunner"/>.
 /// Cada seeder deve ser idempotente: rodar de novo não pode duplicar dados.
 /// </summary>
 public interface ISeeder

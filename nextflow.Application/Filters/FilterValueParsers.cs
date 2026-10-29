@@ -1,14 +1,32 @@
 using System.Globalization;
+using System.Linq;
 
 namespace Nextflow.Application.Filters;
 
+/// <summary>
+/// Provedor estático de Parsers para converter strings em diversos tipos (Guid, Bool, Int, Decimal, etc).
+/// Suporta fallback de culturas para <c>pt-BR</c> e <c>InvariantCulture</c>.
+/// </summary>
 public static class FilterValueParsers
 {
     private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
 
+    /// <summary>
+    /// Tenta converter uma string para Guid.
+    /// </summary>
+    /// <param name="value">A string de entrada.</param>
+    /// <param name="guid">O Guid resultante.</param>
+    /// <returns>True se a conversão for bem sucedida.</returns>
     public static bool TryParseGuid(string value, out Guid guid)
         => Guid.TryParse(value, out guid);
 
+    /// <summary>
+    /// Tenta converter uma string para booleano.
+    /// Aceita diversos padrões (1/0, yes/no, sim/nao, true/false, on/off).
+    /// </summary>
+    /// <param name="value">A string de entrada.</param>
+    /// <param name="b">O booleano resultante.</param>
+    /// <returns>True se o valor for mapeável para booleano.</returns>
     public static bool TryParseBool(string value, out bool b)
     {
         var v = value.Trim().ToLowerInvariant();
@@ -37,14 +55,53 @@ public static class FilterValueParsers
         }
     }
 
+    /// <summary>
+    /// Tenta converter uma string para Inteiro. Suporta pontos e virgulas conforme cultura pt-BR.
+    /// </summary>
+    /// <param name="value">A string de entrada.</param>
+    /// <param name="i">O inteiro resultante.</param>
+    /// <returns>True se a conversão for bem sucedida.</returns>
     public static bool TryParseInt(string value, out int i)
         => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out i)
            || int.TryParse(value, NumberStyles.Integer, PtBr, out i);
 
+    /// <summary>
+    /// Tenta converter uma string para um enum. Aceita tanto o nome do membro em C#
+    /// (PascalCase, case-insensitive) quanto o api_name em snake_case usado nas
+    /// respostas da API e pelo frontend (ex.: "pending_approval" → PendingApproval).
+    /// </summary>
+    /// <param name="value">A string de entrada.</param>
+    /// <param name="result">O valor do enum resultante.</param>
+    /// <returns>True se a conversão for bem sucedida.</returns>
+    public static bool TryParseEnum<TEnum>(string value, out TEnum result) where TEnum : struct, Enum
+    {
+        if (Enum.TryParse(value, ignoreCase: true, out result))
+            return true;
+
+        var pascalCase = string.Concat(
+            value.Split('_', StringSplitOptions.RemoveEmptyEntries)
+                .Select(part => char.ToUpperInvariant(part[0]) + part[1..]));
+
+        return Enum.TryParse(pascalCase, ignoreCase: true, out result);
+    }
+
+    /// <summary>
+    /// Tenta converter uma string para Decimal. Suporta múltiplos formatos culturais.
+    /// </summary>
+    /// <param name="value">A string de entrada.</param>
+    /// <param name="d">O decimal resultante.</param>
+    /// <returns>True se a conversão for bem sucedida.</returns>
     public static bool TryParseDecimal(string value, out decimal d)
         => decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out d)
            || decimal.TryParse(value, NumberStyles.Number, PtBr, out d);
 
+    /// <summary>
+    /// Tenta converter uma string para DateOnly.
+    /// Prioriza ISO (yyyy-MM-dd) seguido de BR (dd/MM/yyyy).
+    /// </summary>
+    /// <param name="value">A string de entrada.</param>
+    /// <param name="date">A data resultante.</param>
+    /// <returns>True se mapeado.</returns>
     public static bool TryParseDateOnly(string value, out DateOnly date)
     {
         // Preferência: ISO-8601 (yyyy-MM-dd). Aceita também pt-BR (dd/MM/yyyy).
@@ -64,6 +121,12 @@ public static class FilterValueParsers
         return false;
     }
 
+    /// <summary>
+    /// Tenta converter uma string para DateTime (UTC preferencialmente).
+    /// </summary>
+    /// <param name="value">A string de entrada.</param>
+    /// <param name="dt">O DateTime resultante.</param>
+    /// <returns>True se a data for válida.</returns>
     public static bool TryParseDateTime(string value, out DateTime dt)
     {
         // ISO-8601 comum
@@ -91,4 +154,3 @@ public static class FilterValueParsers
             out dt);
     }
 }
-

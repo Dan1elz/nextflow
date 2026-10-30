@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Nextflow.Domain.Interfaces.Application.Services;
 
 namespace Nextflow.Extensions;
 
@@ -78,6 +79,19 @@ public static class DependencyInjection
                 ValidateAudience = false,
                 ClockSkew = TimeSpan.Zero,
                 RoleClaimType = ClaimTypes.Role
+            };
+            options.Events = new JwtBearerEvents
+            {
+                // RN-AC02 (decisão de 29/10): usuário inativado perde o acesso na hora, mesmo com o token ainda válido.
+                OnTokenValidated = async context =>
+                {
+                    var userAccess = context.HttpContext.RequestServices.GetRequiredService<IUserAccessService>();
+                    var claim = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                    if (!Guid.TryParse(claim, out var userId)
+                        || !await userAccess.CanAccess(userId, context.HttpContext.RequestAborted))
+                        context.Fail("Usuário inativo ou inexistente.");
+                }
             };
         });
         services.AddAuthorization();

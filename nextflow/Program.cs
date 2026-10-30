@@ -64,6 +64,14 @@ try
 
     app.UseMiddleware<GlobalResultMiddleware>();
 
+    // O ApiController relê o corpo JSON que não virou DTO para separar JSON quebrado (400) de campo inválido (422).
+    app.Use((context, next) =>
+    {
+        if (context.Request.HasJsonContentType())
+            context.Request.EnableBuffering();
+        return next();
+    });
+
     app.UseAuthentication();
     app.UseAuthorization();
 

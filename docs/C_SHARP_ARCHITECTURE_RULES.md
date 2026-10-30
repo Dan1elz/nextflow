@@ -289,6 +289,7 @@ Permitidos só quando a regra pertence a mais de um use case e tem nome de conce
 * O controller é uma passagem: recebe o DTO, chama **um** use case e devolve `Handle(result)` (ou `HandleCreated`,
   `HandleNoContent`). Sucesso devolve o `Data`; falha devolve o `ResultDto` com o status do `ErrorCode`.
 * `UserId` vem do token por `ApiController.UserId`; o controller o repassa ao use case quando a regra precisa.
+* O `ApiController` é também um `IActionFilter`: corpo que não vira DTO devolve 422 no campo que não converteu (`birthDate: "xx"`) e 400 se estiver vazio ou com JSON quebrado, antes de chegar ao use case.
 * Rotas explícitas em minúsculo (`[Route("api/products")]`), soft delete por `DELETE /{id}` e reativação por
   `PATCH /{id}/reactivate`.
 

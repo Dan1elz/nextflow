@@ -65,7 +65,7 @@ As variáveis sensíveis são injetadas **no momento da execução**, garantindo
 ### Comando de subida (Windows)
 
 ```bash
-docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Paulo & set POSTGRES_DB=nextflow_staging_db & set POSTGRES_USER=admin_staging & set POSTGRES_PASSWORD=senha_segura_staging_123 & set JWT_KEY=chave_jwt_muito_segura_para_staging_32_chars & set STORAGE_ROOT_USER=nextflow-admin & set STORAGE_ROOT_PASSWORD=senha_admin_storage_staging & set STORAGE_ACCESS_KEY=nextflow-api & set STORAGE_SECRET_KEY=senha_api_storage_staging & set STORAGE_PUBLIC_URL=https://nextflow-s3.zanni.tech & set CORS_ORIGINS=https://nextflow.zanni.tech & set POSTGRES_PORT=5434 & docker compose -f compose.staging.yaml up -d --build
+docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Paulo & set POSTGRES_DB=nextflow_staging_db & set POSTGRES_USER=admin_staging & set POSTGRES_PASSWORD=senha_segura_staging_123 & set JWT_KEY=chave_jwt_muito_segura_para_staging_32_chars & set SEED_ADMIN_PASSWORD=defina_a_senha_do_admin & set STORAGE_ROOT_USER=nextflow-admin & set STORAGE_ROOT_PASSWORD=senha_admin_storage_staging & set STORAGE_ACCESS_KEY=nextflow-api & set STORAGE_SECRET_KEY=senha_api_storage_staging & set STORAGE_PUBLIC_URL=https://nextflow-s3.zanni.tech & set CORS_ORIGINS=https://nextflow.zanni.tech & set POSTGRES_PORT=5434 & docker compose -f compose.staging.yaml up -d --build
 
 ```
 
@@ -78,6 +78,7 @@ docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Pau
 | `POSTGRES_USER`     | Usuário do PostgreSQL       |
 | `POSTGRES_PASSWORD` | Senha do banco              |
 | `JWT_KEY`           | Chave de assinatura JWT     |
+| `SEED_ADMIN_PASSWORD` | Senha do primeiro Admin (obrigatória no staging) |
 | `POSTGRES_PORT`     | Porta do PostgreSQL no `127.0.0.1` |
 | `STORAGE_ROOT_USER` / `STORAGE_ROOT_PASSWORD` | **Obrigatórias.** Admin do storage (senha com 8+ caracteres). Só o `storage` e o `storage-initial-setup` usam |
 | `STORAGE_ACCESS_KEY` / `STORAGE_SECRET_KEY` | **Obrigatórias.** Usuário que a API usa, criado pelo `storage/init.sh` com acesso só aos buckets |

@@ -53,7 +53,8 @@ Configurações registradas no startup:
 
 | Controller | Rota base | Observações |
 |--|--|--|
-| `UsersController` | `/api/users` | Login, CheckAuth, CRUD + reativação |
+| `AuthController` | `/api/auth` | Login (anônimo), `me` (GET/PUT), `change-password` |
+| `UsersController` | `/api/users` | CRUD + reativação |
 | `ClientsController` | `/api/clients` | CRUD + reativação |
 | `SuppliersController` | `/api/suppliers` | CRUD + reativação |
 | `CategoriesController` | `/api/categories` | CRUD com soft delete |

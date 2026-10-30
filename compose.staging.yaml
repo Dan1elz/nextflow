@@ -81,6 +81,8 @@ services:
       # Seed de demonstração (loja de doces e presentes, 36 meses). AnchorDate vazio = hoje
       Seed__Demo__Enabled: ${SEED_DEMO_ENABLED:-true}
       Seed__Demo__AnchorDate: ${SEED_DEMO_ANCHOR_DATE:-}
+      # Senha do primeiro Admin (banco vazio). Fora de Development a API não sobe sem ela
+      Seed__Admin__Password: "${SEED_ADMIN_PASSWORD:?defina SEED_ADMIN_PASSWORD, a senha do primeiro Admin}"
       # Storage (S3): a API fala pela rede interna; o navegador abre as imagens pelo endereço público.
       # A URL assinada inclui o host, então STORAGE_PUBLIC_URL precisa ser exatamente o que o navegador chama
       Storage__Endpoint: http://storage:9000

@@ -96,6 +96,51 @@ namespace Nextflow.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.Category", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_categories");
+
+                    b.HasIndex("ParentId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_categories_parent_id_name");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("ParentId", "Name"), false);
+
+                    b.ToTable("categories", (string)null);
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.City", b =>
                 {
                     b.Property<Guid>("Id")
@@ -181,6 +226,48 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasDatabaseName("ix_clients_cpf");
 
                     b.ToTable("clients", (string)null);
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Collection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly?>("EndsOn")
+                        .HasColumnType("date")
+                        .HasColumnName("ends_on");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateOnly?>("StartsOn")
+                        .HasColumnType("date")
+                        .HasColumnName("starts_on");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_collections");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_collections_name");
+
+                    b.ToTable("collections", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Contact", b =>
@@ -567,6 +654,17 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("City");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.Category", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Category", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_categories_categories_parent_id");
+
+                    b.Navigation("Parent");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.City", b =>
                 {
                     b.HasOne("Nextflow.Domain.Models.State", "State")
@@ -620,6 +718,11 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasConstraintName("fk_user_stores_users_user_id");
 
                     b.Navigation("Store");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Category", b =>
+                {
+                    b.Navigation("Children");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Country", b =>

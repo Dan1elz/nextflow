@@ -57,6 +57,8 @@ Configurações registradas no startup:
 | `UsersController` | `/api/users` | CRUD + reativação |
 | `ClientsController` | `/api/clients` | CRUD + reativação, `options`, `quick` (cadastro rápido) |
 | `SuppliersController` | `/api/suppliers` | CRUD + reativação, `options` |
+| `StoresController` | `/api/stores` | CRUD + reativação, `options`. Criar loja cria o local "Loja" |
+| `StockLocationsController` | `/api/stock-locations` | Criar, editar, inativar, reativar, `options` |
 | `CategoriesController` | `/api/categories` | CRUD com soft delete |
 | `ProductsController` | `/api/products` | CRUD + upload de imagem (FormData) |
 | `StockMovementsController` | `/api/stock-movements` | Criação e listagem |

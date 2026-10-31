@@ -313,6 +313,91 @@ namespace Nextflow.Infrastructure.Migrations
                     b.ToTable("states", (string)null);
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.StockLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsSellable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_sellable");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("store_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_locations");
+
+                    b.HasIndex("StoreId")
+                        .HasDatabaseName("ix_stock_locations_store_id");
+
+                    b.ToTable("stock_locations", (string)null);
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Store", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("DefaultReceiveLocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_receive_location_id");
+
+                    b.Property<Guid?>("DefaultSaleLocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_sale_location_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stores");
+
+                    b.HasIndex("DefaultReceiveLocationId")
+                        .HasDatabaseName("ix_stores_default_receive_location_id");
+
+                    b.HasIndex("DefaultSaleLocationId")
+                        .HasDatabaseName("ix_stores_default_sale_location_id");
+
+                    b.ToTable("stores", (string)null);
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Supplier", b =>
                 {
                     b.Property<Guid>("Id")
@@ -439,6 +524,37 @@ namespace Nextflow.Infrastructure.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.UserStore", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("store_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_stores");
+
+                    b.HasIndex("StoreId")
+                        .HasDatabaseName("ix_user_stores_store_id");
+
+                    b.HasIndex("UserId", "StoreId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_user_stores_user_id_store_id");
+
+                    b.ToTable("user_stores", (string)null);
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Address", b =>
                 {
                     b.HasOne("Nextflow.Domain.Models.City", "City")
@@ -475,6 +591,37 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("Country");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.StockLocation", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Store", "Store")
+                        .WithMany("Locations")
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_locations_store_store_id");
+
+                    b.Navigation("Store");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.UserStore", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_stores_stores_store_id");
+
+                    b.HasOne("Nextflow.Domain.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_stores_users_user_id");
+
+                    b.Navigation("Store");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Country", b =>
                 {
                     b.Navigation("States");
@@ -483,6 +630,11 @@ namespace Nextflow.Infrastructure.Migrations
             modelBuilder.Entity("Nextflow.Domain.Models.State", b =>
                 {
                     b.Navigation("Cities");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Store", b =>
+                {
+                    b.Navigation("Locations");
                 });
 #pragma warning restore 612, 618
         }

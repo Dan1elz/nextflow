@@ -4,6 +4,7 @@ using Nextflow.Application.UseCases.Users;
 using Nextflow.Domain.Dtos.Auth;
 using Nextflow.Domain.Dtos.Users;
 using Nextflow.Domain.Enums;
+using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Domain.Interfaces.Infrastructure.Repositories;
 using Nextflow.Domain.Models;
 using Nextflow.Domain.Validators.Auth;
@@ -18,14 +19,14 @@ public class UserUseCasesTests
 
     private CreateUserUseCase Create(params User[] users) => new(
         AccessTestData.Repository(users), _unitOfWork, new UserRequestDtoValidator(AccessTestData.Clock()),
-        new ResultFactory<UserResponseDto>(), AccessTestData.Hasher());
+        new ResultFactory<UserResponseDto>(), AccessTestData.Hasher(), Substitute.For<IStoreMembership>());
 
     private UpdateUserUseCase Update(params User[] users) => new(
         AccessTestData.Repository(users), _unitOfWork, new UpdateUserRequestDtoValidator(AccessTestData.Clock()),
         new ResultFactory<UserResponseDto>(), AccessTestData.Hasher());
 
     private UpdateProfileUseCase UpdateProfile(params User[] users) => new(
-        AccessTestData.Repository(users), _unitOfWork, new UpdateProfileRequestDtoValidator(),
+        AccessTestData.Repository(users), Substitute.For<IStoreMembership>(), _unitOfWork, new UpdateProfileRequestDtoValidator(),
         new ResultFactory<CurrentUserDto>());
 
     private DeleteUserUseCase Delete(params User[] users) => new(
@@ -141,7 +142,7 @@ public class UserUseCasesTests
     {
         var user = AccessTestData.NewUser();
         user.Delete();
-        var useCase = new ReactivateUserUseCase(AccessTestData.Repository(user), _unitOfWork, new ResultFactory<bool>());
+        var useCase = new ReactivateUserUseCase(AccessTestData.Repository(user), Substitute.For<IStoreMembership>(), _unitOfWork, new ResultFactory<bool>());
 
         var result = await useCase.Execute(user.Id, Guid.NewGuid());
 
@@ -154,7 +155,7 @@ public class UserUseCasesTests
     public async Task Should_Return400_When_ReactivatingActiveUser()
     {
         var user = AccessTestData.NewUser();
-        var useCase = new ReactivateUserUseCase(AccessTestData.Repository(user), _unitOfWork, new ResultFactory<bool>());
+        var useCase = new ReactivateUserUseCase(AccessTestData.Repository(user), Substitute.For<IStoreMembership>(), _unitOfWork, new ResultFactory<bool>());
 
         var result = await useCase.Execute(user.Id, Guid.NewGuid());
 
@@ -198,7 +199,7 @@ public class UserUseCasesTests
         User? saved = null;
         await repository.AddAsync(Arg.Do<User>(u => saved = u), Arg.Any<CancellationToken>());
         var useCase = new CreateUserUseCase(
-            repository, _unitOfWork, new UserRequestDtoValidator(AccessTestData.Clock()), new ResultFactory<UserResponseDto>(), AccessTestData.Hasher());
+            repository, _unitOfWork, new UserRequestDtoValidator(AccessTestData.Clock()), new ResultFactory<UserResponseDto>(), AccessTestData.Hasher(), Substitute.For<IStoreMembership>());
 
         await useCase.Execute(AccessTestData.Request());
 

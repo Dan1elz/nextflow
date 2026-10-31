@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddSingleton<IBusinessClock, BusinessClock>();
         services.AddScoped<IUserAccessService, UserAccessService>();
         services.AddScoped<IOwnerDirectory, OwnerDirectory>();
+        services.AddScoped<IStoreMembership, StoreMembership>();
 
         services.Scan(scan => scan
             .FromAssemblyOf<GetHealthUseCase>()

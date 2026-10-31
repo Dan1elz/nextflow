@@ -12,6 +12,7 @@ namespace Nextflow.Application.UseCases.Auth;
 /// <summary>Login (T-AC1): credencial inválida tem mensagem genérica (RN-AC03) e usuário inativo não entra (RN-AC02).</summary>
 public class LoginUseCase(
     IUserRepository userRepository,
+    IStoreMembership storeMembership,
     IUnitOfWork unitOfWork,
     IValidator<LoginRequestDto> validator,
     IResultFactory<LoginResponseDto> resultFactory,
@@ -45,6 +46,6 @@ public class LoginUseCase(
         await unitOfWork.CommitAsync(ct);
 
         var (token, expiresAt) = tokenService.GenerateAccessToken(tracked);
-        return resultFactory.Success(new LoginResponseDto(token, expiresAt, new CurrentUserDto(tracked)));
+        return resultFactory.Success(new LoginResponseDto(token, expiresAt, new CurrentUserDto(tracked, await storeMembership.GetStoresOf(tracked.Id, ct))));
     }
 }

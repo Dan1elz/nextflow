@@ -23,7 +23,7 @@ public class LoginUseCaseTests
         clock.UtcNow.Returns(Now);
 
         return new LoginUseCase(
-            AccessTestData.Repository(users), _unitOfWork, new LoginRequestDtoValidator(),
+            AccessTestData.Repository(users), Substitute.For<IStoreMembership>(), _unitOfWork, new LoginRequestDtoValidator(),
             new ResultFactory<LoginResponseDto>(), AccessTestData.Hasher(), tokenService, clock);
     }
 

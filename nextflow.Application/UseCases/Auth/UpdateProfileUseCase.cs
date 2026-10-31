@@ -11,6 +11,7 @@ namespace Nextflow.Application.UseCases.Auth;
 /// <summary>Meu perfil (T-AC4): o usuário logado altera nome, sobrenome e e-mail (único, RN-AC01).</summary>
 public class UpdateProfileUseCase(
     IUserRepository userRepository,
+    IStoreMembership storeMembership,
     IUnitOfWork unitOfWork,
     IValidator<UpdateProfileRequestDto> validator,
     IResultFactory<CurrentUserDto> resultFactory) : IUpdateProfileUseCase
@@ -35,6 +36,6 @@ public class UpdateProfileUseCase(
         user.UpdateProfile(dto);
         await unitOfWork.CommitAsync(ct);
 
-        return resultFactory.Success(new CurrentUserDto(user));
+        return resultFactory.Success(new CurrentUserDto(user, await storeMembership.GetStoresOf(user.Id, ct)));
     }
 }

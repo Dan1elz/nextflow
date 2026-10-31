@@ -152,6 +152,10 @@ stock_locations.store_id              →  stores
 **Fluxo real:** a loja é criada sem locais; o primeiro local ("Loja") é criado com `store_id` e gravado como padrão de venda
 e de recebimento pelo método `Store.SetDefaults(saleLocationId, receiveLocationId)`, no mesmo commit do `CreateStoreUseCase`.
 
+**Como o commit único funciona:** o EF recusa um ciclo entre dois registros novos, então os padrões não são relacionamento no
+modelo. As FKs de `default_sale_location_id` e `default_receive_location_id` estão na migration `AddStores`, escritas em SQL e
+`DEFERRABLE INITIALLY DEFERRED`: o banco confere no fim da transação.
+
 ### Referências polimórficas (`~>`)
 
 | Tabela | Colunas | Regra |

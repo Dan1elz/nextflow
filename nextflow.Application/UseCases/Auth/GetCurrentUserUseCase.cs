@@ -8,6 +8,7 @@ namespace Nextflow.Application.UseCases.Auth;
 
 public class GetCurrentUserUseCase(
     IUserRepository userRepository,
+    IStoreMembership storeMembership,
     IResultFactory<CurrentUserDto> resultFactory) : IGetCurrentUserUseCase
 {
     public async Task<ResultDto<CurrentUserDto>> Execute(Guid userId, CancellationToken ct = default)
@@ -20,6 +21,6 @@ public class GetCurrentUserUseCase(
         if (!user.IsActive)
             return resultFactory.Failure(LoginUseCase.InactiveUserMessage, 403);
 
-        return resultFactory.Success(new CurrentUserDto(user));
+        return resultFactory.Success(new CurrentUserDto(user, await storeMembership.GetStoresOf(user.Id, ct)));
     }
 }

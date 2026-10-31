@@ -15,7 +15,8 @@ public class CreateUserUseCase(
     IUnitOfWork unitOfWork,
     IValidator<UserRequestDto> validator,
     IResultFactory<UserResponseDto> resultFactory,
-    IPasswordHasher passwordHasher)
+    IPasswordHasher passwordHasher,
+    IStoreMembership storeMembership)
     : CreateUseCaseBase<User, IUserRepository, UserRequestDto, UserResponseDto>(
         userRepository, unitOfWork, validator, resultFactory)
 {
@@ -34,6 +35,10 @@ public class CreateUserUseCase(
     }
 
     protected override User MapToEntity(UserRequestDto dto) => new(dto, passwordHasher.Hash(dto.Password));
+
+    /// <summary>Usuário novo enxerga as lojas ativas (decisão 6 de 29/10).</summary>
+    protected override Task BeforePersistence(User entity, UserRequestDto dto, CancellationToken ct)
+        => storeMembership.LinkUser(entity.Id, ct);
 
     protected override UserResponseDto MapToResponseDto(User entity) => new(entity);
 }

@@ -161,7 +161,7 @@ modelo. As FKs de `default_sale_location_id` e `default_receive_location_id` est
 | Tabela | Colunas | Regra |
 |---|---|---|
 | `addresses`, `contacts` | `owner_type` (`Client`, `Supplier`) + `owner_id` | `CHECK` de `owner_type`; existência do dono validada em `ValidateBusinessRules` |
-| `stock_movements` | `source_type` (`Order`, `PurchaseOrder`, `StockTransfer`, `InventoryCount`, `Adjustment`) + `source_id` | gravado só pelo `IStockLedger`, que recebe o documento tipado |
+| `stock_movements` | `source_type` (`Order`, `PurchaseOrder`, `Transfer`, `InventoryCount`, `Manual`) + `source_id` | gravado só pelo `IStockLedger`, que recebe o documento tipado |
 | `notifications` | `source_type` + `source_id` | gravado só pelo use case/job que cria a notificação |
 
 ---

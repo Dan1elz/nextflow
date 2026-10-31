@@ -50,8 +50,6 @@ artifacts/
 # Dotnet tools
 .dotnet_toolchain/
 *.global.json
-appsettings.json
-appsettings.*.json
 
 # ASP.NET and MVC-specific
 wwwroot/

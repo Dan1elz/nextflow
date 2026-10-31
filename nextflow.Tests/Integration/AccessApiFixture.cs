@@ -27,6 +27,7 @@ public sealed class AccessApiFixture : IAsyncLifetime
         {
             builder.UseEnvironment("Development");
             builder.UseSetting("ConnectionStrings:DefaultConnection", _postgres.ConnectionString);
+            builder.UseSetting("JwtSettings:Key", "chave-apenas-para-testes-de-integracao-0001");
             builder.UseSetting("Seed:Admin:Password", AdminPassword);
         });
     }

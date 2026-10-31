@@ -27,6 +27,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Seeders/Data/locations.json" LogicalName="Nextflow.Infrastructure.Seeders.Data.locations.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../nextflow.Domain/Nextflow.Domain.csproj" />
   </ItemGroup>
 

@@ -39,6 +39,10 @@ public static class CommonRules
     public static IRuleBuilderOptions<T, string?> ValidCpf<T>(this IRuleBuilder<T, string?> rule)
         => rule.Must(TaxDocument.IsValidCpf).WithMessage("Informe um CPF válido.");
 
+    /// <summary>Telefone com DDD: 10 ou 11 dígitos, com ou sem máscara.</summary>
+    public static IRuleBuilderOptions<T, string> ValidPhone<T>(this IRuleBuilder<T, string> rule)
+        => rule.Must(p => Utils.Digits.Only(p).Length is 10 or 11).WithMessage("Informe um telefone com DDD.");
+
     public static IRuleBuilderOptions<T, string?> ValidCnpj<T>(this IRuleBuilder<T, string?> rule)
         => rule.Must(TaxDocument.IsValidCnpj).WithMessage("Informe um CNPJ válido.");
 }

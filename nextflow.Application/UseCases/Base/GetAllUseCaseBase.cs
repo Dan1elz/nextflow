@@ -30,7 +30,8 @@ public abstract class GetAllUseCaseBase<TEntity, TRepository, TResponse>(
         var includeExpression = GetInclude();
         var orderBy = ResolveOrderBy(sort, order) ?? GetOrderBy();
 
-        var items = await _repository.GetAll(expressionFilter, offset, limit, includeExpression, orderBy, ct);
+        var items = (await _repository.GetAll(expressionFilter, offset, limit, includeExpression, orderBy, ct)).ToList();
+        await PrepareMapping(items, ct);
         var total = await _repository.Count(expressionFilter, ct);
 
         var pagination = PaginationDto<TResponse>.Paginate(
@@ -40,6 +41,9 @@ public abstract class GetAllUseCaseBase<TEntity, TRepository, TResponse>(
 
         return _resultFactory.Success(pagination);
     }
+
+    /// <summary>Carrega por consulta separada o que o DTO mostra e a entidade não tem navegação (ex.: dono polimórfico).</summary>
+    protected virtual Task PrepareMapping(IReadOnlyList<TEntity> items, CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>Mapeia cada entidade retornada pelo repositório para o DTO de resposta.</summary>
     protected abstract TResponse MapToResponseDto(TEntity entity);

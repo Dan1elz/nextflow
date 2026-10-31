@@ -1,6 +1,8 @@
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using Nextflow.Controllers;
 using Nextflow.Domain.Dtos;
 
 namespace Nextflow.Middlewares;
@@ -26,6 +28,11 @@ public class GlobalResultMiddleware(RequestDelegate next, IWebHostEnvironment en
         {
             Serilog.Log.Warning(ex, "[CONCURRENCY] Registro alterado por outra requisição");
             await WriteErrorAsync(context, "Este registro foi alterado por outra pessoa. Recarregue e tente novamente.", StatusCodes.Status409Conflict);
+        }
+        // UTF-8 inválido estoura na leitura do corpo, antes de o ApiController ver o ModelState.
+        catch (DecoderFallbackException)
+        {
+            await WriteErrorAsync(context, ApiController.InvalidBodyMessage, StatusCodes.Status400BadRequest);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
         {

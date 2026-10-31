@@ -55,8 +55,8 @@ Configurações registradas no startup:
 |--|--|--|
 | `AuthController` | `/api/auth` | Login (anônimo), `me` (GET/PUT), `change-password` |
 | `UsersController` | `/api/users` | CRUD + reativação |
-| `ClientsController` | `/api/clients` | CRUD + reativação |
-| `SuppliersController` | `/api/suppliers` | CRUD + reativação |
+| `ClientsController` | `/api/clients` | CRUD + reativação, `options`, `quick` (cadastro rápido) |
+| `SuppliersController` | `/api/suppliers` | CRUD + reativação, `options` |
 | `CategoriesController` | `/api/categories` | CRUD com soft delete |
 | `ProductsController` | `/api/products` | CRUD + upload de imagem (FormData) |
 | `StockMovementsController` | `/api/stock-movements` | Criação e listagem |
@@ -66,11 +66,11 @@ Configurações registradas no startup:
 | `PromotionsController` | `/api/promotions` | POST/DELETE (Admin; DELETE = cancelar), GET lista (filtros `productId`, `status`=active\|scheduled\|ended\|canceled, `source`) e GET por id |
 | `ForecastsController` | `/api/forecasts` | Previsão de demanda (spec 7.1): `POST generate` (Admin), `GET latest` (`data` null sem análise), `GET` lista paginada, `GET {id}`, `GET products/{productId}?months=24`, `POST recommendations/purchase` (1 pedido Orçamento por fornecedor), `POST recommendations/{id}/promotion` (Admin), `POST recommendations/{id}/dismiss` (body opcional) |
 | `DashboardController` | `/api/dashboard` | `GET stats` (alerta de estoque usa `MinStock`, fallback 15) |
-| `AddressesController` | `/api/addresses` | CRUD + resolução de CEP |
-| `ContactsController` | `/api/contacts` | CRUD |
-| `CountriesController` | `/api/countries` | CRUD |
-| `StatesController` | `/api/states` | CRUD |
-| `CitiesController` | `/api/cities` | CRUD |
+| `AddressesController` | `/api/addresses` | CRUD de um dono (`ownerType` + `ownerId`) |
+| `ContactsController` | `/api/contacts` | CRUD de um dono (`ownerType` + `ownerId`) |
+| `CountriesController` | `/api/countries` | Só `options` |
+| `StatesController` | `/api/states` | Só `options` |
+| `CitiesController` | `/api/cities` | Só `options` (filtros `stateId`, `ibgeCode`) |
 
 ### 3.3 Middlewares
 
@@ -285,7 +285,7 @@ Herdam `BaseRepository<T>`. Repositório `UserRepository` tem lógica extra (bus
 
 ### 6.4 Seeders
 
-Implementam `ISeeder` (`Order` + `SeedAsync`), recebem dependências por DI e são idempotentes. Sempre: `UsersSeeder` (10), `CountriesSeeder` (20), `CitiesSeeder` (30, ~770KB de dados). Só com `Seed:Demo:Enabled`: `DemoStoreSeeder` (70) e `ProductImagesSeeder` (80), em `Seeders/Demo/`. Novo seeder = nova classe `ISeeder` com `Order`; não precisa mexer no `Program.cs`.
+Implementam `ISeeder` (`Order` + `SeedAsync`), recebem dependências por DI e são idempotentes. Sempre: `UsersSeeder` (10), `LocationsSeeder` (20, `Seeders/Data/locations.json` embutido). Só com `Seed:Demo:Enabled`: `DemoStoreSeeder` (70) e `ProductImagesSeeder` (80), em `Seeders/Demo/`. Novo seeder = nova classe `ISeeder` com `Order`; não precisa mexer no `Program.cs`.
 
 **Dados de demonstração** (loja de doces e presentes, 48 SKUs, 36 meses, ~23 mil pedidos, estoque = soma das movimentações): ver `docs/AI_FORECAST_SPEC.md`, seção 8. Flags `Seed:Demo:Enabled` (padrão `false`; `true` no Development e nos compose) e `Seed:Demo:AnchorDate` (vazio = hoje).
 

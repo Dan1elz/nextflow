@@ -14,6 +14,8 @@ namespace Nextflow.Controllers;
 /// </summary>
 public abstract class ApiController : ControllerBase, IActionFilter
 {
+    public const string InvalidBodyMessage = "O corpo da requisição está vazio ou não é um JSON válido.";
+
     public Guid UserId => TokenHelper.GetUserId(User);
 
     protected IActionResult Handle<T>(ResultDto<T> result)
@@ -44,7 +46,7 @@ public abstract class ApiController : ControllerBase, IActionFilter
         // JSON quebrado também cita um campo ({"email": aponta para email), mas o erro é do corpo.
         var result = fieldErrors.Count > 0 && IsWellFormedJson()
             ? ResultDto<object>.Failure(fieldErrors)
-            : ResultDto<object>.Failure("O corpo da requisição está vazio ou não é um JSON válido.");
+            : ResultDto<object>.Failure(InvalidBodyMessage);
 
         context.Result = StatusCode(result.ErrorCode, result);
     }

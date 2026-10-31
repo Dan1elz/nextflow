@@ -27,6 +27,11 @@ public interface IGetByIdUseCase<TEntity, TResponse>
     Task<ResultDto<TResponse>> Execute(Guid id, CancellationToken ct = default);
 }
 
+public interface IGetOptionsUseCase<TEntity, TOption>
+{
+    Task<ResultDto<List<TOption>>> Execute(string? search, IReadOnlyDictionary<string, string>? filters = null, CancellationToken ct = default);
+}
+
 public interface IGetAllUseCase<TEntity, TResponse>
 {
     Task<ResultDto<PaginationDto<TResponse>>> Execute(

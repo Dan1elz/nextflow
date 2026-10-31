@@ -72,6 +72,7 @@ existe quando a atualização aceita menos campos que a criação. DTOs ficam em
 | `XListItemDto` | listagem com colunas bem menores que o detalhe (RNF003) | mesmo padrão do ResponseDto: construtor recebe a entidade |
 | `XFormDto` | formulário que precisa de opções junto com os dados (`GET /{id}/form`) | herda o `XRequestDto` e acrescenta `Options` |
 | `XOptionDto` | combo que precisa de mais que `value`/`label` (ex.: preço) | construtor recebe a entidade |
+| `XSummaryDto` | resumo de leitura que um use case compõe na resposta, por consulta separada (`OwnerSummaryDto`, `CitySummaryDto`) | `record` posicional, montado no repositório ou no serviço; não sai sozinho na API nem aparece no contrato |
 
 Nenhum outro sufixo é criado sem registrar a decisão.
 
@@ -216,7 +217,7 @@ Interfaces/
   Domain/Models/                 IEntityMetadata, IDeletable, IUpdatable<T>, IVersioned
   Application/Services/          IResultFactory<T>, IStockLedger, IProductPricingService, IBusinessClock
   Application/UseCases/Base/     ICreateUseCase, IUpdateUseCase, IDeleteUseCase, IReactivateUseCase,
-                                 IGetAllUseCase, IGetByIdUseCase
+                                 IGetAllUseCase, IGetByIdUseCase, IGetOptionsUseCase
   Application/UseCases/          interfaces de use cases fora do CRUD (IPayOrderUseCase, IReceivePurchaseOrderUseCase…)
   Infrastructure/Repositories/   IBaseRepository<T>, IUnitOfWork, I<Entidade>Repository
   Infrastructure/Services/       IFileStorage, IAiClient, IPasswordHasher, IForecastQueue
@@ -226,7 +227,7 @@ Interfaces/
 
 ### 3.1 Use cases base (reaproveitamento)
 * CRUD **nunca** é escrito do zero. Use as bases de `UseCases/Base/`: `CreateUseCaseBase`, `UpdateUseCaseBase`,
-  `DeleteUseCaseBase`, `ReactivateUseCaseBase`, `GetAllUseCaseBase`, `GetByIdUseCaseBase`.
+  `DeleteUseCaseBase`, `ReactivateUseCaseBase`, `GetAllUseCaseBase`, `GetByIdUseCaseBase`, `GetOptionsUseCaseBase`.
 * O que foge do trivial é feito herdando a base e sobrescrevendo os template methods:
   * `ValidateBusinessRules(dto, ct)` — regras que consultam banco (SKU único, saldo suficiente, pedido no status certo).
     Retorna `ResultDto?`; `null` = ok.
@@ -258,6 +259,8 @@ Permitidos só quando a regra pertence a mais de um use case e tem nome de conce
   Expression Tree com `FilterSet` + `FilterExpressionBuilder` no `BuildFilterExpression`.
 * Ordenação pela query (`sort`, `order`) só aceita os campos da lista branca do use case (`GetSortableFields()`); fora dela
   vale o `GetOrderBy()` padrão.
+* Combos usam `GetOptionsUseCaseBase` (`GET /<recurso>/options`): busca, só ativos, até 20 itens, devolvendo lista.
+* O que a linha mostra e a entidade não tem por navegação (dono polimórfico) é lido por consulta separada em `PrepareMapping`.
 
 ## 4. Padrões de Infraestrutura (`Nextflow.Infrastructure`)
 
@@ -300,8 +303,9 @@ public async Task<IActionResult> Create([FromBody] SupplierRequestDto dto, Cance
 ```
 
 ### 5.2 `GlobalResultMiddleware`
-Só para o inesperado: `DbUpdateConcurrencyException` → 409 ("Este registro foi alterado por outra pessoa"), qualquer outra
-exceção → 500 com log no Serilog. Sempre no formato `ResultDto`. Erro de negócio nunca chega aqui.
+Só para o inesperado: `DbUpdateConcurrencyException` → 409 ("Este registro foi alterado por outra pessoa"),
+`DecoderFallbackException` (corpo com UTF-8 inválido, que estoura na leitura, antes do filtro do `ApiController`) → 400 com a
+mesma mensagem de corpo ilegível, qualquer outra exceção → 500 com log no Serilog. Sempre no formato `ResultDto`. Erro de negócio nunca chega aqui.
 
 ---
 

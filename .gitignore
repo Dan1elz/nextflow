@@ -6,7 +6,6 @@ out/
 \bin*
 \obj*
 
-*appsettings.json
 obj/Debug/
 
 # User-specific files

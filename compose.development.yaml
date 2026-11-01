@@ -120,6 +120,24 @@ services:
       storage-initial-setup:
         condition: service_completed_successfully
 
+  # Front (repo irmão ../nextflow-front-v2): build de produção (Dockerfile multi-stage) servido pelo nginx.
+  # A URL da API entra no build do Vite (fica embutida no JS) e é a que o NAVEGADOR chama: mudou, rode com --build.
+  # Em localhost:8082 (porta 80 do nginx); o hot reload segue no compose.development.yaml do próprio front (5174).
+  frontend:
+    image: nextflow-v2-front:compose
+    build:
+      context: ../nextflow-front-v2
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8081}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONT_PORT:-8082}:80"
+    networks:
+      - nextflow-v2-development-network
+    depends_on:
+      - backend
+
 networks:
   nextflow-v2-development-network:
 

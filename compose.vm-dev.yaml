@@ -1,0 +1,129 @@
+# Ambiente DEV da API nova (feat/arquitetura-atrena) na VM, atrás do proxy de borda. Convive com o staging
+# (compose.staging.yaml, projeto nextflow-backend-staging): projeto, rede, volumes e aliases do proxy são próprios.
+#   dev-nextflow.zanni.tech      → front  (alias nextflow-dev-web:80)
+#   dev-nextflow-api.zanni.tech  → API    (alias nextflow-dev-api:8080)
+#   dev-nextflow-s3.zanni.tech   → Silo   (alias nextflow-dev-s3:9000)
+# Layout na VM: <pasta>/nextflow-v2 (este repo) e <pasta>/nextflow-front-v2 (front, irmão), com .env em <pasta>/nextflow-v2.
+#   docker compose -f compose.vm-dev.yaml up -d --build
+name: nextflow-dev
+
+services:
+  postgres:
+    image: nextflow-dev-postgres:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+      args:
+        DB_TIMEZONE: ${DB_TIMEZONE:-America/Sao_Paulo}
+    restart: unless-stopped
+    # Sem "ports": só a API (rede interna) alcança o banco
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nextflow_db}
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+    volumes:
+      - nextflow_dev_postgres_data:/var/lib/postgresql/data
+    networks:
+      - nextflow-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-nextflow_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  storage:
+    image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    restart: unless-stopped
+    # Painel web só em 127.0.0.1 (de fora: túnel SSH). A API S3 sai pelo proxy de borda
+    ports:
+      - "127.0.0.1:${STORAGE_CONSOLE_PORT:-9021}:9001"
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ROOT_USER:?defina STORAGE_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${STORAGE_ROOT_PASSWORD:?defina STORAGE_ROOT_PASSWORD (mínimo 8 caracteres)}
+    command: server /data --console-address ":9001"
+    volumes:
+      - nextflow_dev_storage_data:/data
+    networks:
+      nextflow-dev-network:
+      proxy-net:
+        aliases: [nextflow-dev-s3]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  storage-initial-setup:
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
+    entrypoint: ["/bin/sh", "/init.sh"]
+    restart: "no"
+    volumes:
+      - ./storage/init.sh:/init.sh:ro
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${STORAGE_ROOT_PASSWORD}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:?defina STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:?defina STORAGE_SECRET_KEY (mínimo 8 caracteres)}
+      STORAGE_BUCKET_PUBLIC: ${STORAGE_BUCKET_PUBLIC:-nextflow-public}
+      STORAGE_BUCKET_PRIVATE: ${STORAGE_BUCKET_PRIVATE:-nextflow-private}
+    networks:
+      - nextflow-dev-network
+    depends_on:
+      storage:
+        condition: service_healthy
+
+  backend:
+    image: nextflow-dev-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=${POSTGRES_DB:-nextflow_db};User Id=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Pooling=true;"
+      JwtSettings__Key: ${JWT_KEY:?defina JWT_KEY}
+      Seed__Demo__Enabled: ${SEED_DEMO_ENABLED:-true}
+      Seed__Demo__AnchorDate: ${SEED_DEMO_ANCHOR_DATE:-}
+      Seed__Admin__Password: "${SEED_ADMIN_PASSWORD:?defina SEED_ADMIN_PASSWORD, a senha do primeiro Admin}"
+      # A URL assinada inclui o host: STORAGE_PUBLIC_URL é exatamente o que o navegador chama
+      Storage__Endpoint: http://storage:9000
+      Storage__PublicUrl: "${STORAGE_PUBLIC_URL:?defina STORAGE_PUBLIC_URL, ex. https://dev-nextflow-s3.zanni.tech}"
+      Storage__AccessKey: ${STORAGE_ACCESS_KEY}
+      Storage__SecretKey: ${STORAGE_SECRET_KEY}
+      Storage__Buckets__Public: ${STORAGE_BUCKET_PUBLIC:-nextflow-public}
+      Storage__Buckets__Private: ${STORAGE_BUCKET_PRIVATE:-nextflow-private}
+      Cors__AllowedOrigins: ${CORS_ORIGINS:-}
+      Ai__Provider: ${AI_PROVIDER:-Gemini}
+      Ai__ApiKey: ${AI_API_KEY:-}
+      Ai__Model: ${AI_MODEL:-gemini-flash-latest}
+      Ai__TimeoutSeconds: ${AI_TIMEOUT_SECONDS:-60}
+    networks:
+      nextflow-dev-network:
+      proxy-net:
+        aliases: [nextflow-dev-api]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      storage-initial-setup:
+        condition: service_completed_successfully
+
+  frontend:
+    image: nextflow-dev-front:latest
+    build:
+      context: ../nextflow-front-v2
+      dockerfile: Dockerfile
+      args:
+        # Entra no build (fica embutida no JS): mudou, tem que reconstruir a imagem (--build)
+        VITE_API_URL: ${VITE_API_URL:-https://dev-nextflow-api.zanni.tech}
+    restart: unless-stopped
+    networks:
+      proxy-net:
+        aliases: [nextflow-dev-web]
+
+networks:
+  nextflow-dev-network:
+  proxy-net:
+    external: true
+
+volumes:
+  nextflow_dev_postgres_data:
+  nextflow_dev_storage_data:

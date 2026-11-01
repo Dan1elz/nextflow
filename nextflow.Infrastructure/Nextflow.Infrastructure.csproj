@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.0.104.7" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.4" />
@@ -21,6 +22,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.4" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.4" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.4" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
     <PackageReference Include="Scrutor" Version="6.1.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.16.0" />

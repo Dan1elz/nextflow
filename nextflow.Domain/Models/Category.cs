@@ -14,6 +14,7 @@ public class Category : BaseModel, IDeletable, IUpdatable<CategoryRequestDto>
 
     public virtual Category? Parent { get; private set; }
     public virtual ICollection<Category> Children { get; private set; } = [];
+    public virtual ICollection<CategoryProduct> Products { get; private set; } = [];
 
     public override string Preposition => "a";
     public override string Singular => "categoria";

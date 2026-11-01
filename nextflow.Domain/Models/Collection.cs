@@ -12,6 +12,8 @@ public class Collection : BaseModel, IDeletable, IUpdatable<CollectionRequestDto
     public bool IsActive { get; private set; } = true;
     public DateTime? UpdatedAt { get; private set; }
 
+    public virtual ICollection<Product> Products { get; private set; } = [];
+
     public override string Preposition => "a";
     public override string Singular => "coleção";
     public override string Plural => "coleções";

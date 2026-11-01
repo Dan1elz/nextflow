@@ -2,7 +2,7 @@ using Nextflow.Domain.Models;
 
 namespace Nextflow.Domain.Dtos.Categories;
 
-/// <summary>Nó da árvore (T4). <see cref="ProductCount"/> fica zero até a F1.3, que traz <c>category_products</c>.</summary>
+/// <summary>Nó da árvore (T4). <see cref="ProductCount"/> conta os produtos ativos vinculados direto à categoria (RN-CE53).</summary>
 public class CategoryNodeDto
 {
     public Guid Id { get; set; }
@@ -22,6 +22,7 @@ public class CategoryNodeDto
         Description = entity.Description;
         ParentId = entity.ParentId;
         IsActive = entity.IsActive;
+        ProductCount = entity.Products.Count;
         Children = [.. entity.Children.Select(child => new CategoryNodeDto(child))];
     }
 }

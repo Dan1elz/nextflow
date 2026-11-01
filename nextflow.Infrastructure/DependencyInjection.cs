@@ -6,6 +6,7 @@ using Nextflow.Infrastructure.Services;
 using Nextflow.Infrastructure.Database;
 using Nextflow.Infrastructure.Repositories;
 using Nextflow.Infrastructure.Seeders;
+using Nextflow.Infrastructure.Storage;
 
 namespace Nextflow.Infrastructure;
 
@@ -26,6 +27,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IPasswordHasher, PasswordHasher>();
+        services.AddStorage(configuration);
 
         services.Scan(scan => scan
             .FromAssemblyOf<UnitOfWork>()

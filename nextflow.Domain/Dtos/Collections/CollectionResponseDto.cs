@@ -21,5 +21,6 @@ public class CollectionResponseDto
         StartsOn = entity.StartsOn;
         EndsOn = entity.EndsOn;
         IsActive = entity.IsActive;
+        ProductCount = entity.Products.Count;
     }
 }

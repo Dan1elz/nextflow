@@ -70,7 +70,7 @@ existe quando a atualização aceita menos campos que a criação. DTOs ficam em
 | DTO | Quando | Regra |
 |--|--|--|
 | `XListItemDto` | listagem com colunas bem menores que o detalhe (RNF003) | mesmo padrão do ResponseDto: construtor recebe a entidade |
-| `XFormDto` | formulário que precisa de opções junto com os dados (`GET /{id}/form`) | herda o `XRequestDto` e acrescenta `Options` |
+| `XFormDto` | formulário que precisa de opções junto com os dados (`GET /{id}/form`; na criação, `GET /form`, como `GET /products/form`, só com as opções) | herda o `XRequestDto` e acrescenta `Options`, do tipo `XFormOptionsDto` |
 | `XOptionDto` | combo que precisa de mais que `value`/`label` (ex.: preço) | construtor recebe a entidade |
 | `XSummaryDto` | resumo de leitura que um use case compõe na resposta, por consulta separada (`OwnerSummaryDto`, `CitySummaryDto`) | `record` posicional, montado no repositório ou no serviço; não sai sozinho na API nem aparece no contrato |
 
@@ -278,6 +278,7 @@ Permitidos só quando a regra pertence a mais de um use case e tem nome de conce
 * `AppDbContext` com `ApplyConfigurationsFromAssembly`; uma `IEntityTypeConfiguration<T>` por entidade em
   `Database/Configurations/` (tabela, colunas `snake_case`, índices, FKs, `IsRowVersion`/`IsConcurrencyToken` em `Version`).
 * Migrations são o dono do schema. Ordem das entidades: `docs/DOMAIN_LEVELS.md`.
+* Índice por expressão (`lower(sku)`) o EF não modela: vai em `migrationBuilder.Sql` na migration, com um comentário na configuração.
 * Seeders implementam `ISeeder` com `Order`, são idempotentes; o seed demo só roda com `Seed:Demo:Enabled`.
 
 ### 4.4 Integrações e trabalho em segundo plano

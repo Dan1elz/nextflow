@@ -92,19 +92,38 @@ public class UpdateCategoryUseCase(
     protected override CategoryResponseDto MapToResponseDto(Category entity) => new(entity);
 }
 
-/// <summary>Inativa a categoria. Com subcategoria ativa, não sai (RN-CE39). "Com produtos ativos pede confirmação" entra na F1.3.</summary>
+/// <summary>
+/// Inativa a categoria. Com subcategoria ativa, não sai (RN-CE39). Com produtos ativos vinculados, pede confirmação; os
+/// vínculos ficam como estão (RN-CE53).
+/// </summary>
 public class DeleteCategoryUseCase(
     ICategoryRepository categoryRepository,
+    IProductRepository productRepository,
     IUnitOfWork unitOfWork,
     IResultFactory<bool> resultFactory)
-    : DeleteUseCaseBase<Category, ICategoryRepository>(categoryRepository, unitOfWork, resultFactory)
+    : DeleteUseCaseBase<Category, ICategoryRepository>(categoryRepository, unitOfWork, resultFactory), IDeleteCategoryUseCase
 {
+    private bool _confirmWarnings;
+
+    public Task<ResultDto<bool>> Execute(Guid id, bool confirmWarnings, Guid? userId = null, CancellationToken ct = default)
+    {
+        _confirmWarnings = confirmWarnings;
+        return Execute(id, userId, ct);
+    }
+
     protected override async Task<ResultDto<bool>?> ValidateBusinessRules(Category entity, Guid? userId, CancellationToken ct)
     {
         var id = entity.Id;
-        return await _repository.Exists(c => c.ParentId == id && c.IsActive, ct)
-            ? _resultFactory.Failure("Inative as subcategorias antes de inativar esta categoria.", 400)
-            : null;
+        if (await _repository.Exists(c => c.ParentId == id && c.IsActive, ct))
+            return _resultFactory.Failure("Inative as subcategorias antes de inativar esta categoria.", 400);
+
+        if (_confirmWarnings)
+            return null;
+
+        var products = await productRepository.Count(p => p.IsActive && p.Categories.Any(c => c.CategoryId == id), ct);
+        return products == 0
+            ? null
+            : _resultFactory.Confirm($"Esta categoria tem {products} produto(s) ativo(s). Eles continuam vinculados a ela, mas ela sai dos combos. Deseja inativar mesmo assim?");
     }
 }
 
@@ -154,7 +173,9 @@ public class GetCategoryTreeUseCase(
     }
 
     private static Func<IQueryable<Category>, IQueryable<Category>> GetInclude()
-        => q => q.Include(c => c.Children.OrderBy(child => child.Name));
+        => q => q.Include(c => c.Products.Where(link => link.Product.IsActive))
+            .Include(c => c.Children.OrderBy(child => child.Name))
+            .ThenInclude(child => child.Products.Where(link => link.Product.IsActive));
 }
 
 /// <summary>Combo de categoria: só ativas, pai antes das filhas. O filtro <c>rootsOnly</c> deixa só o nível 1 (RN-CE23).</summary>

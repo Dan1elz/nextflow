@@ -45,7 +45,7 @@ public class ClassificationRulesTests
         => new(Categories(categories), _unitOfWork, new CategoryRequestDtoValidator(), new ResultFactory<CategoryResponseDto>());
 
     private DeleteCategoryUseCase DeleteCategory(params Category[] categories)
-        => new(Categories(categories), _unitOfWork, new ResultFactory<bool>());
+        => new(Categories(categories), Substitute.For<IProductRepository>(), _unitOfWork, new ResultFactory<bool>());
 
     private ReactivateCategoryUseCase ReactivateCategory(params Category[] categories)
         => new(Categories(categories), _unitOfWork, new ResultFactory<bool>());

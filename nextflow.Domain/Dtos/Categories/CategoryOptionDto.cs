@@ -17,6 +17,17 @@ public class CategoryOptionDto
         Id = entity.Id;
         Name = entity.Name;
         ParentId = entity.ParentId;
-        Path = entity.Parent is null ? entity.Name : $"{entity.Parent.Name} > {entity.Name}";
+        Path = BuildPath(entity.Parent?.Name, entity.Name);
     }
+
+    public CategoryOptionDto(CategorySummaryDto summary)
+    {
+        Id = summary.Id;
+        Name = summary.Name;
+        ParentId = summary.ParentId;
+        Path = BuildPath(summary.ParentName, summary.Name);
+    }
+
+    private static string BuildPath(string? parentName, string name)
+        => parentName is null ? name : $"{parentName} > {name}";
 }

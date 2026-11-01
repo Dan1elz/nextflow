@@ -212,6 +212,37 @@ namespace Nextflow.Infrastructure.Migrations
                     b.ToTable("categories", (string)null);
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.CategoryProduct", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_category_products");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("ix_category_products_product_id");
+
+                    b.HasIndex("CategoryId", "ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_category_products_category_id_product_id");
+
+                    b.ToTable("category_products", (string)null);
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.City", b =>
                 {
                     b.Property<Guid>("Id")
@@ -424,6 +455,253 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasDatabaseName("ix_countries_acronym_iso");
 
                     b.ToTable("countries", (string)null);
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Product", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AllowsNegative")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allows_negative");
+
+                    b.Property<string>("Brand")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("brand");
+
+                    b.Property<Guid?>("CollectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("collection_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<short>("DecimalPlaces")
+                        .HasColumnType("smallint")
+                        .HasColumnName("decimal_places");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("HasVariants")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_variants");
+
+                    b.Property<string>("ImageKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("image_key");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateOnly?>("LaunchedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("launched_on");
+
+                    b.Property<byte>("Lifecycle")
+                        .HasColumnType("smallint")
+                        .HasColumnName("lifecycle");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name");
+
+                    b.Property<byte>("ProductType")
+                        .HasColumnType("smallint")
+                        .HasColumnName("product_type");
+
+                    b.Property<byte>("SaleUnit")
+                        .HasColumnType("smallint")
+                        .HasColumnName("sale_unit");
+
+                    b.Property<int?>("ShelfLifeDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("shelf_life_days");
+
+                    b.Property<bool>("TracksLots")
+                        .HasColumnType("boolean")
+                        .HasColumnName("tracks_lots");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_products");
+
+                    b.HasIndex("CollectionId")
+                        .HasDatabaseName("ix_products_collection_id");
+
+                    b.HasIndex("Name")
+                        .HasDatabaseName("ix_products_name");
+
+                    b.ToTable("products", (string)null);
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductAttribute", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<short>("SortOrder")
+                        .HasColumnType("smallint")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id")
+                        .HasName("pk_product_attributes");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("ix_product_attributes_product_id");
+
+                    b.ToTable("product_attributes", (string)null);
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductAttributeValue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AttributeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("attribute_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<short>("SortOrder")
+                        .HasColumnType("smallint")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_product_attribute_values");
+
+                    b.HasIndex("AttributeId")
+                        .HasDatabaseName("ix_product_attribute_values_attribute_id");
+
+                    b.ToTable("product_attribute_values", (string)null);
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductVariant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("barcode");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("price");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("sku");
+
+                    b.Property<short>("SortOrder")
+                        .HasColumnType("smallint")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_product_variants");
+
+                    b.HasIndex("Barcode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_product_variants_barcode");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("ix_product_variants_product_id");
+
+                    b.HasIndex("Sku")
+                        .IsUnique()
+                        .HasDatabaseName("ix_product_variants_sku");
+
+                    b.ToTable("product_variants", (string)null);
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductVariantValue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AttributeValueId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("attribute_value_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_product_variant_values");
+
+                    b.HasIndex("AttributeValueId")
+                        .HasDatabaseName("ix_product_variant_values_attribute_value_id");
+
+                    b.HasIndex("VariantId", "AttributeValueId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_product_variant_values_variant_id_attribute_value_id");
+
+                    b.ToTable("product_variant_values", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.State", b =>
@@ -736,6 +1014,27 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("Parent");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.CategoryProduct", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Category", "Category")
+                        .WithMany("Products")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_category_products_categories_category_id");
+
+                    b.HasOne("Nextflow.Domain.Models.Product", "Product")
+                        .WithMany("Categories")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_category_products_product_product_id");
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.City", b =>
                 {
                     b.HasOne("Nextflow.Domain.Models.State", "State")
@@ -746,6 +1045,74 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasConstraintName("fk_cities_state_state_id");
 
                     b.Navigation("State");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Product", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Collection", "Collection")
+                        .WithMany("Products")
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_products_collections_collection_id");
+
+                    b.Navigation("Collection");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductAttribute", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Product", "Product")
+                        .WithMany("Attributes")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_product_attributes_product_product_id");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductAttributeValue", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.ProductAttribute", "Attribute")
+                        .WithMany("Values")
+                        .HasForeignKey("AttributeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_product_attribute_values_product_attributes_attribute_id");
+
+                    b.Navigation("Attribute");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductVariant", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Product", "Product")
+                        .WithMany("Variants")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_product_variants_products_product_id");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductVariantValue", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.ProductAttributeValue", "AttributeValue")
+                        .WithMany()
+                        .HasForeignKey("AttributeValueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_product_variant_values_product_attribute_values_attribute_v");
+
+                    b.HasOne("Nextflow.Domain.Models.ProductVariant", "Variant")
+                        .WithMany("AttributeValues")
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_product_variant_values_product_variants_variant_id");
+
+                    b.Navigation("AttributeValue");
+
+                    b.Navigation("Variant");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.State", b =>
@@ -794,11 +1161,37 @@ namespace Nextflow.Infrastructure.Migrations
             modelBuilder.Entity("Nextflow.Domain.Models.Category", b =>
                 {
                     b.Navigation("Children");
+
+                    b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Collection", b =>
+                {
+                    b.Navigation("Products");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Country", b =>
                 {
                     b.Navigation("States");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Product", b =>
+                {
+                    b.Navigation("Attributes");
+
+                    b.Navigation("Categories");
+
+                    b.Navigation("Variants");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductAttribute", b =>
+                {
+                    b.Navigation("Values");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ProductVariant", b =>
+                {
+                    b.Navigation("AttributeValues");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.State", b =>

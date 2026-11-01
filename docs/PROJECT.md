@@ -43,7 +43,7 @@ Configurações registradas no startup:
 | **Swagger** | OpenAPI v1 com suporte Bearer JWT, Newtonsoft.JSON |
 | **Autenticação** | JWT Bearer (`JwtSettings:Key`), sem validação de Issuer/Audience |
 | **DI (Scrutor)** | Scan automático de classes `*UseCase` e `*Repository` como `Scoped` |
-| **Storage** | `IStorageService` → `S3StorageService` (Infrastructure, Singleton) via `AddStorage()`; seção `Storage`. Ver seção 10 |
+| **Storage** | `IFileStorage` → `S3FileStorage` (Infrastructure, Singleton) via `AddStorage()`; seção `Storage`. Ver seção 10 |
 | **Preço efetivo** | `IProductPricingService` → `ProductPricingService` (Scoped, registro manual) |
 | **Health Check** | `/health` com `AddDbContextCheck<AppDbContext>` |
 | **Seeders** | Toda classe `ISeeder` é registrada por Scrutor (Scoped) e o `SeederRunner` executa em ordem (`Order`) após `MigrateAsync()`. Falha de migration ou seeder derruba o startup (sem `catch` silencioso) |
@@ -59,10 +59,10 @@ Configurações registradas no startup:
 | `SuppliersController` | `/api/suppliers` | CRUD + reativação, `options` |
 | `StoresController` | `/api/stores` | CRUD + reativação, `options`. Criar loja cria o local "Loja" |
 | `StockLocationsController` | `/api/stock-locations` | Criar, editar, inativar, reativar, `options` |
-| `CategoriesController` | `/api/categories` | CRUD com soft delete |
+| `CategoriesController` | `/api/categories` | CRUD com soft delete, `tree`, `options`. `DELETE ?confirmWarnings=true` confirma inativar com produtos ativos (RN-CE53) |
 | `CollectionsController` | `/api/collections` | CRUD com soft delete + reativação, `options` |
 | `CalendarEventsController` | `/api/calendar-events` | CRUD com soft delete + reativação, `options`. POST sempre cria evento da empresa; nacional só altera a antecedência |
-| `ProductsController` | `/api/products` | CRUD + upload de imagem (FormData) |
+| `ProductsController` | `/api/products` | CRUD com soft delete + reativação, `form`, `{id}/form`, `{id}/variants`, `{id}/lifecycle`, `POST`/`DELETE {id}/image` (multipart). Sem campo de estoque, custo ou promoção até as fatias donas (contrato T1 a T3) |
 | `StockMovementsController` | `/api/stock-movements` | Criação e listagem |
 | `OrdersController` | `/api/orders` | CRUD + cancel + refund |
 | `SalesController` | `/api/sales` | Criação via checkout |
@@ -191,7 +191,7 @@ Configurações registradas no startup:
 ### 4.6 Interfaces
 
 **Models:** `IDeletable`, `IEntityMetadata`, `IUpdatable`
-**Utils:** `IFileData`, `IStorageService`, `IProductPricingService` (preço efetivo com promoção vigente), `IAiClient` (IA generativa: `IsConfigured`, `ProviderName`, `Model`, `GenerateJsonAsync`)
+**Serviços:** `IFileStorage`, `IProductPricingService` (preço efetivo com promoção vigente), `IAiClient` (IA generativa: `IsConfigured`, `ProviderName`, `Model`, `GenerateJsonAsync`)
 **Repositories:** `IBaseRepository<T>` + 24 interfaces específicas (novas: `IPromotionRepository`, `IProductSalesMonthlyRepository` com `DeleteAllAsync`/`AggregateConfirmedSalesAsync`, `IProductSeasonalityRepository`, `IForecastRunRepository`, `IForecastRecommendationRepository`, `IForecastProjectionRepository`)
 **UseCases:** `IBaseUseCase` (em `Base/`) + interfaces específicas (`ICategoryUseCase`, `IOrderUseCase`, `IProductImageUseCase`, `IPurchaseOrderUseCase`, `IResolveAddressFromCepUseCase`, `ISaleUseCase`, `IStockMovementUseCase`, `IUserUseCase`, `IPromotionUseCase` → `ICreatePromotionUseCase`, `IForecastUseCase` → rebuild/generate/latest/product/apply/dismiss). `IUnitOfWork` (transação sobre o contexto do request; impl. `Infrastructure/Database/UnitOfWork.cs`). `IPurchaseOrderRepository` ganhou `GetIncomingStockByProductAsync` e `GetReceivedLeadTimeSamplesAsync`.
 
@@ -377,17 +377,17 @@ Arquivos ficam num storage compatível com S3, não em disco. Produto: **Silo** 
 
 | Peça | Onde |
 |--|--|
-| Contrato | `Domain/Interfaces/Utils/IStorageService.cs` (`UploadAsync`, `ExistsAsync`, `DeleteAsync`, `GetPublicUrl`, `GetSignedUrl`) |
+| Contrato | `Domain/Interfaces/Infrastructure/Services/IFileStorage.cs` (`UploadAsync`, `DeleteAsync`, `GetPublicUrl`, `GetSignedUrl`) |
 | Onde cada arquivo mora | `Domain/Utils/StorageFolder.cs` (bucket + prefixo). Hoje: `StorageFolder.ProductImages` = bucket público, prefixo `products/` |
-| Buckets | `Domain/Enums/StorageBucket.cs`: `Public` (leitura anônima por prefixo) e `Private` (só URL assinada) |
-| Implementação | `Infrastructure/Storage/S3StorageService.cs` (AWSSDK.S3, `ForcePathStyle`). Dois clientes: um interno (`Endpoint`) e um que só assina URLs com o endereço público (`PublicUrl`), porque a assinatura inclui o host |
+| Buckets | `Domain/Enums/StorageBucketEnum.cs`: `Public` (leitura anônima por prefixo) e `Private` (só URL assinada) |
+| Implementação | `Infrastructure/Storage/S3FileStorage.cs` (AWSSDK.S3, `ForcePathStyle`). Dois clientes: um interno (`Endpoint`) e um que só assina URLs com o endereço público (`PublicUrl`), porque a assinatura inclui o host |
 | Configuração | `Infrastructure/Storage/StorageSettings.cs` (seção `Storage`), validada no startup |
 | Buckets, acesso e usuário da API | `storage/init.sh`, executado pelo `storage-initial-setup` a cada `up` |
 
 **Regras:**
 - O banco guarda só a **chave** (ex.: `products/3f2a….png`), nunca a URL. A URL é montada na leitura (`GetPublicUrl`), então trocar de domínio não exige migrar dados.
-- Validação do arquivo é do use case (`ImageFileValidator`), não do storage. O `Content-Type` gravado vem da extensão validada.
+- Validação do arquivo é do `UploadFileDtoValidator`, chamado pelo use case, não do storage. O `Content-Type` gravado vem da extensão validada.
 - Consistência banco × storage: na troca de imagem, sobe a nova, grava no banco e só então apaga a antiga; se o banco falhar, a nova é apagada. Na remoção, grava no banco antes de apagar o arquivo. Falha ao apagar arquivo antigo só gera `LogWarning` (sobra um arquivo, a operação do usuário não é desfeita).
 - A API usa um usuário próprio (`STORAGE_ACCESS_KEY`) com política só nos dois buckets, não o admin.
 
-**Novo caso de uso** (ex.: anexos de pedido de compra): criar um `StorageFolder` (ex.: `new(StorageBucket.Private, "purchase-orders")`), validar o arquivo no use case e, se for privado, devolver `GetSignedUrl(...)` com validade curta. Prefixo público novo também precisa de uma linha `mc anonymous set download` no `storage/init.sh`.
+**Novo caso de uso** (ex.: anexos de pedido de compra): criar um `StorageFolder` (ex.: `new(StorageBucketEnum.Private, "purchase-orders")`), validar o arquivo no use case e, se for privado, devolver `GetSignedUrl(...)` com validade curta. Prefixo público novo também precisa de uma linha `mc anonymous set download` no `storage/init.sh`.

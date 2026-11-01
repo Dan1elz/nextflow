@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using Nextflow.Application.Filters;
 using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Dtos;
@@ -54,6 +55,9 @@ public class UpdateCollectionUseCase(
             : null;
 
     protected override CollectionResponseDto MapToResponseDto(Collection entity) => new(entity);
+
+    protected override Func<IQueryable<Collection>, IQueryable<Collection>> GetInclude()
+        => q => q.Include(c => c.Products.Where(p => p.IsActive));
 }
 
 public class DeleteCollectionUseCase(
@@ -74,6 +78,9 @@ public class GetCollectionByIdUseCase(
     : GetByIdUseCaseBase<Collection, ICollectionRepository, CollectionResponseDto>(collectionRepository, resultFactory)
 {
     protected override CollectionResponseDto MapToResponseDto(Collection entity) => new(entity);
+
+    protected override Func<IQueryable<Collection>, IQueryable<Collection>> GetInclude()
+        => q => q.Include(c => c.Products.Where(p => p.IsActive));
 }
 
 /// <summary>Listagem (T5). Filtros: <c>search</c> (nome) e <c>isActive</c>.</summary>
@@ -96,6 +103,9 @@ public class GetAllCollectionsUseCase(
         return builder.Predicate;
     }
 
+    protected override Func<IQueryable<Collection>, IQueryable<Collection>> GetInclude()
+        => q => q.Include(c => c.Products.Where(p => p.IsActive));
+
     protected override Func<IQueryable<Collection>, IOrderedQueryable<Collection>> GetOrderBy()
         => q => q.OrderBy(c => c.Name).ThenBy(c => c.Id);
 
@@ -110,7 +120,7 @@ public class GetAllCollectionsUseCase(
     protected override CollectionResponseDto MapToResponseDto(Collection entity) => new(entity);
 }
 
-/// <summary>Combo de coleção: só ativas (usado pelo produto na F1.3).</summary>
+/// <summary>Combo de coleção: só ativas (usado pelo formulário de produto).</summary>
 public class GetCollectionOptionsUseCase(
     ICollectionRepository collectionRepository,
     IResultFactory<List<Option>> resultFactory)

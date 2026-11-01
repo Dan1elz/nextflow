@@ -16,7 +16,7 @@ public class CategoriesController(
     IGetOptionsUseCase<Category, CategoryOptionDto> getOptionsUseCase,
     ICreateUseCase<CategoryRequestDto, CategoryResponseDto> createUseCase,
     IUpdateUseCase<CategoryRequestDto, CategoryResponseDto> updateUseCase,
-    IDeleteUseCase<Category> deleteUseCase,
+    IDeleteCategoryUseCase deleteUseCase,
     IReactivateUseCase<Category> reactivateUseCase) : ApiController
 {
     [HttpGet("tree")]
@@ -40,8 +40,8 @@ public class CategoriesController(
         => Handle(await updateUseCase.Execute(id, dto, ct));
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
-        => HandleNoContent(await deleteUseCase.Execute(id, UserId, ct));
+    public async Task<IActionResult> Delete(Guid id, [FromQuery] bool confirmWarnings = false, CancellationToken ct = default)
+        => HandleNoContent(await deleteUseCase.Execute(id, confirmWarnings, UserId, ct));
 
     [HttpPatch("{id:guid}/reactivate")]
     public async Task<IActionResult> Reactivate(Guid id, CancellationToken ct)

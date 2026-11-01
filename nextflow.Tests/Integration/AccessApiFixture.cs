@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Nextflow.Application.Services;
 using Nextflow.Domain.Interfaces.Application.Services;
+using Nextflow.Domain.Interfaces.Infrastructure.Services;
+using Nextflow.Infrastructure.Database;
 
 namespace Nextflow.Tests.Integration;
 
@@ -24,6 +26,12 @@ public sealed class AccessApiFixture : IAsyncLifetime
     private WebApplicationFactory<Program> _factory = null!;
     private int _sequence;
 
+    /// <summary>Storage em memória que a API usa nos testes: o que subiu fica visível aqui.</summary>
+    public InMemoryFileStorage Files { get; } = new();
+
+    /// <summary>Contexto próprio, para o teste conferir o que ficou gravado no banco.</summary>
+    public AppDbContext CreateContext() => _postgres.CreateContext();
+
     public async Task InitializeAsync()
     {
         await _postgres.InitializeAsync();
@@ -33,6 +41,7 @@ public sealed class AccessApiFixture : IAsyncLifetime
             builder.UseSetting("ConnectionStrings:DefaultConnection", _postgres.ConnectionString);
             builder.UseSetting("JwtSettings:Key", "chave-apenas-para-testes-de-integracao-0001");
             builder.UseSetting("Seed:Admin:Password", AdminPassword);
+            builder.ConfigureTestServices(services => services.AddSingleton<IFileStorage>(Files));
         });
     }
 

@@ -34,7 +34,7 @@ WORKDIR /app
 # Instalar curl para o healthcheck e criar usuário sem privilégios (segurança)
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/* \
-  && adduser --disabled-password --gecos '' appuser \
+  && useradd --create-home --shell /usr/sbin/nologin appuser \
   && chown -R appuser /app
 
 USER appuser

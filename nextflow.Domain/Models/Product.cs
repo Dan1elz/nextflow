@@ -6,9 +6,10 @@ namespace Nextflow.Domain.Models;
 
 /// <summary>
 /// Agregado do catálogo: dono de atributos, valores e variações, sincronizados no mesmo commit. Tudo é variação: produto
-/// sem grade tem uma variação padrão oculta (RN-CE09, RN-CE48).
+/// sem grade tem uma variação padrão oculta (RN-CE09, RN-CE48). Não é <c>IUpdatable</c>: salvar pode trocar preço, e o
+/// histórico exige quem alterou e a data (RN-CE25), que não vêm do DTO.
 /// </summary>
-public class Product : BaseModel, IDeletable, IUpdatable<ProductRequestDto>
+public class Product : BaseModel, IDeletable
 {
     public string Name { get; private set; } = string.Empty;
     public string? Brand { get; private set; }
@@ -31,6 +32,8 @@ public class Product : BaseModel, IDeletable, IUpdatable<ProductRequestDto>
     public virtual ICollection<CategoryProduct> Categories { get; private set; } = [];
     public virtual ICollection<ProductAttribute> Attributes { get; private set; } = [];
     public virtual ICollection<ProductVariant> Variants { get; private set; } = [];
+    public virtual ICollection<ProductEvent> Events { get; private set; } = [];
+    public virtual ICollection<ProductSupplier> Suppliers { get; private set; } = [];
 
     public override string Preposition => "o";
     public override string Singular => "produto";
@@ -38,11 +41,11 @@ public class Product : BaseModel, IDeletable, IUpdatable<ProductRequestDto>
 
     private Product() { }
 
-    public Product(ProductRequestDto dto) => Apply(dto);
+    public Product(ProductRequestDto dto, Guid changedById, DateOnly today) => Apply(dto, changedById, today);
 
-    public void Update(ProductRequestDto dto)
+    public void Update(ProductRequestDto dto, Guid changedById, DateOnly today)
     {
-        Apply(dto);
+        Apply(dto, changedById, today);
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -76,7 +79,7 @@ public class Product : BaseModel, IDeletable, IUpdatable<ProductRequestDto>
         UpdatedAt = DateTime.UtcNow;
     }
 
-    private void Apply(ProductRequestDto dto)
+    private void Apply(ProductRequestDto dto, Guid changedById, DateOnly today)
     {
         Name = dto.Name.Trim();
         Brand = TrimToNull(dto.Brand);
@@ -94,7 +97,9 @@ public class Product : BaseModel, IDeletable, IUpdatable<ProductRequestDto>
 
         SyncCategories(dto.CategoryIds);
         var valueIds = SyncAttributes(dto.Attributes);
-        SyncVariants(dto.Variants, valueIds);
+        SyncVariants(dto.Variants, valueIds, changedById, today);
+        SyncEvents(dto.EventIds);
+        SyncSuppliers(dto.Suppliers);
     }
 
     private void SyncCategories(List<Guid> categoryIds)
@@ -136,14 +141,14 @@ public class Product : BaseModel, IDeletable, IUpdatable<ProductRequestDto>
     }
 
     /// <summary>
-    /// Variação que saiu do formulário é apagada, porque ainda não existe saldo nem movimentação (RN-CE51). A F1.5 recusa
-    /// a remoção antes de chegar aqui, na regra do use case, quando houver saldo ou movimento.
+    /// Variação que saiu do formulário é preservada como removida, nunca apagada: ela já tem histórico de preço (RN-CE58).
+    /// A F1.5 recusa a remoção antes de chegar aqui, na regra do use case, quando houver saldo ou movimento.
     /// </summary>
-    private void SyncVariants(List<ProductVariantRequestDto> dtos, Dictionary<string, Guid> valueIds)
+    private void SyncVariants(List<ProductVariantRequestDto> dtos, Dictionary<string, Guid> valueIds, Guid changedById, DateOnly today)
     {
         var kept = dtos.Select(dto => dto.Id).ToHashSet();
-        foreach (var variant in Variants.Where(variant => !kept.Contains(variant.Id)).ToList())
-            Variants.Remove(variant);
+        foreach (var variant in Variants.Where(variant => variant.RemovedOn == null && !kept.Contains(variant.Id)))
+            variant.Remove(today);
 
         for (var index = 0; index < dtos.Count; index++)
         {
@@ -151,15 +156,42 @@ public class Product : BaseModel, IDeletable, IUpdatable<ProductRequestDto>
             var variant = Variants.FirstOrDefault(v => v.Id == dto.Id);
             if (variant is null)
             {
-                variant = new ProductVariant(dto, Id, (short)index);
+                variant = new ProductVariant(dto, Id, (short)index, changedById, today);
                 Variants.Add(variant);
             }
             else
             {
-                variant.Update(dto, (short)index);
+                variant.Update(dto, (short)index, changedById, today);
             }
 
             variant.SyncValues(dto.AttributeValueIds.Select(key => valueIds[key]).ToList());
+        }
+    }
+
+    private void SyncEvents(List<Guid> eventIds)
+    {
+        foreach (var link in Events.Where(link => !eventIds.Contains(link.EventId)).ToList())
+            Events.Remove(link);
+
+        var linked = Events.Select(link => link.EventId).ToHashSet();
+        foreach (var eventId in eventIds.Distinct().Where(id => !linked.Contains(id)))
+            Events.Add(new ProductEvent(Id, eventId));
+    }
+
+    /// <summary>Quem saiu é removido; quem fica preserva o id, reconhecido pelo fornecedor, único no produto (RN-CE60).</summary>
+    private void SyncSuppliers(List<ProductSupplierRequestDto> dtos)
+    {
+        var kept = dtos.Select(dto => dto.SupplierId).ToHashSet();
+        foreach (var link in Suppliers.Where(link => !kept.Contains(link.SupplierId)).ToList())
+            Suppliers.Remove(link);
+
+        foreach (var dto in dtos)
+        {
+            var link = Suppliers.FirstOrDefault(s => s.SupplierId == dto.SupplierId);
+            if (link is null)
+                Suppliers.Add(new ProductSupplier(dto, Id));
+            else
+                link.Update(dto);
         }
     }
 

@@ -40,7 +40,7 @@ public class ProductFormDto : ProductRequestDto
                 Value = value.Value,
             })],
         })];
-        Variants = [.. entity.Variants.OrderBy(v => v.SortOrder).Select(variant => new ProductVariantRequestDto
+        Variants = [.. entity.Variants.Where(v => v.RemovedOn == null).OrderBy(v => v.SortOrder).Select(variant => new ProductVariantRequestDto
         {
             Id = variant.Id,
             AttributeValueIds = [.. variant.AttributeValues.Select(link => link.AttributeValueId.ToString())],
@@ -48,6 +48,16 @@ public class ProductFormDto : ProductRequestDto
             Barcode = variant.Barcode,
             Price = variant.Price,
             IsActive = variant.IsActive,
+        })];
+        EventIds = [.. entity.Events.Select(link => link.EventId)];
+        Suppliers = [.. entity.Suppliers.OrderByDescending(s => s.IsPreferred).ThenBy(s => s.CreatedAt).Select(link => new ProductSupplierRequestDto
+        {
+            SupplierId = link.SupplierId,
+            IsPreferred = link.IsPreferred,
+            SupplierSku = link.SupplierSku,
+            LeadTimeDays = link.LeadTimeDays,
+            MinOrderQty = link.MinOrderQty,
+            OrderMultiple = link.OrderMultiple,
         })];
     }
 }

@@ -19,4 +19,6 @@ public class ProductRequestDto
     public DateOnly? LaunchedOn { get; set; }
     public List<ProductAttributeRequestDto> Attributes { get; set => field = value ?? []; } = [];
     public List<ProductVariantRequestDto> Variants { get; set => field = value ?? []; } = [];
+    public List<Guid> EventIds { get; set => field = value ?? []; } = [];
+    public List<ProductSupplierRequestDto> Suppliers { get; set => field = value ?? []; } = [];
 }

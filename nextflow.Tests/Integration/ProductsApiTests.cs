@@ -446,7 +446,7 @@ public class ProductsApiTests(AccessApiFixture api)
 
     [Fact]
     [Trait("Rule", "RN-CE51")]
-    public async Task Should_DeleteVariantAndLinks_When_VariantLeavesForm()
+    public async Task Should_KeepRemovedVariantAndItsHistory_When_VariantLeavesForm()
     {
         using var admin = await api.AdminAsync();
         var id = await Create(admin, ApparelBody(Unique("CAM")));
@@ -460,8 +460,13 @@ public class ProductsApiTests(AccessApiFixture api)
 
         (await VariantLabels(admin, id)).ShouldBe(["P", "M"]);
         await using var context = api.CreateContext();
-        (await context.Set<ProductVariant>().CountAsync(v => v.ProductId == Guid.Parse(id))).ShouldBe(2);
-        (await context.Set<ProductVariantValue>().CountAsync(v => v.Variant.ProductId == Guid.Parse(id))).ShouldBe(2);
+        // A variação que saiu continua gravada como removida, porque o histórico de preço aponta para ela.
+        (await context.Set<ProductVariant>().CountAsync(v => v.ProductId == Guid.Parse(id) && v.RemovedOn == null)).ShouldBe(2);
+        (await context.Set<ProductVariant>().CountAsync(v => v.ProductId == Guid.Parse(id) && v.RemovedOn != null)).ShouldBe(1);
+        (await context.Set<ProductVariantValue>().CountAsync(v => v.Variant.ProductId == Guid.Parse(id))).ShouldBe(3);
+        var history = await Json(await admin.GetAsync($"{Route}/{id}/price-history"));
+        history.GetArrayLength().ShouldBe(3);
+        history.EnumerateArray().Single(h => h.GetProperty("variantRemoved").GetBoolean()).GetProperty("validTo").ValueKind.ShouldNotBe(JsonValueKind.Null);
         // O valor G continua no atributo: quem saiu foi a variação.
         (await context.Set<ProductAttributeValue>().CountAsync(v => v.Attribute.ProductId == Guid.Parse(id))).ShouldBe(3);
     }
@@ -520,7 +525,7 @@ public class ProductsApiTests(AccessApiFixture api)
         (await context.Set<ProductAttribute>().CountAsync(a => a.ProductId == productId)).ShouldBe(0);
         (await context.Set<ProductAttributeValue>().CountAsync(v => v.Attribute.ProductId == productId)).ShouldBe(0);
         (await context.Set<ProductVariantValue>().CountAsync(v => v.Variant.ProductId == productId)).ShouldBe(0);
-        (await context.Set<ProductVariant>().SingleAsync(v => v.ProductId == productId)).Id.ShouldBe(kept.GetProperty("id").GetGuid());
+        (await context.Set<ProductVariant>().SingleAsync(v => v.ProductId == productId && v.RemovedOn == null)).Id.ShouldBe(kept.GetProperty("id").GetGuid());
     }
 
     [Fact]
@@ -582,7 +587,7 @@ public class ProductsApiTests(AccessApiFixture api)
 
     [Fact]
     [Trait("Rule", "RN-CE57")]
-    public async Task Should_ReuseSku_When_OldVariantLeavesInSameSave()
+    public async Task Should_Return422_When_ReusingSkuOfVariantRemovedInSameSave()
     {
         using var admin = await api.AdminAsync();
         var prefix = Unique("CAM");
@@ -597,17 +602,12 @@ public class ProductsApiTests(AccessApiFixture api)
             new { attributeValueIds = new[] { variants[2].GetProperty("attributeValueIds")[0].GetString() }, sku = $"{prefix}-G", price = 99m, isActive = true },
         };
 
-        var response = await admin.PutAsJsonAsync($"{Route}/{id}", body);
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-
-        var after = await Json(await admin.GetAsync($"{Route}/{id}/variants"));
-        after[2].GetProperty("id").GetString().ShouldNotBe(variants[2].GetProperty("id").GetString());
-        after[2].GetProperty("sku").GetString().ShouldBe($"{prefix}-G");
+        await ShouldFailOn(await admin.PutAsJsonAsync($"{Route}/{id}", body), "variants[2].sku");
     }
 
     [Fact]
     [Trait("Rule", "RN-CE57")]
-    public async Task Should_MoveCodeToKeptVariant_When_OldVariantLeavesInSameSave()
+    public async Task Should_Return422_When_KeptVariantTakesCodeOfRemovedVariant()
     {
         using var admin = await api.AdminAsync();
         var prefix = Unique("CAM");
@@ -618,20 +618,13 @@ public class ProductsApiTests(AccessApiFixture api)
         initial["variants"] = new[] { rows[0], rows[1], VariantRow(rows[2], $"{prefix}-G", barcode) };
         (await admin.PutAsJsonAsync($"{Route}/{id}", initial)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // O G sai; o P fica e assume o SKU e o código de barras dele, no mesmo commit (update e delete).
+        // O G sai, mas segue reservado pelo histórico: o P não pode assumir o SKU dele.
         var form = await Form(admin, id);
         var variants = form.GetProperty("variants").EnumerateArray().ToList();
         var body = EditBody(form);
         body["variants"] = new object[] { VariantRow(variants[0], $"{prefix}-G", barcode), variants[1] };
 
-        var response = await admin.PutAsJsonAsync($"{Route}/{id}", body);
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-
-        var after = await Json(await admin.GetAsync($"{Route}/{id}/variants"));
-        after.GetArrayLength().ShouldBe(2);
-        after[0].GetProperty("id").GetString().ShouldBe(variants[0].GetProperty("id").GetString());
-        after[0].GetProperty("sku").GetString().ShouldBe($"{prefix}-G");
-        after[0].GetProperty("barcode").GetString().ShouldBe(barcode);
+        await ShouldFailOn(await admin.PutAsJsonAsync($"{Route}/{id}", body), "variants[0].sku");
     }
 
     [Fact]
@@ -1255,5 +1248,114 @@ public class ProductsApiTests(AccessApiFixture api)
 
         api.Files.Files.ContainsKey(url[InMemoryFileStorage.BaseUrl.Length..]).ShouldBeFalse();
         (await Json(await admin.GetAsync($"{Route}/{id}"))).GetProperty("imageUrl").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    // ---------- F1.4: preço, fornecedores e eventos ----------
+
+    private static string NewCnpj()
+    {
+        var digits = (Random.Shared.NextInt64(10_000_000, 99_999_999) + "0001").Select(c => c - '0').ToList();
+        foreach (var weights in new[] { new[] { 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2 }, new[] { 6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2 } })
+        {
+            var rest = digits.Select((digit, index) => digit * weights[index]).Sum() % 11;
+            digits.Add(rest < 2 ? 0 : 11 - rest);
+        }
+        return string.Concat(digits);
+    }
+
+    private static async Task<string> CreateSupplier(HttpClient client, string name, int leadTimeDays = 10)
+    {
+        var response = await client.PostAsJsonAsync("/api/suppliers", new { name, cnpj = NewCnpj(), leadTimeDays });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await Json(response)).GetProperty("id").GetString()!;
+    }
+
+    private static async Task<string> CreateEvent(HttpClient client)
+    {
+        var response = await client.PostAsJsonAsync("/api/calendar-events", new { name = Unique("Evento"), dateRule = "Fixed", month = 6, day = 24, leadDays = 7 });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await Json(response)).GetProperty("id").GetString()!;
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE21")]
+    public async Task Should_CountOnlyActiveProducts_When_ListingCalendarEvents()
+    {
+        using var admin = await api.AdminAsync();
+        var eventId = await CreateEvent(admin);
+        Dictionary<string, object?> Body() => JsonSerializer.Deserialize<Dictionary<string, object?>>(JsonSerializer.Serialize(SimpleBody(Unique("EV"))))!;
+        var active = Body();
+        active["eventIds"] = new[] { eventId };
+        var toInactivate = Body();
+        toInactivate["eventIds"] = new[] { eventId };
+        await Create(admin, active);
+        var inactiveId = await Create(admin, toInactivate);
+        (await admin.DeleteAsync($"{Route}/{inactiveId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var calendarEvent = await Json(await admin.GetAsync($"/api/calendar-events/{eventId}"));
+        var page = await Json(await admin.GetAsync($"/api/calendar-events?limit=100&filters={Filters(new { search = calendarEvent.GetProperty("name").GetString() })}"));
+
+        calendarEvent.GetProperty("productCount").GetInt32().ShouldBe(1);
+        page.GetProperty("items")[0].GetProperty("productCount").GetInt32().ShouldBe(1);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE21")]
+    public async Task Should_Return422_When_EventInactive()
+    {
+        using var admin = await api.AdminAsync();
+        var eventId = await CreateEvent(admin);
+        (await admin.DeleteAsync($"/api/calendar-events/{eventId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var body = JsonSerializer.Deserialize<Dictionary<string, object?>>(JsonSerializer.Serialize(SimpleBody(Unique("EV"))))!;
+        body["eventIds"] = new[] { eventId };
+
+        await ShouldFailOn(await admin.PostAsJsonAsync(Route, body), "eventIds");
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE25")]
+    public async Task Should_ReturnPriceHistory_When_PriceChangedInEdit()
+    {
+        using var admin = await api.AdminAsync();
+        var id = await Create(admin, SimpleBody(Unique("PR")));
+        var form = await Form(admin, id);
+        var body = EditBody(form);
+        var row = form.GetProperty("variants")[0];
+        body["variants"] = new object[] { new { id = row.GetProperty("id").GetString(), attributeValueIds = Array.Empty<string>(), sku = row.GetProperty("sku").GetString(), price = 20m, isActive = true } };
+
+        (await admin.PutAsJsonAsync($"{Route}/{id}", body)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await admin.PutAsJsonAsync($"{Route}/{id}", body)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var history = await Json(await admin.GetAsync($"{Route}/{id}/price-history"));
+        history.GetArrayLength().ShouldBe(2);
+        history[0].GetProperty("price").GetDecimal().ShouldBe(20m);
+        history[0].GetProperty("validTo").ValueKind.ShouldBe(JsonValueKind.Null);
+        history[0].GetProperty("changedByName").GetString().ShouldNotBeNullOrEmpty();
+        history[1].GetProperty("price").GetDecimal().ShouldBe(12.5m);
+        history[1].GetProperty("validTo").ValueKind.ShouldNotBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE27")]
+    public async Task Should_ReturnEffectiveLeadTime_When_ListingProductSuppliers()
+    {
+        using var admin = await api.AdminAsync();
+        var withDefault = await CreateSupplier(admin, Unique("Forn"), leadTimeDays: 10);
+        var withOwn = await CreateSupplier(admin, Unique("Forn"), leadTimeDays: 10);
+        var body = JsonSerializer.Deserialize<Dictionary<string, object?>>(JsonSerializer.Serialize(SimpleBody(Unique("SU"))))!;
+        body["suppliers"] = new object[]
+        {
+            new { supplierId = withDefault, isPreferred = false },
+            new { supplierId = withOwn, isPreferred = true, leadTimeDays = 3, minOrderQty = 24, orderMultiple = 12 },
+        };
+        var id = await Create(admin, body);
+
+        var suppliers = await Json(await admin.GetAsync($"{Route}/{id}/suppliers"));
+
+        suppliers.GetArrayLength().ShouldBe(2);
+        suppliers[0].GetProperty("supplierId").GetString().ShouldBe(withOwn);
+        suppliers[0].GetProperty("leadTimeDays").GetInt32().ShouldBe(3);
+        suppliers[0].GetProperty("orderMultiple").GetDecimal().ShouldBe(12m);
+        suppliers[1].GetProperty("leadTimeDays").GetInt32().ShouldBe(10);
     }
 }

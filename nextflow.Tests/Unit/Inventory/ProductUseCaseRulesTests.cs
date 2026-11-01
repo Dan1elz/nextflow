@@ -7,6 +7,7 @@ using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Dtos.Categories;
 using Nextflow.Domain.Dtos.Collections;
 using Nextflow.Domain.Dtos.Products;
+using Nextflow.Domain.Dtos.Suppliers;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Infrastructure.Repositories;
 using Nextflow.Domain.Interfaces.Infrastructure.Services;
@@ -38,7 +39,7 @@ public class ProductUseCaseRulesTests
     {
         var repository = Products(forUpdate is null ? [] : [forUpdate]);
         repository.GetById(Arg.Any<Guid>(), Arg.Any<Func<IQueryable<Product>, IQueryable<Product>>?>(), Arg.Any<CancellationToken>())
-            .Returns(new Product(Simple()));
+            .Returns(ProductTestData.NewProduct(Simple()));
         return repository;
     }
 
@@ -70,11 +71,32 @@ public class ProductUseCaseRulesTests
         return repository;
     }
 
+    private static ICalendarEventRepository Events(params CalendarEvent[] events)
+    {
+        var repository = Substitute.For<ICalendarEventRepository>();
+        repository.GetAll(Arg.Any<Expression<Func<CalendarEvent, bool>>>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<Func<IQueryable<CalendarEvent>, IQueryable<CalendarEvent>>?>(), Arg.Any<Func<IQueryable<CalendarEvent>, IOrderedQueryable<CalendarEvent>>?>(), Arg.Any<CancellationToken>())
+            .Returns(call => events.AsQueryable().Where(call.Arg<Expression<Func<CalendarEvent, bool>>>()).ToList());
+        return repository;
+    }
+
+    private static ISupplierRepository Suppliers(params Supplier[] suppliers)
+    {
+        var repository = Substitute.For<ISupplierRepository>();
+        repository.GetAll(Arg.Any<Expression<Func<Supplier, bool>>>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<Func<IQueryable<Supplier>, IQueryable<Supplier>>?>(), Arg.Any<Func<IQueryable<Supplier>, IOrderedQueryable<Supplier>>?>(), Arg.Any<CancellationToken>())
+            .Returns(call => suppliers.AsQueryable().Where(call.Arg<Expression<Func<Supplier, bool>>>()).ToList());
+        return repository;
+    }
+
+    private static Supplier NewSupplier(string name = "Doces Ltda") => new(new SupplierRequestDto { Name = name, Cnpj = "11222333000181" });
+
+    private CreateProductUseCase CreateWith(params Supplier[] suppliers)
+        => new(Products(), Categories(), Collections(), Variants(), Events(), Suppliers(suppliers), _storage, new ProductPricingService(), ProductTestData.Clock(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
+
     private CreateProductUseCase Create(ICategoryRepository? categories = null, ICollectionRepository? collections = null, IProductVariantRepository? variants = null, IProductRepository? products = null)
-        => new(products ?? Products(), categories ?? Categories(), collections ?? Collections(), variants ?? Variants(), _storage, new ProductPricingService(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
+        => new(products ?? Products(), categories ?? Categories(), collections ?? Collections(), variants ?? Variants(), Events(), Suppliers(), _storage, new ProductPricingService(), ProductTestData.Clock(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
 
     private UpdateProductUseCase Update(Product product, ICategoryRepository? categories = null, ICollectionRepository? collections = null, IProductVariantRepository? variants = null, IProductRepository? products = null)
-        => new(products ?? Products(product), categories ?? Categories(), collections ?? Collections(), variants ?? Variants([.. product.Variants]), _storage, new ProductPricingService(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
+        => new(products ?? Products(product), categories ?? Categories(), collections ?? Collections(), variants ?? Variants([.. product.Variants]), Events(), Suppliers(), _storage, new ProductPricingService(), ProductTestData.Clock(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
 
     private static ProductRequestDto Simple(string sku = "CAD-1", string? barcode = null) => new()
     {
@@ -119,12 +141,90 @@ public class ProductUseCaseRulesTests
         result.FieldErrors!.ShouldContainKey(field);
     }
 
+    // ---------- Fornecedores (F1.4) ----------
+
+    private static ProductRequestDto WithSuppliers(params ProductSupplierRequestDto[] suppliers)
+    {
+        var dto = Simple();
+        dto.Suppliers = [.. suppliers];
+        return dto;
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE27")]
+    public async Task Should_Return422_When_SupplierDuplicated()
+    {
+        var supplier = NewSupplier();
+        var dto = WithSuppliers(new ProductSupplierRequestDto { SupplierId = supplier.Id }, new ProductSupplierRequestDto { SupplierId = supplier.Id });
+
+        ShouldHaveField(await CreateWith(supplier).Execute(dto, ProductTestData.UserId), "suppliers[1].supplierId");
+        await ShouldNotCommit();
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE27")]
+    public async Task Should_Return422_When_MoreThanOnePreferredSupplier()
+    {
+        var first = NewSupplier("Doces A");
+        var second = NewSupplier("Doces B");
+        var dto = WithSuppliers(new ProductSupplierRequestDto { SupplierId = first.Id, IsPreferred = true }, new ProductSupplierRequestDto { SupplierId = second.Id, IsPreferred = true });
+
+        ShouldHaveField(await CreateWith(first, second).Execute(dto, ProductTestData.UserId), "suppliers");
+        await ShouldNotCommit();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-6)]
+    [InlineData(2.5)]
+    [Trait("Rule", "RN-CE30")]
+    public async Task Should_Return422_When_OrderMultipleNotPositive(double multiple)
+    {
+        var supplier = NewSupplier();
+        var dto = WithSuppliers(new ProductSupplierRequestDto { SupplierId = supplier.Id, OrderMultiple = (decimal)multiple });
+
+        ShouldHaveField(await CreateWith(supplier).Execute(dto, ProductTestData.UserId), "suppliers[0].orderMultiple");
+        await ShouldNotCommit();
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE30")]
+    public async Task Should_Return422_When_MinOrderQtyNotPositive()
+    {
+        var supplier = NewSupplier();
+        var dto = WithSuppliers(new ProductSupplierRequestDto { SupplierId = supplier.Id, MinOrderQty = 0 });
+
+        ShouldHaveField(await CreateWith(supplier).Execute(dto, ProductTestData.UserId), "suppliers[0].minOrderQty");
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE27")]
+    public async Task Should_Return422_When_SupplierInactiveAndNotLinked()
+    {
+        var supplier = NewSupplier();
+        supplier.Delete();
+        var dto = WithSuppliers(new ProductSupplierRequestDto { SupplierId = supplier.Id });
+
+        ShouldHaveField(await CreateWith(supplier).Execute(dto, ProductTestData.UserId), "suppliers[0].supplierId");
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE25")]
+    public async Task Should_Return401_When_UserNotInformed()
+    {
+        var result = await Create().Execute(Simple());
+
+        result.IsSuccess.ShouldBeFalse();
+        result.ErrorCode.ShouldBe(401);
+        await ShouldNotCommit();
+    }
+
     // ---------- Criar ----------
 
     [Fact]
     public async Task Should_CommitOnce_When_CreatingValidProduct()
     {
-        var result = await Create().Execute(Simple());
+        var result = await Create().Execute(Simple(), ProductTestData.UserId);
 
         result.IsSuccess.ShouldBeTrue();
         await _unitOfWork.Received(1).CommitAsync(Arg.Any<CancellationToken>());
@@ -136,7 +236,7 @@ public class ProductUseCaseRulesTests
         var dto = Simple();
         dto.Name = "";
 
-        ShouldHaveField(await Create().Execute(dto), "name");
+        ShouldHaveField(await Create().Execute(dto, ProductTestData.UserId), "name");
         await ShouldNotCommit();
     }
 
@@ -144,9 +244,9 @@ public class ProductUseCaseRulesTests
     [Trait("Rule", "RN-CE57")]
     public async Task Should_FailOnSku_When_UsedByAnotherProductIgnoringCase()
     {
-        var other = new Product(Simple("abc-1")).Variants.Single();
+        var other = ProductTestData.NewProduct(Simple("abc-1")).Variants.Single();
 
-        var result = await Create(variants: Variants(other)).Execute(Simple("ABC-1"));
+        var result = await Create(variants: Variants(other)).Execute(Simple("ABC-1"), ProductTestData.UserId);
 
         ShouldHaveField(result, "variants[0].sku");
         await ShouldNotCommit();
@@ -156,9 +256,9 @@ public class ProductUseCaseRulesTests
     [Trait("Rule", "RN-CE57")]
     public async Task Should_FailOnBarcode_When_UsedByAnotherProduct()
     {
-        var other = new Product(Simple("OUTRO", "789")).Variants.Single();
+        var other = ProductTestData.NewProduct(Simple("OUTRO", "789")).Variants.Single();
 
-        var result = await Create(variants: Variants(other)).Execute(Simple("NOVO", " 789 "));
+        var result = await Create(variants: Variants(other)).Execute(Simple("NOVO", " 789 "), ProductTestData.UserId);
 
         ShouldHaveField(result, "variants[0].barcode");
         await ShouldNotCommit();
@@ -168,19 +268,19 @@ public class ProductUseCaseRulesTests
     [Trait("Rule", "RN-CE57")]
     public async Task Should_FailOnBarcode_When_UsedIgnoringCase()
     {
-        var other = new Product(Simple("OUTRO", "abc789")).Variants.Single();
+        var other = ProductTestData.NewProduct(Simple("OUTRO", "abc789")).Variants.Single();
 
-        ShouldHaveField(await Create(variants: Variants(other)).Execute(Simple("NOVO", "ABC789")), "variants[0].barcode");
+        ShouldHaveField(await Create(variants: Variants(other)).Execute(Simple("NOVO", "ABC789"), ProductTestData.UserId), "variants[0].barcode");
     }
 
     [Fact]
     [Trait("Rule", "RN-CE57")]
     public async Task Should_FailOnSku_When_ProductUsingItIsInactive()
     {
-        var inactive = new Product(Simple("ABC"));
+        var inactive = ProductTestData.NewProduct(Simple("ABC"));
         inactive.Delete();
 
-        ShouldHaveField(await Create(variants: Variants(inactive.Variants.Single())).Execute(Simple("ABC")), "variants[0].sku");
+        ShouldHaveField(await Create(variants: Variants(inactive.Variants.Single())).Execute(Simple("ABC"), ProductTestData.UserId), "variants[0].sku");
     }
 
     [Fact]
@@ -190,7 +290,7 @@ public class ProductUseCaseRulesTests
         var dto = Simple();
         dto.Variants[0].Id = Guid.NewGuid();
 
-        ShouldHaveField(await Create().Execute(dto), "variants[0].id");
+        ShouldHaveField(await Create().Execute(dto, ProductTestData.UserId), "variants[0].id");
         await ShouldNotCommit();
     }
 
@@ -203,7 +303,7 @@ public class ProductUseCaseRulesTests
         dto.Attributes[0].Values[0].Id = Guid.NewGuid();
         dto.Variants[0].AttributeValueIds = [dto.Attributes[0].Values[0].Id.ToString()!];
 
-        var result = await Create().Execute(dto);
+        var result = await Create().Execute(dto, ProductTestData.UserId);
 
         ShouldHaveField(result, "attributes[0].id");
         result.FieldErrors!.ShouldContainKey("attributes[0].values[0].id");
@@ -215,7 +315,7 @@ public class ProductUseCaseRulesTests
         var dto = Simple();
         dto.CategoryIds = [Guid.NewGuid()];
 
-        ShouldHaveField(await Create().Execute(dto), "categoryIds");
+        ShouldHaveField(await Create().Execute(dto, ProductTestData.UserId), "categoryIds");
         await ShouldNotCommit();
     }
 
@@ -227,7 +327,7 @@ public class ProductUseCaseRulesTests
         var dto = Simple();
         dto.CategoryIds = [category.Id];
 
-        ShouldHaveField(await Create(categories: Categories(category)).Execute(dto), "categoryIds");
+        ShouldHaveField(await Create(categories: Categories(category)).Execute(dto, ProductTestData.UserId), "categoryIds");
     }
 
     [Fact]
@@ -237,7 +337,7 @@ public class ProductUseCaseRulesTests
         var dto = Simple();
         dto.CategoryIds = [category.Id];
 
-        (await Create(categories: Categories(category), products: ProductsRereading()).Execute(dto)).IsSuccess.ShouldBeTrue();
+        (await Create(categories: Categories(category), products: ProductsRereading()).Execute(dto, ProductTestData.UserId)).IsSuccess.ShouldBeTrue();
     }
 
     [Fact]
@@ -246,7 +346,7 @@ public class ProductUseCaseRulesTests
         var dto = Simple();
         dto.CollectionId = Guid.NewGuid();
 
-        ShouldHaveField(await Create().Execute(dto), "collectionId");
+        ShouldHaveField(await Create().Execute(dto, ProductTestData.UserId), "collectionId");
     }
 
     [Fact]
@@ -257,7 +357,7 @@ public class ProductUseCaseRulesTests
         var dto = Simple();
         dto.CollectionId = collection.Id;
 
-        ShouldHaveField(await Create(collections: Collections(collection)).Execute(dto), "collectionId");
+        ShouldHaveField(await Create(collections: Collections(collection)).Execute(dto, ProductTestData.UserId), "collectionId");
     }
 
     // ---------- Editar ----------
@@ -266,10 +366,10 @@ public class ProductUseCaseRulesTests
     [Trait("Rule", "RN-CE04")]
     public async Task Should_Return400_When_EditingInactiveProduct()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.Delete();
 
-        var result = await Update(product).Execute(product.Id, EditOf(product));
+        var result = await Update(product).Execute(product.Id, EditOf(product), ProductTestData.UserId);
 
         result.ErrorCode.ShouldBe(400);
         await ShouldNotCommit();
@@ -282,22 +382,22 @@ public class ProductUseCaseRulesTests
         var category = new Category(new CategoryRequestDto { Name = "Doces" });
         var dto = Simple();
         dto.CategoryIds = [category.Id];
-        var product = new Product(dto);
+        var product = ProductTestData.NewProduct(dto);
         category.Delete();
 
-        (await Update(product, categories: Categories(category), products: ProductsRereading(product)).Execute(product.Id, EditOf(product))).IsSuccess.ShouldBeTrue();
+        (await Update(product, categories: Categories(category), products: ProductsRereading(product)).Execute(product.Id, EditOf(product), ProductTestData.UserId)).IsSuccess.ShouldBeTrue();
     }
 
     [Fact]
     [Trait("Rule", "RN-CE53")]
     public async Task Should_FailOnCategories_When_EditAddsInactiveCategory()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         var category = InactiveCategory();
         var dto = EditOf(product);
         dto.CategoryIds = [category.Id];
 
-        ShouldHaveField(await Update(product, categories: Categories(category)).Execute(product.Id, dto), "categoryIds");
+        ShouldHaveField(await Update(product, categories: Categories(category)).Execute(product.Id, dto, ProductTestData.UserId), "categoryIds");
     }
 
     [Fact]
@@ -306,98 +406,98 @@ public class ProductUseCaseRulesTests
         var collection = new Collection(new CollectionRequestDto { Name = "Verão" });
         var dto = Simple();
         dto.CollectionId = collection.Id;
-        var product = new Product(dto);
+        var product = ProductTestData.NewProduct(dto);
         collection.Delete();
 
-        (await Update(product, collections: Collections(collection)).Execute(product.Id, EditOf(product))).IsSuccess.ShouldBeTrue();
+        (await Update(product, collections: Collections(collection)).Execute(product.Id, EditOf(product), ProductTestData.UserId)).IsSuccess.ShouldBeTrue();
     }
 
     [Fact]
     [Trait("Rule", "RN-CE40")]
     public async Task Should_FailOnCollection_When_EditChangesToInactive()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         var collection = InactiveCollection();
         var dto = EditOf(product);
         dto.CollectionId = collection.Id;
 
-        ShouldHaveField(await Update(product, collections: Collections(collection)).Execute(product.Id, dto), "collectionId");
+        ShouldHaveField(await Update(product, collections: Collections(collection)).Execute(product.Id, dto, ProductTestData.UserId), "collectionId");
     }
 
     [Fact]
     public async Task Should_FailOnId_When_VariantBelongsToAnotherProduct()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         var dto = EditOf(product);
         dto.Variants[0].Id = Guid.NewGuid();
 
-        ShouldHaveField(await Update(product).Execute(product.Id, dto), "variants[0].id");
+        ShouldHaveField(await Update(product).Execute(product.Id, dto, ProductTestData.UserId), "variants[0].id");
         await ShouldNotCommit();
     }
 
     [Fact]
     public async Task Should_FailOnId_When_AttributeBelongsToAnotherProduct()
     {
-        var product = new Product(Grid("A", "P"));
+        var product = ProductTestData.NewProduct(Grid("A", "P"));
         var dto = EditOf(product);
         dto.Attributes[0].Id = Guid.NewGuid();
 
-        ShouldHaveField(await Update(product).Execute(product.Id, dto), "attributes[0].id");
+        ShouldHaveField(await Update(product).Execute(product.Id, dto, ProductTestData.UserId), "attributes[0].id");
     }
 
     [Fact]
     public async Task Should_FailOnId_When_ValueBelongsToAnotherAttribute()
     {
-        var product = new Product(Grid("A", "P"));
+        var product = ProductTestData.NewProduct(Grid("A", "P"));
         var dto = EditOf(product);
         var foreignValue = Guid.NewGuid();
         dto.Attributes[0].Values[0].Id = foreignValue;
         dto.Variants[0].AttributeValueIds = [foreignValue.ToString()];
 
-        ShouldHaveField(await Update(product).Execute(product.Id, dto), "attributes[0].values[0].id");
+        ShouldHaveField(await Update(product).Execute(product.Id, dto, ProductTestData.UserId), "attributes[0].values[0].id");
     }
 
     [Fact]
     [Trait("Rule", "RN-CE57")]
     public async Task Should_AcceptOwnSku_When_EditingSameVariant()
-        => await AssertOwnSkuAccepted(new Product(Simple("ABC")));
+        => await AssertOwnSkuAccepted(ProductTestData.NewProduct(Simple("ABC")));
 
     private async Task AssertOwnSkuAccepted(Product product)
-        => (await Update(product).Execute(product.Id, EditOf(product))).IsSuccess.ShouldBeTrue();
+        => (await Update(product).Execute(product.Id, EditOf(product), ProductTestData.UserId)).IsSuccess.ShouldBeTrue();
 
     [Fact]
     [Trait("Rule", "RN-CE57")]
     public async Task Should_FailOnSku_When_SwappingBetweenTwoKeptVariants()
     {
-        var product = new Product(Grid("A", "P", "M"));
+        var product = ProductTestData.NewProduct(Grid("A", "P", "M"));
         var dto = EditOf(product);
         (dto.Variants[0].Sku, dto.Variants[1].Sku) = (dto.Variants[1].Sku, dto.Variants[0].Sku);
 
-        ShouldHaveField(await Update(product).Execute(product.Id, dto), "variants[0].sku");
+        ShouldHaveField(await Update(product).Execute(product.Id, dto, ProductTestData.UserId), "variants[0].sku");
     }
 
     [Fact]
     [Trait("Rule", "RN-CE57")]
-    public async Task Should_AcceptSku_When_ReusedFromVariantLeavingTheProduct()
+    public async Task Should_FailOnSku_When_ReusingSkuOfVariantRemovedInSameSave()
     {
-        var product = new Product(Grid("A", "P", "M"));
+        var product = ProductTestData.NewProduct(Grid("A", "P", "M"));
         var dto = EditOf(product);
         var leaving = dto.Variants[1];
         dto.Variants = [dto.Variants[0], new() { Sku = leaving.Sku, Price = 10m, AttributeValueIds = leaving.AttributeValueIds }];
 
-        (await Update(product).Execute(product.Id, dto)).IsSuccess.ShouldBeTrue();
+        ShouldHaveField(await Update(product).Execute(product.Id, dto, ProductTestData.UserId), "variants[1].sku");
     }
 
     [Fact]
     [Trait("Rule", "RN-CE57")]
     public async Task Should_FailOnSku_When_UsedByAnotherProductOnEdit()
     {
-        var product = new Product(Simple("MEU"));
-        var other = new Product(Simple("DELE")).Variants.Single();
+        var product = ProductTestData.NewProduct(Simple("MEU"));
+        var other = ProductTestData.NewProduct(Simple("DELE")).Variants.Single();
         var dto = EditOf(product);
         dto.Variants[0].Sku = "dele";
 
-        ShouldHaveField(await Update(product, variants: Variants(other)).Execute(product.Id, dto), "variants[0].sku");
+        ShouldHaveField(await Update(product, variants: Variants(other)).Execute(product.Id, dto, ProductTestData.UserId), "variants[0].sku");
     }
 
     // ---------- Ciclo de vida ----------
@@ -409,7 +509,7 @@ public class ProductUseCaseRulesTests
     [Trait("Rule", "RN-CE19")]
     public async Task Should_MarkDiscontinued_When_Asked()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
 
         var result = await Lifecycle(product).Execute(product.Id, new() { Lifecycle = LifecycleEnum.Discontinued });
 
@@ -422,7 +522,7 @@ public class ProductUseCaseRulesTests
     [Trait("Rule", "RN-CE04")]
     public async Task Should_Return400_When_ChangingLifecycleOfInactiveProduct()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.Delete();
 
         (await Lifecycle(product).Execute(product.Id, new() { Lifecycle = LifecycleEnum.Discontinued })).ErrorCode.ShouldBe(400);
@@ -463,7 +563,7 @@ public class ProductUseCaseRulesTests
     [Trait("Rule", "RN-CE05")]
     public async Task Should_NotUpload_When_FileInvalid()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         var file = new UploadFileDto("foto.png", "image/png", 3, new MemoryStream([1, 2, 3]));
 
         ShouldHaveField(await UploadImage(product).Execute(product.Id, file), "image");
@@ -474,7 +574,7 @@ public class ProductUseCaseRulesTests
     [Trait("Rule", "RN-CE04")]
     public async Task Should_NotUpload_When_ProductInactive()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.Delete();
 
         (await UploadImage(product).Execute(product.Id, PngFile())).ErrorCode.ShouldBe(400);
@@ -488,7 +588,7 @@ public class ProductUseCaseRulesTests
     [Fact]
     public async Task Should_DeletePreviousAfterCommit_When_ReplacingImage()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.SetImage("products/antiga.png");
         _storage.UploadAsync(StorageFolder.ProductImages, Arg.Any<UploadFileDto>(), Arg.Any<CancellationToken>()).Returns("products/nova.png");
         _storage.GetPublicUrl("products/nova.png").Returns("http://s/nova");
@@ -507,7 +607,7 @@ public class ProductUseCaseRulesTests
     [Fact]
     public async Task Should_DeleteNewAndRethrow_When_CommitFails()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.SetImage("products/antiga.png");
         _storage.UploadAsync(StorageFolder.ProductImages, Arg.Any<UploadFileDto>(), Arg.Any<CancellationToken>()).Returns("products/nova.png");
         _unitOfWork.CommitAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("banco"));
@@ -521,7 +621,7 @@ public class ProductUseCaseRulesTests
     [Fact]
     public async Task Should_KeepSuccess_When_DeletingPreviousFails()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.SetImage("products/antiga.png");
         _storage.UploadAsync(StorageFolder.ProductImages, Arg.Any<UploadFileDto>(), Arg.Any<CancellationToken>()).Returns("products/nova.png");
         _storage.DeleteAsync(StorageBucketEnum.Public, "products/antiga.png", Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("s3"));
@@ -532,7 +632,7 @@ public class ProductUseCaseRulesTests
     [Fact]
     public async Task Should_PassTokenAndKeepSwap_When_DeletingPreviousIsCanceled()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.SetImage("products/antiga.png");
         using var cts = new CancellationTokenSource();
         _storage.UploadAsync(StorageFolder.ProductImages, Arg.Any<UploadFileDto>(), cts.Token).Returns("products/nova.png");
@@ -549,7 +649,7 @@ public class ProductUseCaseRulesTests
     [Fact]
     public async Task Should_PassTokenAndKeepRemoval_When_DeletingFileIsCanceled()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.SetImage("products/a.png");
         using var cts = new CancellationTokenSource();
         _storage.DeleteAsync(StorageBucketEnum.Public, "products/a.png", cts.Token).ThrowsAsync(new OperationCanceledException());
@@ -564,7 +664,7 @@ public class ProductUseCaseRulesTests
     [Fact]
     public async Task Should_DeleteNewWithoutToken_When_CommitIsCanceled()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         using var cts = new CancellationTokenSource();
         _storage.UploadAsync(StorageFolder.ProductImages, Arg.Any<UploadFileDto>(), cts.Token).Returns("products/nova.png");
         _unitOfWork.CommitAsync(cts.Token).ThrowsAsync(new OperationCanceledException());
@@ -577,7 +677,7 @@ public class ProductUseCaseRulesTests
     [Fact]
     public async Task Should_CommitBeforeDeletingFile_When_RemovingImage()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.SetImage("products/a.png");
 
         (await RemoveImage(product).Execute(product.Id)).IsSuccess.ShouldBeTrue();
@@ -593,7 +693,7 @@ public class ProductUseCaseRulesTests
     [Fact]
     public async Task Should_KeepSuccess_When_DeletingRemovedFileFails()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.SetImage("products/a.png");
         _storage.DeleteAsync(StorageBucketEnum.Public, "products/a.png", Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("s3"));
 
@@ -603,7 +703,7 @@ public class ProductUseCaseRulesTests
     [Fact]
     public async Task Should_DoNothing_When_RemovingAbsentImage()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
 
         (await RemoveImage(product).Execute(product.Id)).IsSuccess.ShouldBeTrue();
 
@@ -615,7 +715,7 @@ public class ProductUseCaseRulesTests
     [Trait("Rule", "RN-CE04")]
     public async Task Should_Return400_When_RemovingImageOfInactiveProduct()
     {
-        var product = new Product(Simple());
+        var product = ProductTestData.NewProduct(Simple());
         product.SetImage("products/a.png");
         product.Delete();
 

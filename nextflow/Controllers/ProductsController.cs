@@ -15,6 +15,8 @@ public class ProductsController(
     IGetAllUseCase<Product, ProductListItemDto> getAllUseCase,
     IGetByIdUseCase<Product, ProductResponseDto> getByIdUseCase,
     IGetByIdUseCase<Product, List<ProductVariantResponseDto>> getVariantsUseCase,
+    IGetByIdUseCase<Product, List<ProductSupplierResponseDto>> getSuppliersUseCase,
+    IGetByIdUseCase<Product, List<PriceHistoryResponseDto>> getPriceHistoryUseCase,
     IGetProductFormUseCase getFormUseCase,
     ICreateUseCase<ProductRequestDto, ProductResponseDto> createUseCase,
     IUpdateUseCase<ProductRequestDto, ProductResponseDto> updateUseCase,
@@ -46,13 +48,21 @@ public class ProductsController(
     public async Task<IActionResult> Variants(Guid id, CancellationToken ct)
         => Handle(await getVariantsUseCase.Execute(id, ct));
 
+    [HttpGet("{id:guid}/suppliers")]
+    public async Task<IActionResult> Suppliers(Guid id, CancellationToken ct)
+        => Handle(await getSuppliersUseCase.Execute(id, ct));
+
+    [HttpGet("{id:guid}/price-history")]
+    public async Task<IActionResult> PriceHistory(Guid id, CancellationToken ct)
+        => Handle(await getPriceHistoryUseCase.Execute(id, ct));
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ProductRequestDto dto, CancellationToken ct)
-        => HandleCreated(await createUseCase.Execute(dto, ct));
+        => HandleCreated(await createUseCase.Execute(dto, UserId, ct));
 
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] ProductRequestDto dto, CancellationToken ct)
-        => Handle(await updateUseCase.Execute(id, dto, ct));
+        => Handle(await updateUseCase.Execute(id, dto, UserId, ct));
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)

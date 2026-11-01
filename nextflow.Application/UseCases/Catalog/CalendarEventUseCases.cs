@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using Nextflow.Application.Filters;
 using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Dtos;
@@ -65,9 +66,12 @@ public class UpdateCalendarEventUseCase(
     }
 
     protected override CalendarEventResponseDto MapToResponseDto(CalendarEvent entity) => new(entity, clock.Today);
+
+    protected override Func<IQueryable<CalendarEvent>, IQueryable<CalendarEvent>> GetInclude()
+        => q => q.Include(e => e.Products.Where(link => link.Product.IsActive));
 }
 
-/// <summary>Soft delete nos dois escopos, porque <c>product_events</c> vai apontar para o evento na F1.4 (RN-CE43).</summary>
+/// <summary>Soft delete nos dois escopos, porque <c>product_events</c> aponta para o evento (RN-CE43).</summary>
 public class DeleteCalendarEventUseCase(
     ICalendarEventRepository calendarEventRepository,
     IUnitOfWork unitOfWork,
@@ -87,6 +91,9 @@ public class GetCalendarEventByIdUseCase(
     : GetByIdUseCaseBase<CalendarEvent, ICalendarEventRepository, CalendarEventResponseDto>(calendarEventRepository, resultFactory)
 {
     protected override CalendarEventResponseDto MapToResponseDto(CalendarEvent entity) => new(entity, clock.Today);
+
+    protected override Func<IQueryable<CalendarEvent>, IQueryable<CalendarEvent>> GetInclude()
+        => q => q.Include(e => e.Products.Where(link => link.Product.IsActive));
 }
 
 /// <summary>
@@ -126,9 +133,12 @@ public class GetAllCalendarEventsUseCase(
         };
 
     protected override CalendarEventResponseDto MapToResponseDto(CalendarEvent entity) => new(entity, clock.Today);
+
+    protected override Func<IQueryable<CalendarEvent>, IQueryable<CalendarEvent>> GetInclude()
+        => q => q.Include(e => e.Products.Where(link => link.Product.IsActive));
 }
 
-/// <summary>Combo de evento: só ativos (usado pelo produto na F1.4).</summary>
+/// <summary>Combo de evento: só ativos.</summary>
 public class GetCalendarEventOptionsUseCase(
     ICalendarEventRepository calendarEventRepository,
     IResultFactory<List<Option>> resultFactory)

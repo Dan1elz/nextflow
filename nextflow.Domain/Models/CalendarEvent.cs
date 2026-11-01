@@ -20,6 +20,8 @@ public class CalendarEvent : BaseModel, IDeletable, IUpdatable<CalendarEventRequ
     public bool IsActive { get; private set; } = true;
     public DateTime? UpdatedAt { get; private set; }
 
+    public virtual ICollection<ProductEvent> Products { get; private set; } = [];
+
     public override string Preposition => "o";
     public override string Singular => "evento";
     public override string Plural => "eventos";

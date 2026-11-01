@@ -4,8 +4,8 @@ using Nextflow.Domain.Models;
 namespace Nextflow.Domain.Dtos.Suppliers;
 
 /// <summary>
-/// Linha da listagem (T-CD1). <see cref="RealLeadTimeDays"/>, <see cref="ProductCount"/> e <see cref="LastPurchaseOn"/>
-/// dependem de compras e produtos: ficam nulos ou zero até as fases 1 e 2.
+/// Linha da listagem (T-CD1). <see cref="RealLeadTimeDays"/> e <see cref="LastPurchaseOn"/> dependem de compras: ficam
+/// nulos até a fase 2. <see cref="ProductCount"/> conta os produtos ativos vinculados.
 /// </summary>
 public class SupplierListItemDto
 {
@@ -30,6 +30,7 @@ public class SupplierListItemDto
         CityState = summary?.CityState;
         MainContact = summary?.MainContact;
         LeadTimeDays = entity.LeadTimeDays;
+        ProductCount = entity.Products.Count;
         IsActive = entity.IsActive;
     }
 }

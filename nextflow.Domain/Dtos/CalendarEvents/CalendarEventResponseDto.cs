@@ -5,7 +5,7 @@ namespace Nextflow.Domain.Dtos.CalendarEvents;
 
 /// <summary>
 /// Evento de calendário (T6). <see cref="NextDate"/> é calculado aqui, a partir da data de negócio recebida (RN-CE46).
-/// <see cref="ProductCount"/> fica zero até a F1.4, que traz <c>product_events</c>.
+/// <see cref="ProductCount"/> conta os produtos ativos vinculados, carregados no <c>GetInclude()</c> do use case.
 /// </summary>
 public class CalendarEventResponseDto
 {
@@ -36,6 +36,7 @@ public class CalendarEventResponseDto
         EasterOffsetDays = entity.EasterOffsetDays;
         LeadDays = entity.LeadDays;
         NextDate = entity.NextDate(today);
+        ProductCount = entity.Products.Count;
         IsActive = entity.IsActive;
     }
 }

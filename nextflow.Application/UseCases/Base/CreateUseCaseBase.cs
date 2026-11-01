@@ -25,8 +25,15 @@ public abstract class CreateUseCaseBase<TEntity, TRepository, TRequest, TRespons
     protected readonly IValidator<TRequest> _validator = validator;
     protected readonly IResultFactory<TResponse> _resultFactory = resultFactory;
 
-    public virtual async Task<ResultDto<TResponse>> Execute(TRequest dto, CancellationToken ct = default)
+    /// <summary>Usuário logado, quando o controller o repassa. Só a regra que grava autoria precisa dele.</summary>
+    protected Guid? UserId { get; private set; }
+
+    public Task<ResultDto<TResponse>> Execute(TRequest dto, CancellationToken ct = default) => Execute(dto, null, ct);
+
+    public virtual async Task<ResultDto<TResponse>> Execute(TRequest dto, Guid? userId, CancellationToken ct = default)
     {
+        UserId = userId;
+
         if (dto is null)
             return _resultFactory.Failure("O corpo da requisição é obrigatório.", 400);
 

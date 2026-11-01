@@ -5,11 +5,17 @@ namespace Nextflow.Domain.Interfaces.Application.UseCases.Base;
 public interface ICreateUseCase<TRequest, TResponse>
 {
     Task<ResultDto<TResponse>> Execute(TRequest dto, CancellationToken ct = default);
+
+    /// <summary>Com o usuário logado, para a regra que grava quem alterou (RN-CE25).</summary>
+    Task<ResultDto<TResponse>> Execute(TRequest dto, Guid? userId, CancellationToken ct = default);
 }
 
 public interface IUpdateUseCase<TRequest, TResponse>
 {
     Task<ResultDto<TResponse>> Execute(Guid id, TRequest dto, CancellationToken ct = default);
+
+    /// <summary>Com o usuário logado, para a regra que grava quem alterou (RN-CE25).</summary>
+    Task<ResultDto<TResponse>> Execute(Guid id, TRequest dto, Guid? userId, CancellationToken ct = default);
 }
 
 public interface IDeleteUseCase<TEntity>

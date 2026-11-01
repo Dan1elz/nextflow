@@ -53,6 +53,21 @@ public class ProductRequestDtoValidator : AbstractValidator<ProductRequestDto>
                 .PrecisionScale(12, 2, true).WithMessage("O preço aceita até 10 dígitos e 2 casas decimais.");
         });
 
+        RuleForEach(x => x.Suppliers).NotNull().WithMessage("Informe os dados do fornecedor.").ChildRules(supplier =>
+        {
+            supplier.RuleFor(s => s.SupplierId).NotEmpty().WithMessage("Escolha o fornecedor.");
+            supplier.RuleFor(s => s.SupplierSku).MaximumLength(50).WithMessage("O código no fornecedor deve ter no máximo 50 caracteres.");
+            supplier.RuleFor(s => s.LeadTimeDays) // RN-CD03
+                .InclusiveBetween(1, 180).WithMessage("O prazo de entrega deve ser de 1 a 180 dias.")
+                .When(s => s.LeadTimeDays is not null);
+            supplier.RuleFor(s => s.MinOrderQty)
+                .Must(IsPositiveWholeNumber).WithMessage("O pedido mínimo deve ser um número inteiro maior que zero.")
+                .When(s => s.MinOrderQty is not null);
+            supplier.RuleFor(s => s.OrderMultiple) // RN-CE30
+                .Must(IsPositiveWholeNumber).WithMessage("O múltiplo de compra deve ser um número inteiro maior que zero.")
+                .When(s => s.OrderMultiple is not null);
+        });
+
         // Comparam os itens entre si: com item nulo, que já tem erro próprio, só valem depois de corrigido.
         When(HasNoNullItem, () =>
         {
@@ -84,13 +99,33 @@ public class ProductRequestDtoValidator : AbstractValidator<ProductRequestDto>
                 AddDuplicateCodeFailures(dto, context);
                 if (dto.Attributes.Count > 0)
                     AddCombinationFailures(dto, context);
+                AddSupplierFailures(dto, context);
             });
         });
     }
 
     private static bool HasNoNullItem(ProductRequestDto dto)
         => dto.Attributes.All(attribute => attribute != null && attribute.Values.All(value => value != null))
-            && dto.Variants.All(variant => variant != null);
+            && dto.Variants.All(variant => variant != null)
+            && dto.Suppliers.All(supplier => supplier != null);
+
+    /// <summary>RN-CE60: fornecedor único no produto, no máximo um preferido, quantidades nas casas decimais do produto.</summary>
+    private static void AddSupplierFailures(ProductRequestDto dto, ValidationContext<ProductRequestDto> context)
+    {
+        if (dto.Suppliers.Count(supplier => supplier.IsPreferred) > 1)
+            context.AddFailure(nameof(dto.Suppliers), "Só um fornecedor pode ser o preferido.");
+
+        var seen = new HashSet<Guid>();
+        for (var index = 0; index < dto.Suppliers.Count; index++)
+        {
+            var supplier = dto.Suppliers[index];
+            if (supplier.SupplierId != Guid.Empty && !seen.Add(supplier.SupplierId))
+                context.AddFailure($"Suppliers[{index}].SupplierId", "Este fornecedor já está na lista.");
+        }
+    }
+
+    private static bool IsPositiveWholeNumber(decimal? quantity)
+        => quantity is { } value && value >= 1 && value <= int.MaxValue && decimal.Truncate(value) == value;
 
     /// <summary>SKU e código de barras únicos também dentro do próprio formulário (T2), sem diferenciar maiúsculas.</summary>
     private static void AddDuplicateCodeFailures(ProductRequestDto dto, ValidationContext<ProductRequestDto> context)

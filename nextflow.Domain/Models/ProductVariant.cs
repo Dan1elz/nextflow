@@ -11,10 +11,13 @@ public class ProductVariant : BaseModel
     public decimal Price { get; private set; }
     public short SortOrder { get; private set; }
     public bool IsActive { get; private set; } = true;
+    /// <summary>Saiu do formulário: fica inativa e fora das telas de variação, para o histórico de preço não se perder (RN-CE58).</summary>
+    public DateOnly? RemovedOn { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
     public virtual Product Product { get; private set; } = null!;
     public virtual ICollection<ProductVariantValue> AttributeValues { get; private set; } = [];
+    public virtual ICollection<PriceHistory> PriceHistory { get; private set; } = [];
 
     public override string Preposition => "a";
     public override string Singular => "variação";
@@ -22,17 +25,34 @@ public class ProductVariant : BaseModel
 
     private ProductVariant() { }
 
-    public ProductVariant(ProductVariantRequestDto dto, Guid productId, short sortOrder)
+    public ProductVariant(ProductVariantRequestDto dto, Guid productId, short sortOrder, Guid changedById, DateOnly today)
     {
         ProductId = productId;
         Apply(dto, sortOrder);
+        PriceHistory.Add(new PriceHistory(Id, Price, today, changedById));
     }
 
-    /// <summary>A F1.4 grava <c>price_history</c> quando o preço mudar (RN-CE25).</summary>
-    public void Update(ProductVariantRequestDto dto, short sortOrder)
+    /// <summary>Preço igual não grava nada; preço diferente fecha a faixa aberta e abre outra (RN-CE25, RN-CE59).</summary>
+    public void Update(ProductVariantRequestDto dto, short sortOrder, Guid changedById, DateOnly today)
     {
+        var previousPrice = Price;
         Apply(dto, sortOrder);
         UpdatedAt = DateTime.UtcNow;
+
+        if (Price == previousPrice)
+            return;
+
+        CloseCurrentPrice(today);
+        PriceHistory.Add(new PriceHistory(Id, Price, today, changedById));
+    }
+
+    /// <summary>Remoção sem apagar: toda variação gravada tem histórico de preço, e histórico não se apaga (RN-CE58).</summary>
+    public void Remove(DateOnly today)
+    {
+        IsActive = false;
+        RemovedOn = today;
+        UpdatedAt = DateTime.UtcNow;
+        CloseCurrentPrice(today);
     }
 
     public void SyncValues(List<Guid> attributeValueIds)
@@ -43,6 +63,12 @@ public class ProductVariant : BaseModel
         var linked = AttributeValues.Select(link => link.AttributeValueId).ToHashSet();
         foreach (var valueId in attributeValueIds.Where(id => !linked.Contains(id)))
             AttributeValues.Add(new ProductVariantValue(Id, valueId));
+    }
+
+    private void CloseCurrentPrice(DateOnly today)
+    {
+        foreach (var current in PriceHistory.Where(entry => entry.ValidTo is null))
+            current.Close(today);
     }
 
     private void Apply(ProductVariantRequestDto dto, short sortOrder)

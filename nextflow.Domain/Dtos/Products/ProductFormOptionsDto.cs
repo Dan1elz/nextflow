@@ -1,10 +1,13 @@
 using Nextflow.Domain.Dtos.Categories;
+using Nextflow.Domain.Dtos.Suppliers;
 
 namespace Nextflow.Domain.Dtos.Products;
 
-/// <summary>Opções do formulário T2: as ativas e as já vinculadas ao produto, mesmo inativas. Eventos entram na F1.4.</summary>
+/// <summary>Opções do formulário T2: os ativos e os já vinculados ao produto, mesmo inativos.</summary>
 public class ProductFormOptionsDto
 {
     public List<CategoryOptionDto> Categories { get; set; } = [];
     public List<Option> Collections { get; set; } = [];
+    public List<Option> Events { get; set; } = [];
+    public List<SupplierOptionDto> Suppliers { get; set; } = [];
 }

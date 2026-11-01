@@ -6,8 +6,8 @@ using Nextflow.Domain.Models;
 namespace Nextflow.Domain.Dtos.Products;
 
 /// <summary>
-/// Cabeçalho da tela T3. Provisório, declarado no contrato: disponível e custo entram na F1.5; promoção, na F2.3. Eventos
-/// (F1.4), classe ABC e cobertura alvo (F1.8) ainda não existem e ficam fora.
+/// Cabeçalho da tela T3. Provisório, declarado no contrato: disponível e custo entram na F1.5; promoção, na F2.3. Classe
+/// ABC e cobertura alvo (F1.8) ainda não existem e ficam fora.
 /// </summary>
 public class ProductResponseDto
 {
@@ -35,6 +35,7 @@ public class ProductResponseDto
     public decimal? ActivePromotionPercent { get; set; }
     public decimal AvailableQuantity { get; set; }
     public int VariantCount { get; set; }
+    public List<Option> Events { get; set; } = [];
 
     public ProductResponseDto() { }
 
@@ -62,5 +63,6 @@ public class ProductResponseDto
         MinEffectivePrice = prices.DefaultIfEmpty(0).Min();
         MaxEffectivePrice = prices.DefaultIfEmpty(0).Max();
         VariantCount = prices.Count;
+        Events = [.. entity.Events.Where(link => link.Event != null).Select(link => new Option(link.EventId.ToString(), link.Event.Name)).OrderBy(e => e.Label)];
     }
 }

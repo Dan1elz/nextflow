@@ -13,6 +13,8 @@ public class Supplier : BaseModel, IDeletable, IUpdatable<SupplierRequestDto>
     public bool IsActive { get; private set; } = true;
     public DateTime? UpdatedAt { get; private set; }
 
+    public virtual ICollection<ProductSupplier> Products { get; private set; } = [];
+
     public override string Preposition => "o";
     public override string Singular => "fornecedor";
     public override string Plural => "fornecedores";

@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using Nextflow.Application.Filters;
 using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Dtos;
@@ -125,6 +126,9 @@ public class GetAllSuppliersUseCase(
 
     protected override async Task PrepareMapping(IReadOnlyList<Supplier> items, CancellationToken ct)
         => _summaries = await ownerDirectory.GetSummaries(OwnerTypeEnum.Supplier, [.. items.Select(s => s.Id)], ct);
+
+    protected override Func<IQueryable<Supplier>, IQueryable<Supplier>> GetInclude()
+        => q => q.Include(s => s.Products.Where(link => link.Product.IsActive));
 
     protected override Func<IQueryable<Supplier>, IOrderedQueryable<Supplier>> GetOrderBy()
         => q => q.OrderBy(s => s.Name).ThenBy(s => s.Id);

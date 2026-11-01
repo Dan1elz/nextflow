@@ -3,6 +3,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Nextflow.Application.Services;
+using Nextflow.Domain.Interfaces.Application.Services;
 
 namespace Nextflow.Tests.Integration;
 
@@ -33,6 +37,21 @@ public sealed class AccessApiFixture : IAsyncLifetime
     }
 
     public HttpClient Anonymous() => _factory.CreateClient();
+
+    /// <summary>
+    /// Outro host sobre o mesmo banco, com a data de negócio fixa. Subir o host roda migrations e seeders de novo, como um
+    /// restart da API.
+    /// </summary>
+    public WebApplicationFactory<Program> HostWithClock(DateOnly today) => _factory.WithWebHostBuilder(builder =>
+        builder.ConfigureTestServices(services => services.AddSingleton<IBusinessClock>(new FixedDateClock(today))));
+
+    public async Task<HttpClient> AdminAsync(WebApplicationFactory<Program> host)
+    {
+        var token = (await LoginAsync(AdminEmail, AdminPassword)).GetProperty("token").GetString()!;
+        var client = host.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
 
     public HttpClient Authenticated(string token)
     {
@@ -95,6 +114,12 @@ public sealed class AccessApiFixture : IAsyncLifetime
         await _factory.DisposeAsync();
         await _postgres.DisposeAsync();
     }
+}
+
+/// <summary>Só a data de negócio é fixa: <c>UtcNow</c> continua real, porque o JWT depende dele.</summary>
+internal sealed class FixedDateClock(DateOnly today) : BusinessClock, IBusinessClock
+{
+    DateOnly IBusinessClock.Today => today;
 }
 
 public sealed record CreatedUser(Guid Id, string Email, string Cpf, string Password);

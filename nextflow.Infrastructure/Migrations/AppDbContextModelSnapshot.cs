@@ -96,6 +96,77 @@ namespace Nextflow.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.CalendarEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<byte>("DateRule")
+                        .HasColumnType("smallint")
+                        .HasColumnName("date_rule");
+
+                    b.Property<short?>("Day")
+                        .HasColumnType("smallint")
+                        .HasColumnName("day");
+
+                    b.Property<short?>("EasterOffsetDays")
+                        .HasColumnType("smallint")
+                        .HasColumnName("easter_offset_days");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<short>("LeadDays")
+                        .HasColumnType("smallint")
+                        .HasColumnName("lead_days");
+
+                    b.Property<short?>("Month")
+                        .HasColumnType("smallint")
+                        .HasColumnName("month");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<short?>("Nth")
+                        .HasColumnType("smallint")
+                        .HasColumnName("nth");
+
+                    b.Property<byte>("Scope")
+                        .HasColumnType("smallint")
+                        .HasColumnName("scope");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<short?>("Weekday")
+                        .HasColumnType("smallint")
+                        .HasColumnName("weekday");
+
+                    b.HasKey("Id")
+                        .HasName("pk_calendar_events");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_calendar_events_name");
+
+                    b.ToTable("calendar_events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_calendar_events_date_rule", "date_rule IN (1, 2, 3, 4, 5)");
+
+                            t.HasCheckConstraint("ck_calendar_events_scope", "scope IN (1, 2)");
+                        });
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Category", b =>
                 {
                     b.Property<Guid>("Id")

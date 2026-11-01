@@ -60,6 +60,8 @@ Configurações registradas no startup:
 | `StoresController` | `/api/stores` | CRUD + reativação, `options`. Criar loja cria o local "Loja" |
 | `StockLocationsController` | `/api/stock-locations` | Criar, editar, inativar, reativar, `options` |
 | `CategoriesController` | `/api/categories` | CRUD com soft delete |
+| `CollectionsController` | `/api/collections` | CRUD com soft delete + reativação, `options` |
+| `CalendarEventsController` | `/api/calendar-events` | CRUD com soft delete + reativação, `options`. POST sempre cria evento da empresa; nacional só altera a antecedência |
 | `ProductsController` | `/api/products` | CRUD + upload de imagem (FormData) |
 | `StockMovementsController` | `/api/stock-movements` | Criação e listagem |
 | `OrdersController` | `/api/orders` | CRUD + cancel + refund |

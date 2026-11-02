@@ -1155,7 +1155,7 @@ public class ProductsApiTests(AccessApiFixture api)
     }
 
     [Fact]
-    public async Task Should_ReturnProvisionalValues_When_ListingBeforeLedger()
+    public async Task Should_ReturnZeroAvailable_When_ListingWithoutMovement()
     {
         using var admin = await api.AdminAsync();
         var name = Unique("Provisorio");

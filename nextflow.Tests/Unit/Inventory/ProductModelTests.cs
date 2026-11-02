@@ -520,7 +520,7 @@ public class ProductDtoMappingTests
     }
 
     [Fact]
-    public void Should_DeclareProvisionalStock_When_MappingBeforeLedger()
+    public void Should_MapZeroStockAndNoCost_When_VariantHasNoMovement()
     {
         var product = ProductTestData.NewProduct(new ProductRequestDto { Name = "Caderno", ProductType = ProductTypeEnum.Standard, SaleUnit = SaleUnitEnum.Unit, Variants = [new() { Sku = "A", Price = 10m }] });
 

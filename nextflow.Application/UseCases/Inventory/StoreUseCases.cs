@@ -52,7 +52,7 @@ public class UpdateStoreUseCase(
     : UpdateUseCaseBase<Store, IStoreRepository, UpdateStoreRequestDto, StoreResponseDto>(
         storeRepository, unitOfWork, validator, resultFactory)
 {
-    protected override Func<IQueryable<Store>, IQueryable<Store>> GetInclude() => q => q.Include(s => s.Locations);
+    protected override Func<IQueryable<Store>, IQueryable<Store>> GetInclude() => q => q.Include(s => s.Locations).ThenInclude(l => l.Balances.Where(b => b.Quantity != 0));
 
     protected override Task<ResultDto<StoreResponseDto>?> ValidateBusinessRules(Store entity, UpdateStoreRequestDto dto, CancellationToken ct)
     {
@@ -74,9 +74,13 @@ public class UpdateStoreUseCase(
         => Task.FromResult<ResultDto<StoreResponseDto>?>(_resultFactory.FieldFailure(field, message));
 }
 
-/// <summary>Inativa a loja (RN-CE36): os locais ficam como estão, e a última loja ativa não sai.</summary>
+/// <summary>
+/// Inativa a loja (RN-CE36): os locais ficam como estão, a última loja ativa não sai e loja com saldo diferente de zero em
+/// algum local também não.
+/// </summary>
 public class DeleteStoreUseCase(
     IStoreRepository storeRepository,
+    IStockBalanceRepository balanceRepository,
     IUnitOfWork unitOfWork,
     IResultFactory<bool> resultFactory)
     : DeleteUseCaseBase<Store, IStoreRepository>(storeRepository, unitOfWork, resultFactory)
@@ -84,9 +88,12 @@ public class DeleteStoreUseCase(
     protected override async Task<ResultDto<bool>?> ValidateBusinessRules(Store entity, Guid? userId, CancellationToken ct)
     {
         var id = entity.Id;
-        return await _repository.Exists(s => s.Id != id && s.IsActive, ct)
-            ? null
-            : _resultFactory.Failure("Não é possível inativar a última loja ativa.", 400);
+        if (!await _repository.Exists(s => s.Id != id && s.IsActive, ct))
+            return _resultFactory.Failure("Não é possível inativar a última loja ativa.", 400);
+
+        return await balanceRepository.Exists(b => b.Location.StoreId == id && b.Quantity != 0, ct)
+            ? _resultFactory.Failure("Esta loja tem saldo de estoque. Zere ou transfira o saldo antes de inativar.", 422)
+            : null;
     }
 }
 
@@ -107,7 +114,7 @@ public class GetStoreByIdUseCase(
     IResultFactory<StoreResponseDto> resultFactory)
     : GetByIdUseCaseBase<Store, IStoreRepository, StoreResponseDto>(storeRepository, resultFactory)
 {
-    protected override Func<IQueryable<Store>, IQueryable<Store>> GetInclude() => q => q.Include(s => s.Locations);
+    protected override Func<IQueryable<Store>, IQueryable<Store>> GetInclude() => q => q.Include(s => s.Locations).ThenInclude(l => l.Balances.Where(b => b.Quantity != 0));
 
     protected override StoreResponseDto MapToResponseDto(Store entity) => new(entity);
 }
@@ -127,7 +134,7 @@ public class GetAllStoresUseCase(
             .Predicate;
     }
 
-    protected override Func<IQueryable<Store>, IQueryable<Store>> GetInclude() => q => q.Include(s => s.Locations);
+    protected override Func<IQueryable<Store>, IQueryable<Store>> GetInclude() => q => q.Include(s => s.Locations).ThenInclude(l => l.Balances.Where(b => b.Quantity != 0));
 
     protected override Func<IQueryable<Store>, IOrderedQueryable<Store>> GetOrderBy()
         => q => q.OrderBy(s => s.Name).ThenBy(s => s.Id);

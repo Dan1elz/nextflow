@@ -5,7 +5,7 @@ namespace Nextflow.Domain.Dtos.Products;
 
 /// <summary>
 /// Linha da aba Variações (T3). <see cref="Label"/> é "P / Azul", na ordem da grade, e vazio na variação padrão oculta.
-/// Provisório: disponível e custo entram na F1.5; promoção, na F2.3.
+/// Disponível é o físico da empresa inteira enquanto não houver orçamento (RN-CE08); promoção entra na F2.3.
 /// </summary>
 public class ProductVariantResponseDto
 {
@@ -26,14 +26,24 @@ public class ProductVariantResponseDto
     public ProductVariantResponseDto(ProductVariant entity, IProductPricingService pricing)
     {
         Id = entity.Id;
-        Label = string.Join(" / ", entity.AttributeValues
-            .Where(link => link.AttributeValue != null)
-            .OrderBy(link => link.AttributeValue.Attribute != null ? link.AttributeValue.Attribute.SortOrder : short.MaxValue)
-            .Select(link => link.AttributeValue.Value));
+        Label = LabelOf(entity);
         Sku = entity.Sku;
         Barcode = entity.Barcode;
         Price = entity.Price;
         EffectivePrice = pricing.GetEffectivePrice(entity);
+        AverageCost = entity.AverageCost;
+        LastCost = entity.LastCost;
+        MarginPercent = AverageCost is { } cost && EffectivePrice > 0
+            ? Math.Round((EffectivePrice - cost) / EffectivePrice * 100, 2, MidpointRounding.AwayFromZero)
+            : null;
+        AvailableQuantity = entity.Balances.Sum(b => b.Quantity);
         IsActive = entity.IsActive;
     }
+
+    /// <summary>"P / Azul", na ordem da grade; vazio na variação padrão oculta. Usa os valores e atributos já carregados.</summary>
+    public static string LabelOf(ProductVariant entity)
+        => string.Join(" / ", entity.AttributeValues
+            .Where(link => link.AttributeValue != null)
+            .OrderBy(link => link.AttributeValue.Attribute != null ? link.AttributeValue.Attribute.SortOrder : short.MaxValue)
+            .Select(link => link.AttributeValue.Value));
 }

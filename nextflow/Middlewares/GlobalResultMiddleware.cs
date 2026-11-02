@@ -2,17 +2,21 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using Npgsql;
 using Nextflow.Controllers;
 using Nextflow.Domain.Dtos;
 
 namespace Nextflow.Middlewares;
 
 /// <summary>
-/// Só para o inesperado: concorrência vira 409 e qualquer outra exceção vira 500, sempre no formato
+/// Só para o inesperado: concorrência (token de versão ou chave única disputada por duas gravações) vira 409 e qualquer
+/// outra exceção vira 500, sempre no formato
 /// <see cref="ResultDto{T}"/>. Erro de negócio nunca chega aqui (vem pela <c>IResultFactory</c>).
 /// </summary>
 public class GlobalResultMiddleware(RequestDelegate next, IWebHostEnvironment env)
 {
+    public const string ConflictMessage = "Este registro foi alterado por outra pessoa. Recarregue e tente novamente.";
+
     private static readonly JsonSerializerSettings JsonSettings = new()
     {
         ContractResolver = new CamelCasePropertyNamesContractResolver()
@@ -27,7 +31,14 @@ public class GlobalResultMiddleware(RequestDelegate next, IWebHostEnvironment en
         catch (DbUpdateConcurrencyException ex)
         {
             Serilog.Log.Warning(ex, "[CONCURRENCY] Registro alterado por outra requisição");
-            await WriteErrorAsync(context, "Este registro foi alterado por outra pessoa. Recarregue e tente novamente.", StatusCodes.Status409Conflict);
+            await WriteErrorAsync(context, ConflictMessage, StatusCodes.Status409Conflict);
+        }
+        // Duas requisições criando a mesma linha (ex.: o primeiro saldo de uma variação num local): a segunda esbarra no
+        // índice único. Regra de negócio de unicidade continua no use case; aqui só chega a corrida.
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            Serilog.Log.Warning(ex, "[CONCURRENCY] Chave única disputada por outra requisição");
+            await WriteErrorAsync(context, ConflictMessage, StatusCodes.Status409Conflict);
         }
         // UTF-8 inválido estoura na leitura do corpo, antes de o ApiController ver o ModelState.
         catch (DecoderFallbackException)

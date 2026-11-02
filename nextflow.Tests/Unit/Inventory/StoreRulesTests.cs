@@ -54,7 +54,7 @@ public class StoreRulesTests
     }
 
     private DeleteLocationUseCase DeleteLocation(Store store)
-        => new(Locations([.. store.Locations]), Stores(store), _unitOfWork, new ResultFactory<bool>());
+        => new(Locations([.. store.Locations]), Stores(store), Substitute.For<IStockBalanceRepository>(), _unitOfWork, new ResultFactory<bool>());
 
     private UpdateStoreUseCase UpdateStore(Store store)
         => new(Stores(store), _unitOfWork, new UpdateStoreRequestDtoValidator(), new ResultFactory<StoreResponseDto>());
@@ -199,7 +199,7 @@ public class StoreRulesTests
         var inactive = NewStore(out _, "Antiga");
         inactive.Delete();
 
-        var result = await new DeleteStoreUseCase(Stores(last, inactive), _unitOfWork, new ResultFactory<bool>()).Execute(last.Id);
+        var result = await new DeleteStoreUseCase(Stores(last, inactive), Substitute.For<IStockBalanceRepository>(), _unitOfWork, new ResultFactory<bool>()).Execute(last.Id);
 
         result.ErrorCode.ShouldBe(400);
         last.IsActive.ShouldBeTrue();
@@ -212,7 +212,7 @@ public class StoreRulesTests
         var store = NewStore(out var main);
         var other = NewStore(out _, "Outra");
 
-        var result = await new DeleteStoreUseCase(Stores(store, other), _unitOfWork, new ResultFactory<bool>()).Execute(store.Id);
+        var result = await new DeleteStoreUseCase(Stores(store, other), Substitute.For<IStockBalanceRepository>(), _unitOfWork, new ResultFactory<bool>()).Execute(store.Id);
 
         result.IsSuccess.ShouldBeTrue();
         store.IsActive.ShouldBeFalse();

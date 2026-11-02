@@ -10,7 +10,7 @@ public class LocationResponseDto
     public bool IsSellable { get; set; }
     public bool IsActive { get; set; }
 
-    /// <summary>Falso até a F1.5, quando o saldo passa a existir.</summary>
+    /// <summary>Algum saldo diferente de zero no local (RN-CE35): a tela avisa que não dá para inativar. Lê os saldos carregados.</summary>
     public bool HasStock { get; set; }
 
     public LocationResponseDto() { }
@@ -22,5 +22,6 @@ public class LocationResponseDto
         Name = entity.Name;
         IsSellable = entity.IsSellable;
         IsActive = entity.IsActive;
+        HasStock = entity.Balances.Any(b => b.Quantity != 0);
     }
 }

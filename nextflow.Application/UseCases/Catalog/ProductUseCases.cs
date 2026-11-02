@@ -8,6 +8,7 @@ using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Dtos.Categories;
 using Nextflow.Domain.Dtos.Products;
+using Nextflow.Domain.Dtos.Stock;
 using Nextflow.Domain.Dtos.Suppliers;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Application.Services;
@@ -82,6 +83,23 @@ internal static class ProductRules
         }
 
         return failures;
+    }
+
+    /// <summary>
+    /// Variação que sai do formulário não pode ter saldo diferente de zero (RN-CE51): o saldo ficaria preso numa variação
+    /// que nenhuma tela mostra. Movimentação antiga não impede, porque a removida continua gravada (RN-CE58).
+    /// </summary>
+    public static async Task<List<ValidationFailure>> RemovedVariantsWithBalance(
+        IStockBalanceRepository balances, ProductRequestDto dto, Product product, CancellationToken ct)
+    {
+        var kept = dto.Variants.Select(v => v.Id).ToHashSet();
+        var removed = product.Variants.Where(v => v.RemovedOn == null && !kept.Contains(v.Id)).Select(v => v.Id).ToList();
+        if (removed.Count == 0)
+            return [];
+
+        return await balances.Exists(b => removed.Contains(b.VariantId) && b.Quantity != 0, ct)
+            ? [new(nameof(dto.Variants), "Uma variação removida tem saldo de estoque. Zere ou transfira o saldo antes de remover.")]
+            : [];
     }
 
     /// <summary>Evento existe e está ativo; o já vinculado pode estar inativo, para o produto seguir editável (RN-CE61).</summary>
@@ -204,7 +222,7 @@ public class CreateProductUseCase(
     private static Func<IQueryable<Product>, IQueryable<Product>> GetInclude()
         => q => q.Include(p => p.Categories).ThenInclude(c => c.Category).ThenInclude(c => c.Parent)
             .Include(p => p.Collection)
-            .Include(p => p.Variants)
+            .Include(p => p.Variants).ThenInclude(v => v.Balances)
             .Include(p => p.Events).ThenInclude(e => e.Event);
 }
 
@@ -216,6 +234,7 @@ public class UpdateProductUseCase(
     IProductVariantRepository variantRepository,
     ICalendarEventRepository calendarEventRepository,
     ISupplierRepository supplierRepository,
+    IStockBalanceRepository balanceRepository,
     IFileStorage fileStorage,
     IProductPricingService pricing,
     IBusinessClock clock,
@@ -235,7 +254,7 @@ public class UpdateProductUseCase(
         var failures = ProductRules.Ownership(dto, entity);
         failures.AddRange(await ProductRules.Categories(categoryRepository, dto, [.. entity.Categories.Select(c => c.CategoryId)], ct));
         failures.AddRange(await ProductRules.Collection(collectionRepository, dto, entity.CollectionId, ct));
-        // F1.5 entra aqui: recusar a remoção de variação com saldo diferente de zero ou com movimentação (RN-CE51).
+        failures.AddRange(await ProductRules.RemovedVariantsWithBalance(balanceRepository, dto, entity, ct));
         failures.AddRange(await ProductRules.Codes(variantRepository, dto, ct));
         failures.AddRange(await ProductRules.Events(calendarEventRepository, dto, [.. entity.Events.Select(e => e.EventId)], ct));
         failures.AddRange(await ProductRules.Suppliers(supplierRepository, dto, [.. entity.Suppliers.Select(s => s.SupplierId)], ct));
@@ -262,6 +281,7 @@ public class UpdateProductUseCase(
             .Include(p => p.Variants).ThenInclude(v => v.AttributeValues)
             // Só a faixa aberta: é a única que uma troca de preço toca (RN-CE59).
             .Include(p => p.Variants).ThenInclude(v => v.PriceHistory.Where(entry => entry.ValidTo == null))
+            .Include(p => p.Variants).ThenInclude(v => v.Balances)
             .Include(p => p.Events).ThenInclude(e => e.Event)
             .Include(p => p.Suppliers);
 }
@@ -291,11 +311,14 @@ public class GetProductByIdUseCase(
     protected override Func<IQueryable<Product>, IQueryable<Product>> GetInclude()
         => q => q.Include(p => p.Categories).ThenInclude(c => c.Category).ThenInclude(c => c.Parent)
             .Include(p => p.Collection)
-            .Include(p => p.Variants)
+            .Include(p => p.Variants).ThenInclude(v => v.Balances)
             .Include(p => p.Events).ThenInclude(e => e.Event);
 }
 
-/// <summary>Aba Variações do T3: as variações do produto, na ordem da grade. A removida só aparece na aba Preços (RN-CE58).</summary>
+/// <summary>
+/// Aba Variações do T3: as variações do produto, na ordem da grade, com custo médio, último custo, margem e disponível da
+/// empresa (RN-CE31, RN-CE08). A removida só aparece na aba Preços (RN-CE58).
+/// </summary>
 public class GetProductVariantsUseCase(
     IProductRepository productRepository,
     IProductPricingService pricing,
@@ -306,7 +329,8 @@ public class GetProductVariantsUseCase(
         => [.. entity.Variants.Where(v => v.RemovedOn == null).OrderBy(v => v.SortOrder).Select(v => new ProductVariantResponseDto(v, pricing))];
 
     protected override Func<IQueryable<Product>, IQueryable<Product>> GetInclude()
-        => q => q.Include(p => p.Variants)
+        => q => q.Include(p => p.Variants).ThenInclude(v => v.Balances)
+            .Include(p => p.Variants)
             .ThenInclude(v => v.AttributeValues)
             .ThenInclude(link => link.AttributeValue)
             .ThenInclude(value => value.Attribute);
@@ -349,17 +373,25 @@ public class GetProductPriceHistoryUseCase(
             .ThenInclude(value => value.Attribute);
 }
 
-/// <summary>Listagem (T1). Filtros: search, categoryId (nível 1 traz as filhas), productType, collectionId, lifecycle, isActive.</summary>
+/// <summary>
+/// Listagem (T1). Filtros: search, categoryId (nível 1 traz as filhas), productType, collectionId, lifecycle, isActive e
+/// storeId, que não filtra produto: só escolhe a loja do disponível (sem ele, a empresa inteira).
+/// </summary>
 public class GetAllProductsUseCase(
     IProductRepository productRepository,
+    IStockBalanceRepository balanceRepository,
     IFileStorage fileStorage,
     IProductPricingService pricing,
     IResultFactory<PaginationDto<ProductListItemDto>> resultFactory)
     : GetAllUseCaseBase<Product, IProductRepository, ProductListItemDto>(productRepository, resultFactory)
 {
+    private Guid? _storeId;
+    private Dictionary<Guid, decimal> _available = new();
+
     protected override Expression<Func<Product, bool>> BuildFilterExpression(IReadOnlyDictionary<string, string>? filters)
     {
         var set = new FilterSet(filters);
+        _storeId = set.TryGetString("storeId", out var store) && Guid.TryParse(store, out var storeId) ? storeId : null;
         var builder = new FilterExpressionBuilder<Product>()
             .WhereBoolEquals(set, "isActive", p => p.IsActive)
             .WhereEnumEquals(set, "productType", p => p.ProductType)
@@ -396,8 +428,66 @@ public class GetAllProductsUseCase(
             ["price"] = p => p.Variants.Where(v => v.IsActive).Min(v => (decimal?)v.Price),
         };
 
+    /// <summary>Disponível da página numa consulta só, somado no banco (RN-CE08: sem orçamento, disponível = físico).</summary>
+    protected override async Task PrepareMapping(IReadOnlyList<Product> items, CancellationToken ct)
+        => _available = await balanceRepository.SumByProduct([.. items.Select(p => p.Id)], _storeId, ct);
+
     protected override ProductListItemDto MapToResponseDto(Product entity)
-        => new(entity, fileStorage.GetPublicUrl(entity.ImageKey), pricing);
+        => new(entity, fileStorage.GetPublicUrl(entity.ImageKey), pricing, _available.GetValueOrDefault(entity.Id));
+}
+
+/// <summary>
+/// Aba Estoque do T3 (contrato, linha da matriz): uma linha por variação ativa, uma coluna por local ativo de loja ativa
+/// (da loja informada ou de todas). Célula sem saldo gravado vale zero.
+/// </summary>
+public class GetProductStockUseCase(
+    IProductRepository productRepository,
+    IStockLocationRepository locationRepository,
+    IStockBalanceRepository balanceRepository,
+    IResultFactory<StockMatrixDto> resultFactory) : IGetProductStockUseCase
+{
+    public async Task<ResultDto<StockMatrixDto>> Execute(Guid id, Guid? storeId, CancellationToken ct = default)
+    {
+        var product = await productRepository.GetById(id, GetInclude(), ct);
+        if (product is null)
+            return resultFactory.Failure($"Entidade com id {id} não encontrada.", 404);
+
+        var locations = (await locationRepository.GetAll(
+            l => l.IsActive && l.Store.IsActive && (storeId == null || l.StoreId == storeId),
+            0,
+            int.MaxValue,
+            GetLocationInclude(),
+            q => q.OrderBy(l => l.Store.Name).ThenBy(l => l.Name).ThenBy(l => l.Id),
+            ct)).ToList();
+
+        var variants = product.Variants.Where(v => v.RemovedOn == null && v.IsActive).OrderBy(v => v.SortOrder).ToList();
+        var variantIds = variants.Select(v => v.Id).ToList();
+        var locationIds = locations.Select(l => l.Id).ToList();
+        var balances = (await balanceRepository.GetAll(
+            b => variantIds.Contains(b.VariantId) && locationIds.Contains(b.LocationId), 0, int.MaxValue, ct: ct)).ToList();
+
+        return resultFactory.Success(new StockMatrixDto
+        {
+            Locations = [.. locations.Select(l => new StockMatrixLocationDto(l))],
+            Rows = [.. variants.Select(variant => new StockMatrixRowDto
+            {
+                VariantId = variant.Id,
+                VariantLabel = ProductVariantResponseDto.LabelOf(variant),
+                Sku = variant.Sku,
+                Cells = [.. locations.Select(location => new StockMatrixCellDto(
+                    location.Id,
+                    balances.Where(b => b.VariantId == variant.Id && b.LocationId == location.Id).Sum(b => b.Quantity)))],
+            })],
+        });
+    }
+
+    private static Func<IQueryable<Product>, IQueryable<Product>> GetInclude()
+        => q => q.Include(p => p.Variants)
+            .ThenInclude(v => v.AttributeValues)
+            .ThenInclude(link => link.AttributeValue)
+            .ThenInclude(value => value.Attribute);
+
+    private static Func<IQueryable<StockLocation>, IQueryable<StockLocation>> GetLocationInclude() => q => q.Include(l => l.Store);
 }
 
 /// <summary>Monta o formulário T2. As opções trazem as ativas e as já vinculadas, para o combo mostrar o que está gravado.</summary>

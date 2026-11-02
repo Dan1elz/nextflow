@@ -5,8 +5,9 @@ using Nextflow.Domain.Models;
 namespace Nextflow.Domain.Dtos.Products;
 
 /// <summary>
-/// Linha da listagem (T1), uma por produto. Provisório, declarado no contrato: <see cref="AvailableQuantity"/> e
-/// <see cref="HasLowStock"/> entram na F1.5; <see cref="ActivePromotionPercent"/>, na F2.3.
+/// Linha da listagem (T1), uma por produto. <see cref="AvailableQuantity"/> é o físico na loja do filtro (ou na empresa),
+/// enquanto não houver orçamento (RN-CE08). <see cref="HasLowStock"/> fica falso até a F1.8 (mínimos);
+/// <see cref="ActivePromotionPercent"/> entra na F2.3.
 /// </summary>
 public class ProductListItemDto
 {
@@ -30,7 +31,7 @@ public class ProductListItemDto
 
     public ProductListItemDto() { }
 
-    public ProductListItemDto(Product entity, string? imageUrl, IProductPricingService pricing)
+    public ProductListItemDto(Product entity, string? imageUrl, IProductPricingService pricing, decimal availableQuantity = 0)
     {
         var prices = entity.Variants.Where(v => v.IsActive).Select(pricing.GetEffectivePrice).ToList();
 
@@ -46,6 +47,7 @@ public class ProductListItemDto
         VariantCount = prices.Count;
         MinEffectivePrice = prices.DefaultIfEmpty(0).Min();
         MaxEffectivePrice = prices.DefaultIfEmpty(0).Max();
+        AvailableQuantity = availableQuantity;
         SaleUnit = entity.SaleUnit.GetApiName();
         DecimalPlaces = entity.DecimalPlaces;
     }

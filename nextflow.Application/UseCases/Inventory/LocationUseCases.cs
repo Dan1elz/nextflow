@@ -60,16 +60,20 @@ public class UpdateLocationUseCase(
             : null;
     }
 
+    protected override Func<IQueryable<StockLocation>, IQueryable<StockLocation>> GetInclude()
+        => q => q.Include(l => l.Balances.Where(b => b.Quantity != 0));
+
     protected override LocationResponseDto MapToResponseDto(StockLocation entity) => new(entity);
 }
 
 /// <summary>
-/// Inativa o local. Padrão de venda ou recebimento não sai (decisão 7 de 29/10), e a loja fica com ao menos um local
-/// ativo. "Local com saldo" entra na F1.5, com o saldo.
+/// Inativa o local. Padrão de venda ou recebimento não sai (decisão 7 de 29/10), a loja fica com ao menos um local ativo
+/// e local com saldo diferente de zero não sai (RN-CE35): o saldo ficaria fora de todas as telas.
 /// </summary>
 public class DeleteLocationUseCase(
     IStockLocationRepository locationRepository,
     IStoreRepository storeRepository,
+    IStockBalanceRepository balanceRepository,
     IUnitOfWork unitOfWork,
     IResultFactory<bool> resultFactory)
     : DeleteUseCaseBase<StockLocation, IStockLocationRepository>(locationRepository, unitOfWork, resultFactory)
@@ -84,6 +88,9 @@ public class DeleteLocationUseCase(
             return _resultFactory.Failure("Este local é padrão de venda ou de recebimento da loja. Troque o padrão antes de inativar.", 400);
 
         var (id, storeId) = (entity.Id, entity.StoreId);
+        if (await balanceRepository.Exists(b => b.LocationId == id && b.Quantity != 0, ct))
+            return _resultFactory.Failure("Este local tem saldo de estoque. Zere ou transfira o saldo antes de inativar.", 422);
+
         return await _repository.Exists(l => l.StoreId == storeId && l.Id != id && l.IsActive, ct)
             ? null
             : _resultFactory.Failure("A loja precisa de ao menos um local ativo.", 400);

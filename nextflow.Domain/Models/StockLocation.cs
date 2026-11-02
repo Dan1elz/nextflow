@@ -16,6 +16,7 @@ public class StockLocation : BaseModel, IDeletable, IUpdatable<UpdateLocationReq
     public DateTime? UpdatedAt { get; private set; }
 
     public virtual Store Store { get; private set; } = null!;
+    public virtual ICollection<StockBalance> Balances { get; private set; } = [];
 
     public override string Preposition => "o";
     public override string Singular => "local";

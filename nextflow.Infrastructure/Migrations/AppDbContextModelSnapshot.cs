@@ -757,6 +757,11 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal?>("AverageCost")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)")
+                        .HasColumnName("average_cost");
+
                     b.Property<string>("Barcode")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
@@ -769,6 +774,11 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
+
+                    b.Property<decimal?>("LastCost")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)")
+                        .HasColumnName("last_cost");
 
                     b.Property<decimal>("Price")
                         .HasPrecision(12, 2)
@@ -890,6 +900,57 @@ namespace Nextflow.Infrastructure.Migrations
                     b.ToTable("states", (string)null);
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.StockBalance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
+                    b.Property<Guid?>("LotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lot_id");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_balances");
+
+                    b.HasIndex("LocationId")
+                        .HasDatabaseName("ix_stock_balances_location_id");
+
+                    b.HasIndex("VariantId", "LocationId", "LotId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_stock_balances_variant_id_location_id_lot_id");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("VariantId", "LocationId", "LotId"), false);
+
+                    b.ToTable("stock_balances", (string)null);
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.StockLocation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -929,6 +990,91 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasDatabaseName("ix_stock_locations_store_id");
 
                     b.ToTable("stock_locations", (string)null);
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.StockMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("balance_after");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
+                    b.Property<Guid?>("LotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lot_id");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<byte>("Reason")
+                        .HasColumnType("smallint")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid?>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<byte>("SourceType")
+                        .HasColumnType("smallint")
+                        .HasColumnName("source_type");
+
+                    b.Property<byte>("Type")
+                        .HasColumnType("smallint")
+                        .HasColumnName("type");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)")
+                        .HasColumnName("unit_cost");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_movements");
+
+                    b.HasIndex("LocationId")
+                        .HasDatabaseName("ix_stock_movements_location_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_stock_movements_user_id");
+
+                    b.HasIndex("SourceType", "SourceId")
+                        .HasDatabaseName("ix_stock_movements_source_type_source_id");
+
+                    b.HasIndex("VariantId", "LocationId", "CreatedAt")
+                        .HasDatabaseName("ix_stock_movements_variant_id_location_id_created_at");
+
+                    b.ToTable("stock_movements", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_movements_signed_quantity", "(type = 1 AND quantity > 0) OR (type = 2 AND quantity < 0)");
+
+                            t.HasCheckConstraint("ck_stock_movements_unit_cost", "unit_cost IS NULL OR unit_cost >= 0");
+                        });
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Store", b =>
@@ -1331,6 +1477,27 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("Country");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.StockBalance", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.StockLocation", "Location")
+                        .WithMany("Balances")
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_balances_stock_location_location_id");
+
+                    b.HasOne("Nextflow.Domain.Models.ProductVariant", "Variant")
+                        .WithMany("Balances")
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_balances_product_variants_variant_id");
+
+                    b.Navigation("Location");
+
+                    b.Navigation("Variant");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.StockLocation", b =>
                 {
                     b.HasOne("Nextflow.Domain.Models.Store", "Store")
@@ -1341,6 +1508,36 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasConstraintName("fk_stock_locations_store_store_id");
 
                     b.Navigation("Store");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.StockMovement", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.StockLocation", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_movements_stock_locations_location_id");
+
+                    b.HasOne("Nextflow.Domain.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_movements_user_user_id");
+
+                    b.HasOne("Nextflow.Domain.Models.ProductVariant", "Variant")
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_movements_product_variants_variant_id");
+
+                    b.Navigation("Location");
+
+                    b.Navigation("User");
+
+                    b.Navigation("Variant");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.UserStore", b =>
@@ -1406,12 +1603,19 @@ namespace Nextflow.Infrastructure.Migrations
                 {
                     b.Navigation("AttributeValues");
 
+                    b.Navigation("Balances");
+
                     b.Navigation("PriceHistory");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.State", b =>
                 {
                     b.Navigation("Cities");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.StockLocation", b =>
+                {
+                    b.Navigation("Balances");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Store", b =>

@@ -1,6 +1,7 @@
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Dtos.Categories;
 using Nextflow.Domain.Dtos.Products;
+using Nextflow.Domain.Dtos.Stock;
 
 namespace Nextflow.Domain.Interfaces.Application.UseCases;
 
@@ -34,4 +35,10 @@ public interface IUploadProductImageUseCase
 public interface IRemoveProductImageUseCase
 {
     Task<ResultDto<bool>> Execute(Guid id, CancellationToken ct = default);
+}
+
+/// <summary>Aba Estoque do T3: matriz variação × local, só da loja informada ou de todas as lojas ativas.</summary>
+public interface IGetProductStockUseCase
+{
+    Task<ResultDto<StockMatrixDto>> Execute(Guid id, Guid? storeId, CancellationToken ct = default);
 }

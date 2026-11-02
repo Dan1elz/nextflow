@@ -2,7 +2,7 @@ using Nextflow.Domain.Dtos.Products;
 
 namespace Nextflow.Domain.Models;
 
-/// <summary>Unidade de estoque, venda e compra (ADR 0008). Custo médio e último custo entram na F1.5, escritos só pelo estoque.</summary>
+/// <summary>Unidade de estoque, venda e compra (ADR 0008). Custo médio e último custo são escritos só pelo estoque (RN-CE14, RN-CE31).</summary>
 public class ProductVariant : BaseModel
 {
     public Guid ProductId { get; private set; }
@@ -13,11 +13,16 @@ public class ProductVariant : BaseModel
     public bool IsActive { get; private set; } = true;
     /// <summary>Saiu do formulário: fica inativa e fora das telas de variação, para o histórico de preço não se perder (RN-CE58).</summary>
     public DateOnly? RemovedOn { get; private set; }
+    /// <summary>Custo médio ponderado da variação na empresa inteira (RN-CE31). Nulo até a primeira entrada com custo.</summary>
+    public decimal? AverageCost { get; private set; }
+    /// <summary>Custo da última entrada com custo: só informação, não entra em cálculo (RN-CE31).</summary>
+    public decimal? LastCost { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
     public virtual Product Product { get; private set; } = null!;
     public virtual ICollection<ProductVariantValue> AttributeValues { get; private set; } = [];
     public virtual ICollection<PriceHistory> PriceHistory { get; private set; } = [];
+    public virtual ICollection<StockBalance> Balances { get; private set; } = [];
 
     public override string Preposition => "a";
     public override string Singular => "variação";
@@ -53,6 +58,19 @@ public class ProductVariant : BaseModel
         RemovedOn = today;
         UpdatedAt = DateTime.UtcNow;
         CloseCurrentPrice(today);
+    }
+
+    /// <summary>
+    /// Entrada com custo (RN-CE31): médio = (qtd atual × médio + qtd entrada × custo) / qtd total, com a quantidade da
+    /// empresa inteira antes da entrada. Sem médio anterior, ou com saldo zerado ou negativo, não há base para ponderar e o
+    /// médio passa a ser o custo da entrada. Chamado só pelo <c>IStockLedger</c>.
+    /// </summary>
+    public void ApplyInboundCost(decimal companyQuantityBefore, decimal quantity, decimal unitCost)
+    {
+        LastCost = unitCost;
+        AverageCost = AverageCost is not { } average || companyQuantityBefore <= 0
+            ? unitCost
+            : Math.Round((companyQuantityBefore * average + quantity * unitCost) / (companyQuantityBefore + quantity), 4, MidpointRounding.AwayFromZero);
     }
 
     public void SyncValues(List<Guid> attributeValueIds)

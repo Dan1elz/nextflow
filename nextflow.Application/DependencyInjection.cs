@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<IOwnerDirectory, OwnerDirectory>();
         services.AddScoped<IStoreMembership, StoreMembership>();
         services.AddScoped<IProductPricingService, ProductPricingService>();
+        services.AddScoped<IStockLedger, StockLedger>();
 
         services.Scan(scan => scan
             .FromAssemblyOf<GetHealthUseCase>()

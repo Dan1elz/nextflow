@@ -18,6 +18,7 @@ public class ProductsController(
     IGetByIdUseCase<Product, List<ProductSupplierResponseDto>> getSuppliersUseCase,
     IGetByIdUseCase<Product, List<PriceHistoryResponseDto>> getPriceHistoryUseCase,
     IGetProductFormUseCase getFormUseCase,
+    IGetProductStockUseCase getStockUseCase,
     ICreateUseCase<ProductRequestDto, ProductResponseDto> createUseCase,
     IUpdateUseCase<ProductRequestDto, ProductResponseDto> updateUseCase,
     IDeleteUseCase<Product> deleteUseCase,
@@ -47,6 +48,10 @@ public class ProductsController(
     [HttpGet("{id:guid}/variants")]
     public async Task<IActionResult> Variants(Guid id, CancellationToken ct)
         => Handle(await getVariantsUseCase.Execute(id, ct));
+
+    [HttpGet("{id:guid}/stock")]
+    public async Task<IActionResult> Stock(Guid id, [FromQuery] Guid? storeId, CancellationToken ct)
+        => Handle(await getStockUseCase.Execute(id, storeId, ct));
 
     [HttpGet("{id:guid}/suppliers")]
     public async Task<IActionResult> Suppliers(Guid id, CancellationToken ct)

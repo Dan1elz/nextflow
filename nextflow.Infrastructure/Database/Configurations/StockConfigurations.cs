@@ -1,0 +1,58 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Nextflow.Domain.Models;
+
+namespace Nextflow.Infrastructure.Database.Configurations;
+
+public class StockBalanceConfiguration : IEntityTypeConfiguration<StockBalance>
+{
+    public void Configure(EntityTypeBuilder<StockBalance> builder)
+    {
+        builder.ToTable("stock_balances");
+        builder.HasKey(b => b.Id);
+        builder.Property(b => b.Id).ValueGeneratedNever();
+        builder.Property(b => b.Quantity).HasPrecision(14, 3);
+
+        // Concorrência otimista (RN-CE14): o UPDATE leva a versão lida no WHERE; se outra gravação passou no meio, nada é
+        // atualizado, o EF lança DbUpdateConcurrencyException e o middleware devolve 409.
+        builder.Property(b => b.Version).IsConcurrencyToken();
+
+        builder.HasOne(b => b.Variant).WithMany(v => v.Balances).HasForeignKey(b => b.VariantId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(b => b.Location).WithMany(l => l.Balances).HasForeignKey(b => b.LocationId).OnDelete(DeleteBehavior.Restrict);
+
+        // Um saldo por variação × local × lote, com lote nulo contando como valor (a FK do lote entra na F1.7). Duas
+        // primeiras entradas simultâneas na mesma chave: uma grava e a outra esbarra aqui (409 no middleware).
+        builder.HasIndex(b => new { b.VariantId, b.LocationId, b.LotId }).IsUnique().AreNullsDistinct(false);
+        builder.HasIndex(b => b.LocationId);
+    }
+}
+
+public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement>
+{
+    public void Configure(EntityTypeBuilder<StockMovement> builder)
+    {
+        builder.ToTable("stock_movements", table =>
+        {
+            // A quantidade leva o sinal do sentido: entrada positiva, saída negativa, nunca zero (RN-CE01).
+            table.HasCheckConstraint("ck_stock_movements_signed_quantity", "(type = 1 AND quantity > 0) OR (type = 2 AND quantity < 0)");
+            table.HasCheckConstraint("ck_stock_movements_unit_cost", "unit_cost IS NULL OR unit_cost >= 0");
+        });
+        builder.HasKey(m => m.Id);
+        builder.Property(m => m.Id).ValueGeneratedNever();
+        builder.Property(m => m.Type).HasConversion<byte>();
+        builder.Property(m => m.Reason).HasConversion<byte>();
+        builder.Property(m => m.SourceType).HasConversion<byte>();
+        builder.Property(m => m.Quantity).HasPrecision(14, 3);
+        builder.Property(m => m.BalanceAfter).HasPrecision(14, 3);
+        builder.Property(m => m.UnitCost).HasPrecision(14, 4);
+        builder.Property(m => m.Note).HasMaxLength(500);
+
+        builder.HasOne(m => m.Variant).WithMany().HasForeignKey(m => m.VariantId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(m => m.Location).WithMany().HasForeignKey(m => m.LocationId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(m => m.User).WithMany().HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Restrict);
+
+        // Kardex (F1.8): por variação e local na ordem do tempo, e por documento de origem.
+        builder.HasIndex(m => new { m.VariantId, m.LocationId, m.CreatedAt });
+        builder.HasIndex(m => new { m.SourceType, m.SourceId });
+    }
+}

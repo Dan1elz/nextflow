@@ -36,7 +36,7 @@ public class LastStoreRuleTests(PostgresFixture fixture) : IClassFixture<Postgre
     private async Task<Domain.Dtos.ResultDto<bool>> Inactivate(Guid id)
     {
         await using var context = fixture.CreateContext();
-        return await new DeleteStoreUseCase(new StoreRepository(context), new UnitOfWork(context), new ResultFactory<bool>()).Execute(id);
+        return await new DeleteStoreUseCase(new StoreRepository(context), new StockBalanceRepository(context), new UnitOfWork(context), new ResultFactory<bool>()).Execute(id);
     }
 
     private async Task<bool> IsActiveInDatabase(Guid id)

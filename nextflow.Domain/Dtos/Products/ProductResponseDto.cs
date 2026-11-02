@@ -6,8 +6,9 @@ using Nextflow.Domain.Models;
 namespace Nextflow.Domain.Dtos.Products;
 
 /// <summary>
-/// Cabeçalho da tela T3. Provisório, declarado no contrato: disponível e custo entram na F1.5; promoção, na F2.3. Classe
-/// ABC e cobertura alvo (F1.8) ainda não existem e ficam fora.
+/// Cabeçalho da tela T3. Disponível é o físico da empresa inteira, somado entre as variações ativas (RN-CE08, sem orçamento
+/// ainda); custo médio é a faixa entre as variações ativas que já têm custo (RN-CE31). Promoção entra na F2.3; classe ABC
+/// e cobertura alvo, na F1.8.
 /// </summary>
 public class ProductResponseDto
 {
@@ -41,7 +42,9 @@ public class ProductResponseDto
 
     public ProductResponseDto(Product entity, string? imageUrl, IProductPricingService pricing)
     {
-        var prices = entity.Variants.Where(v => v.IsActive).Select(pricing.GetEffectivePrice).ToList();
+        var active = entity.Variants.Where(v => v.IsActive).ToList();
+        var prices = active.Select(pricing.GetEffectivePrice).ToList();
+        var costs = active.Where(v => v.AverageCost != null).Select(v => v.AverageCost!.Value).ToList();
 
         Id = entity.Id;
         Name = entity.Name;
@@ -62,6 +65,9 @@ public class ProductResponseDto
         HasVariants = entity.HasVariants;
         MinEffectivePrice = prices.DefaultIfEmpty(0).Min();
         MaxEffectivePrice = prices.DefaultIfEmpty(0).Max();
+        MinAverageCost = costs.Count > 0 ? costs.Min() : null;
+        MaxAverageCost = costs.Count > 0 ? costs.Max() : null;
+        AvailableQuantity = entity.Variants.SelectMany(v => v.Balances).Sum(b => b.Quantity);
         VariantCount = prices.Count;
         Events = [.. entity.Events.Where(link => link.Event != null).Select(link => new Option(link.EventId.ToString(), link.Event.Name)).OrderBy(e => e.Label)];
     }

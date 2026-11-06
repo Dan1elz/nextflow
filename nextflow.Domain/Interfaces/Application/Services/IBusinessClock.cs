@@ -10,4 +10,7 @@ public interface IBusinessClock
     DateTime Now { get; }
     DateOnly Today { get; }
     DateOnly ToBusinessDate(DateTime utc);
+
+    /// <summary>Instante UTC em que o dia de negócio começa (meia-noite local): base de filtros por período.</summary>
+    DateTime StartOfDayUtc(DateOnly date);
 }

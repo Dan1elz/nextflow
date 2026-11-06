@@ -18,6 +18,8 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.ProductType).HasConversion<byte>();
         builder.Property(p => p.SaleUnit).HasConversion<byte>();
         builder.Property(p => p.Lifecycle).HasConversion<byte>();
+        builder.Property(p => p.AbcClass).HasConversion<byte?>();
+        builder.Property(p => p.DefaultMinQuantity).HasPrecision(14, 3);
 
         builder.HasOne(p => p.Collection).WithMany(c => c.Products).HasForeignKey(p => p.CollectionId).OnDelete(DeleteBehavior.Restrict);
 

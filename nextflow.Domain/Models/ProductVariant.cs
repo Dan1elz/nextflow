@@ -23,6 +23,7 @@ public class ProductVariant : BaseModel
     public virtual ICollection<ProductVariantValue> AttributeValues { get; private set; } = [];
     public virtual ICollection<PriceHistory> PriceHistory { get; private set; } = [];
     public virtual ICollection<StockBalance> Balances { get; private set; } = [];
+    public virtual ICollection<StockLocationMinimum> LocationMinimums { get; private set; } = [];
 
     public override string Preposition => "a";
     public override string Singular => "variação";
@@ -81,6 +82,25 @@ public class ProductVariant : BaseModel
         var linked = AttributeValues.Select(link => link.AttributeValueId).ToHashSet();
         foreach (var valueId in attributeValueIds.Where(id => !linked.Contains(id)))
             AttributeValues.Add(new ProductVariantValue(Id, valueId));
+    }
+
+    /// <summary>
+    /// Substitui os mínimos por local pelos do formulário (RN-CE33): o local que saiu volta a usar o mínimo padrão do
+    /// produto; o que ficou preserva a linha.
+    /// </summary>
+    public void SyncMinimums(IReadOnlyDictionary<Guid, decimal> minimumsByLocation)
+    {
+        foreach (var minimum in LocationMinimums.Where(m => !minimumsByLocation.ContainsKey(m.LocationId)).ToList())
+            LocationMinimums.Remove(minimum);
+
+        foreach (var (locationId, quantity) in minimumsByLocation)
+        {
+            var minimum = LocationMinimums.FirstOrDefault(m => m.LocationId == locationId);
+            if (minimum is null)
+                LocationMinimums.Add(new StockLocationMinimum(Id, locationId, quantity));
+            else
+                minimum.Update(quantity);
+        }
     }
 
     private void CloseCurrentPrice(DateOnly today)

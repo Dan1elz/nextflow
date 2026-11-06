@@ -12,4 +12,13 @@ public interface IStockMovementRepository
     Task AddAsync(StockMovement movement, CancellationToken ct = default);
     Task<bool> Exists(Expression<Func<StockMovement, bool>> predicate, CancellationToken ct = default);
     Task<int> Count(Expression<Func<StockMovement, bool>> predicate, CancellationToken ct = default);
+
+    /// <summary>Página do kardex (T8), só leitura.</summary>
+    Task<IEnumerable<StockMovement>> GetAll(
+        Expression<Func<StockMovement, bool>> predicate,
+        int offset,
+        int limit,
+        Func<IQueryable<StockMovement>, IQueryable<StockMovement>>? includeExpression = null,
+        Func<IQueryable<StockMovement>, IOrderedQueryable<StockMovement>>? orderBy = null,
+        CancellationToken ct = default);
 }

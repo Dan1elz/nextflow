@@ -68,6 +68,21 @@ public class ProductRequestDtoValidator : AbstractValidator<ProductRequestDto>
                 .When(s => s.OrderMultiple is not null);
         });
 
+        // RN-CE33, RN-CE29: mínimos não negativos, nas casas do estoque (3); cobertura própria em dias inteiros > 0.
+        RuleFor(x => x.DefaultMinQuantity)
+            .GreaterThanOrEqualTo(0).WithMessage("O mínimo padrão não pode ser negativo.")
+            .PrecisionScale(14, 3, true).WithMessage("O mínimo padrão aceita até 3 casas decimais.");
+        RuleFor(x => x.TargetCoverageDays)
+            .InclusiveBetween(1, 365).WithMessage("A cobertura alvo deve ser de 1 a 365 dias; deixe vazio para usar a da classe ABC.")
+            .When(x => x.TargetCoverageDays is not null);
+        RuleForEach(x => x.LocationMinimums).NotNull().WithMessage("Informe os dados do mínimo.").ChildRules(minimum =>
+        {
+            minimum.RuleFor(m => m.LocationId).NotEmpty().WithMessage("Escolha o local.");
+            minimum.RuleFor(m => m.MinQuantity)
+                .GreaterThanOrEqualTo(0).WithMessage("O mínimo não pode ser negativo.")
+                .PrecisionScale(14, 3, true).WithMessage("O mínimo aceita até 3 casas decimais.");
+        });
+
         // Comparam os itens entre si: com item nulo, que já tem erro próprio, só valem depois de corrigido.
         When(HasNoNullItem, () =>
         {
@@ -100,6 +115,7 @@ public class ProductRequestDtoValidator : AbstractValidator<ProductRequestDto>
                 if (dto.Attributes.Count > 0)
                     AddCombinationFailures(dto, context);
                 AddSupplierFailures(dto, context);
+                AddMinimumFailures(dto, context);
             });
         });
     }
@@ -107,7 +123,22 @@ public class ProductRequestDtoValidator : AbstractValidator<ProductRequestDto>
     private static bool HasNoNullItem(ProductRequestDto dto)
         => dto.Attributes.All(attribute => attribute != null && attribute.Values.All(value => value != null))
             && dto.Variants.All(variant => variant != null)
-            && dto.Suppliers.All(supplier => supplier != null);
+            && dto.Suppliers.All(supplier => supplier != null)
+            && dto.LocationMinimums.All(minimum => minimum != null);
+
+    /// <summary>RN-CE33: o mínimo cita uma variação do formulário pela posição, e cada variação × local aparece uma vez.</summary>
+    private static void AddMinimumFailures(ProductRequestDto dto, ValidationContext<ProductRequestDto> context)
+    {
+        var seen = new HashSet<(int, Guid)>();
+        for (var index = 0; index < dto.LocationMinimums.Count; index++)
+        {
+            var minimum = dto.LocationMinimums[index];
+            if (minimum.VariantIndex < 0 || minimum.VariantIndex >= dto.Variants.Count)
+                context.AddFailure($"LocationMinimums[{index}].VariantIndex", "O mínimo cita uma variação que não está no formulário.");
+            else if (minimum.LocationId != Guid.Empty && !seen.Add((minimum.VariantIndex, minimum.LocationId)))
+                context.AddFailure($"LocationMinimums[{index}].LocationId", "Esta variação já tem mínimo neste local.");
+        }
+    }
 
     /// <summary>RN-CE60: fornecedor único no produto, no máximo um preferido, quantidades nas casas decimais do produto.</summary>
     private static void AddSupplierFailures(ProductRequestDto dto, ValidationContext<ProductRequestDto> context)

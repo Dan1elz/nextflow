@@ -6,7 +6,8 @@ namespace Nextflow.Domain.Dtos.Products;
 
 /// <summary>
 /// Linha da listagem (T1), uma por produto. <see cref="AvailableQuantity"/> é o físico na loja do filtro (ou na empresa),
-/// enquanto não houver orçamento (RN-CE08). <see cref="HasLowStock"/> fica falso até a F1.8 (mínimos);
+/// enquanto não houver orçamento (RN-CE08). <see cref="HasLowStock"/>: alguma variação abaixo do mínimo efetivo em algum
+/// local do mesmo recorte (RN-CE33);
 /// <see cref="ActivePromotionPercent"/> entra na F2.3.
 /// </summary>
 public class ProductListItemDto
@@ -31,7 +32,7 @@ public class ProductListItemDto
 
     public ProductListItemDto() { }
 
-    public ProductListItemDto(Product entity, string? imageUrl, IProductPricingService pricing, decimal availableQuantity = 0)
+    public ProductListItemDto(Product entity, string? imageUrl, IProductPricingService pricing, decimal availableQuantity = 0, bool hasLowStock = false)
     {
         var prices = entity.Variants.Where(v => v.IsActive).Select(pricing.GetEffectivePrice).ToList();
 
@@ -50,6 +51,7 @@ public class ProductListItemDto
         AvailableQuantity = availableQuantity;
         SaleUnit = entity.SaleUnit.GetApiName();
         DecimalPlaces = entity.DecimalPlaces;
+        HasLowStock = hasLowStock;
     }
 
     /// <summary>RN-CE52: categoria principal é a mais específica; entre iguais, a primeira pelo caminho.</summary>

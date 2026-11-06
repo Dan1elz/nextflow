@@ -9,6 +9,7 @@ using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Dtos.Categories;
 using Nextflow.Domain.Dtos.Products;
 using Nextflow.Domain.Dtos.Stock;
+using Nextflow.Domain.Dtos.Stores;
 using Nextflow.Domain.Dtos.Suppliers;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Application.Services;
@@ -136,6 +137,27 @@ internal static class ProductRules
         return failures;
     }
 
+    /// <summary>Local do mínimo existe e está aberto (ativo, de loja ativa); o que já tem mínimo pode estar fechado (RN-CE33).</summary>
+    public static async Task<List<ValidationFailure>> Locations(
+        IStockLocationRepository locations, ProductRequestDto dto, ICollection<Guid> linked, CancellationToken ct)
+    {
+        var ids = dto.LocationMinimums.Select(m => m.LocationId).Distinct().ToList();
+        if (ids.Count == 0)
+            return [];
+
+        var open = (await locations.GetAll(l => ids.Contains(l.Id) && l.IsActive && l.Store.IsActive, 0, int.MaxValue, ct: ct))
+            .Select(l => l.Id).ToHashSet();
+        var failures = new List<ValidationFailure>();
+        for (var i = 0; i < dto.LocationMinimums.Count; i++)
+        {
+            var id = dto.LocationMinimums[i].LocationId;
+            if (!open.Contains(id) && !linked.Contains(id))
+                failures.Add(new($"LocationMinimums[{i}].LocationId", "Escolha um local ativo de uma loja ativa."));
+        }
+
+        return failures;
+    }
+
     /// <summary>
     /// SKU e código de barras únicos entre todos os produtos, ativos ou não, sem diferenciar maiúsculas (T2). Vale também para
     /// a variação removida, que continua gravada com o código, porque o histórico aponta para ela (RN-CE57, RN-CE58).
@@ -182,6 +204,7 @@ public class CreateProductUseCase(
     IProductVariantRepository variantRepository,
     ICalendarEventRepository calendarEventRepository,
     ISupplierRepository supplierRepository,
+    IStockLocationRepository locationRepository,
     IFileStorage fileStorage,
     IProductPricingService pricing,
     IBusinessClock clock,
@@ -204,6 +227,7 @@ public class CreateProductUseCase(
         failures.AddRange(await ProductRules.Codes(variantRepository, dto, ct));
         failures.AddRange(await ProductRules.Events(calendarEventRepository, dto, [], ct));
         failures.AddRange(await ProductRules.Suppliers(supplierRepository, dto, [], ct));
+        failures.AddRange(await ProductRules.Locations(locationRepository, dto, [], ct));
 
         return failures.Count == 0 ? null : _resultFactory.Failure(new ValidationResult(failures));
     }
@@ -234,6 +258,7 @@ public class UpdateProductUseCase(
     IProductVariantRepository variantRepository,
     ICalendarEventRepository calendarEventRepository,
     ISupplierRepository supplierRepository,
+    IStockLocationRepository locationRepository,
     IStockBalanceRepository balanceRepository,
     IFileStorage fileStorage,
     IProductPricingService pricing,
@@ -258,6 +283,8 @@ public class UpdateProductUseCase(
         failures.AddRange(await ProductRules.Codes(variantRepository, dto, ct));
         failures.AddRange(await ProductRules.Events(calendarEventRepository, dto, [.. entity.Events.Select(e => e.EventId)], ct));
         failures.AddRange(await ProductRules.Suppliers(supplierRepository, dto, [.. entity.Suppliers.Select(s => s.SupplierId)], ct));
+        failures.AddRange(await ProductRules.Locations(
+            locationRepository, dto, [.. entity.Variants.SelectMany(v => v.LocationMinimums).Select(m => m.LocationId)], ct));
 
         return failures.Count == 0 ? null : _resultFactory.Failure(new ValidationResult(failures));
     }
@@ -282,6 +309,7 @@ public class UpdateProductUseCase(
             // Só a faixa aberta: é a única que uma troca de preço toca (RN-CE59).
             .Include(p => p.Variants).ThenInclude(v => v.PriceHistory.Where(entry => entry.ValidTo == null))
             .Include(p => p.Variants).ThenInclude(v => v.Balances)
+            .Include(p => p.Variants).ThenInclude(v => v.LocationMinimums)
             .Include(p => p.Events).ThenInclude(e => e.Event)
             .Include(p => p.Suppliers);
 }
@@ -375,7 +403,8 @@ public class GetProductPriceHistoryUseCase(
 
 /// <summary>
 /// Listagem (T1). Filtros: search, categoryId (nível 1 traz as filhas), productType, collectionId, lifecycle, isActive e
-/// storeId, que não filtra produto: só escolhe a loja do disponível (sem ele, a empresa inteira).
+/// storeId, que não filtra produto: só escolhe a loja do disponível e dos mínimos (sem ele, a empresa inteira).
+/// F1.8: lowStock = "só estoque baixo" (RN-CE33) e ordenação por disponível.
 /// </summary>
 public class GetAllProductsUseCase(
     IProductRepository productRepository,
@@ -386,12 +415,30 @@ public class GetAllProductsUseCase(
     : GetAllUseCaseBase<Product, IProductRepository, ProductListItemDto>(productRepository, resultFactory)
 {
     private Guid? _storeId;
+    private HashSet<Guid>? _lowStockFilter;
     private Dictionary<Guid, decimal> _available = new();
+    private HashSet<Guid> _lowStock = [];
+
+    /// <summary>
+    /// "Só estoque baixo" depende de uma consulta de variação × local que não cabe no predicado do produto: resolvida antes,
+    /// vira um filtro por id, para a paginação e o total continuarem no banco.
+    /// </summary>
+    public override async Task<ResultDto<PaginationDto<ProductListItemDto>>> Execute(
+        int offset, int limit, IReadOnlyDictionary<string, string>? filters,
+        string? sort = null, string? order = null, CancellationToken ct = default)
+    {
+        var set = new FilterSet(filters);
+        _storeId = set.TryGetString("storeId", out var store) && Guid.TryParse(store, out var storeId) ? storeId : null;
+        _lowStockFilter = set.TryGetString("lowStock", out var raw) && FilterValueParsers.TryParseBool(raw, out var lowStock) && lowStock
+            ? await balanceRepository.GetLowStockProductIds(null, _storeId, ct)
+            : null;
+
+        return await base.Execute(offset, limit, filters, sort, order, ct);
+    }
 
     protected override Expression<Func<Product, bool>> BuildFilterExpression(IReadOnlyDictionary<string, string>? filters)
     {
         var set = new FilterSet(filters);
-        _storeId = set.TryGetString("storeId", out var store) && Guid.TryParse(store, out var storeId) ? storeId : null;
         var builder = new FilterExpressionBuilder<Product>()
             .WhereBoolEquals(set, "isActive", p => p.IsActive)
             .WhereEnumEquals(set, "productType", p => p.ProductType)
@@ -410,6 +457,9 @@ public class GetAllProductsUseCase(
         if (set.TryGetString("categoryId", out var raw) && Guid.TryParse(raw, out var categoryId))
             builder.And(p => p.Categories.Any(c => c.CategoryId == categoryId || c.Category.ParentId == categoryId));
 
+        if (_lowStockFilter is { } lowStockIds)
+            builder.And(p => lowStockIds.Contains(p.Id));
+
         return builder.Predicate;
     }
 
@@ -426,14 +476,25 @@ public class GetAllProductsUseCase(
             ["name"] = p => p.Name,
             // F2.3: ordena pelo preço de tabela enquanto preço efetivo = preço da variação.
             ["price"] = p => p.Variants.Where(v => v.IsActive).Min(v => (decimal?)v.Price),
+            // Mesmo recorte do disponível da linha: locais ativos de loja ativa, da loja do filtro ou da empresa (RN-CE08).
+            ["available"] = AvailableSort(_storeId),
         };
 
-    /// <summary>Disponível da página numa consulta só, somado no banco (RN-CE08: sem orçamento, disponível = físico).</summary>
+    private static Expression<Func<Product, object?>> AvailableSort(Guid? storeId)
+        => p => p.Variants.SelectMany(v => v.Balances)
+            .Where(b => b.Location.IsActive && b.Location.Store.IsActive && (storeId == null || b.Location.StoreId == storeId))
+            .Sum(b => (decimal?)b.Quantity) ?? 0m;
+
+    /// <summary>Disponível e estoque baixo da página, numa consulta cada, calculados no banco (RN-CE08, RN-CE33).</summary>
     protected override async Task PrepareMapping(IReadOnlyList<Product> items, CancellationToken ct)
-        => _available = await balanceRepository.SumByProduct([.. items.Select(p => p.Id)], _storeId, ct);
+    {
+        var ids = items.Select(p => p.Id).ToList();
+        _available = await balanceRepository.SumByProduct(ids, _storeId, ct);
+        _lowStock = await balanceRepository.GetLowStockProductIds(ids, _storeId, ct);
+    }
 
     protected override ProductListItemDto MapToResponseDto(Product entity)
-        => new(entity, fileStorage.GetPublicUrl(entity.ImageKey), pricing, _available.GetValueOrDefault(entity.Id));
+        => new(entity, fileStorage.GetPublicUrl(entity.ImageKey), pricing, _available.GetValueOrDefault(entity.Id), _lowStock.Contains(entity.Id));
 }
 
 /// <summary>
@@ -476,13 +537,15 @@ public class GetProductStockUseCase(
                 Sku = variant.Sku,
                 Cells = [.. locations.Select(location => new StockMatrixCellDto(
                     location.Id,
-                    balances.Where(b => b.VariantId == variant.Id && b.LocationId == location.Id).Sum(b => b.Quantity)))],
+                    balances.Where(b => b.VariantId == variant.Id && b.LocationId == location.Id).Sum(b => b.Quantity),
+                    product.EffectiveMinimum(variant, location.Id)))],
             })],
         });
     }
 
     private static Func<IQueryable<Product>, IQueryable<Product>> GetInclude()
-        => q => q.Include(p => p.Variants)
+        => q => q.Include(p => p.Variants).ThenInclude(v => v.LocationMinimums)
+            .Include(p => p.Variants)
             .ThenInclude(v => v.AttributeValues)
             .ThenInclude(link => link.AttributeValue)
             .ThenInclude(value => value.Attribute);
@@ -497,6 +560,7 @@ public class GetProductFormUseCase(
     ICollectionRepository collectionRepository,
     ICalendarEventRepository calendarEventRepository,
     ISupplierRepository supplierRepository,
+    IStockLocationRepository locationRepository,
     IFileStorage fileStorage,
     IResultFactory<ProductFormDto> resultFactory) : IGetProductFormUseCase
 {
@@ -534,6 +598,14 @@ public class GetProductFormUseCase(
             int.MaxValue,
             orderBy: q => q.OrderBy(s => s.Name).ThenBy(s => s.Id),
             ct: ct);
+        var linkedLocations = product?.Variants.SelectMany(v => v.LocationMinimums).Select(m => m.LocationId).Distinct().ToList() ?? [];
+        var locations = await locationRepository.GetAll(
+            l => (l.IsActive && l.Store.IsActive) || linkedLocations.Contains(l.Id),
+            0,
+            int.MaxValue,
+            q => q.Include(l => l.Store),
+            q => q.OrderBy(l => l.Store.Name).ThenBy(l => l.Name).ThenBy(l => l.Id),
+            ct);
 
         var options = new ProductFormOptionsDto
         {
@@ -541,6 +613,7 @@ public class GetProductFormUseCase(
             Collections = [.. collections.Select(c => new Option(c.Id.ToString(), c.Name))],
             Events = [.. events.Select(e => new Option(e.Id.ToString(), e.Name))],
             Suppliers = [.. suppliers.Select(s => new SupplierOptionDto(s))],
+            Locations = [.. locations.Select(l => new LocationOptionDto(l))],
         };
 
         return resultFactory.Success(product is null
@@ -552,6 +625,7 @@ public class GetProductFormUseCase(
         => q => q.Include(p => p.Categories)
             .Include(p => p.Attributes).ThenInclude(a => a.Values)
             .Include(p => p.Variants).ThenInclude(v => v.AttributeValues)
+            .Include(p => p.Variants).ThenInclude(v => v.LocationMinimums)
             .Include(p => p.Events)
             .Include(p => p.Suppliers);
 }

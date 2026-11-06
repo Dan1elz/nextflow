@@ -40,7 +40,18 @@ public class ProductFormDto : ProductRequestDto
                 Value = value.Value,
             })],
         })];
-        Variants = [.. entity.Variants.Where(v => v.RemovedOn == null).OrderBy(v => v.SortOrder).Select(variant => new ProductVariantRequestDto
+        DefaultMinQuantity = entity.DefaultMinQuantity;
+        TargetCoverageDays = entity.TargetCoverageDays;
+        var variants = entity.Variants.Where(v => v.RemovedOn == null).OrderBy(v => v.SortOrder).ToList();
+        LocationMinimums = [.. variants.SelectMany((variant, index) => variant.LocationMinimums
+            .OrderBy(m => m.CreatedAt)
+            .Select(minimum => new ProductLocationMinimumDto
+            {
+                VariantIndex = index,
+                LocationId = minimum.LocationId,
+                MinQuantity = minimum.MinQuantity,
+            }))];
+        Variants = [.. variants.Select(variant => new ProductVariantRequestDto
         {
             Id = variant.Id,
             AttributeValueIds = [.. variant.AttributeValues.Select(link => link.AttributeValueId.ToString())],

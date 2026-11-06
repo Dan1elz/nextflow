@@ -23,4 +23,34 @@ public class StockBalanceRepository(AppDbContext context) : BaseRepository<Stock
             .GroupBy(b => b.Variant.ProductId)
             .Select(g => new { ProductId = g.Key, Quantity = g.Sum(b => b.Quantity) })
             .ToDictionaryAsync(row => row.ProductId, row => row.Quantity, ct);
+
+    public async Task<HashSet<Guid>> GetLowStockProductIds(IReadOnlyCollection<Guid>? productIds, Guid? storeId, CancellationToken ct = default)
+    {
+        var variants = _context.Set<ProductVariant>().AsNoTracking()
+            .Where(v => v.IsActive && v.RemovedOn == null && v.Product.IsActive
+                && (productIds == null || productIds.Contains(v.ProductId)));
+        var locations = _context.Set<StockLocation>().AsNoTracking()
+            .Where(l => l.IsActive && l.Store.IsActive && (storeId == null || l.StoreId == storeId));
+        var balances = _context.Set<StockBalance>().AsNoTracking();
+        var minimums = _context.Set<StockLocationMinimum>().AsNoTracking();
+
+        // Variação × local: sem saldo gravado, o disponível é zero; sem mínimo do local, vale o padrão do produto.
+        // Sem orçamento ainda, disponível = físico (RN-CE08).
+        var ids = await (
+            from variant in variants
+            from location in locations
+            let available = balances
+                .Where(b => b.VariantId == variant.Id && b.LocationId == location.Id)
+                .Sum(b => (decimal?)b.Quantity) ?? 0m
+            let minimum = minimums
+                .Where(m => m.VariantId == variant.Id && m.LocationId == location.Id)
+                .Select(m => (decimal?)m.MinQuantity)
+                .FirstOrDefault() ?? variant.Product.DefaultMinQuantity
+            where available < minimum
+            select variant.ProductId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        return [.. ids];
+    }
 }

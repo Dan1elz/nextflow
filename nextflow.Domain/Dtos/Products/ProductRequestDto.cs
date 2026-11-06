@@ -21,4 +21,9 @@ public class ProductRequestDto
     public List<ProductVariantRequestDto> Variants { get; set => field = value ?? []; } = [];
     public List<Guid> EventIds { get; set => field = value ?? []; } = [];
     public List<ProductSupplierRequestDto> Suppliers { get; set => field = value ?? []; } = [];
+    /// <summary>Mínimo em todo local sem mínimo próprio (RN-CE33).</summary>
+    public decimal DefaultMinQuantity { get; set; }
+    /// <summary>Exceção à política da classe ABC (RN-CE29); vazio = usa a da classe.</summary>
+    public int? TargetCoverageDays { get; set; }
+    public List<ProductLocationMinimumDto> LocationMinimums { get; set => field = value ?? []; } = [];
 }

@@ -511,6 +511,10 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<byte?>("AbcClass")
+                        .HasColumnType("smallint")
+                        .HasColumnName("abc_class");
+
                     b.Property<bool>("AllowsNegative")
                         .HasColumnType("boolean")
                         .HasColumnName("allows_negative");
@@ -531,6 +535,11 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Property<short>("DecimalPlaces")
                         .HasColumnType("smallint")
                         .HasColumnName("decimal_places");
+
+                    b.Property<decimal>("DefaultMinQuantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("default_min_quantity");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
@@ -575,6 +584,10 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Property<int?>("ShelfLifeDays")
                         .HasColumnType("integer")
                         .HasColumnName("shelf_life_days");
+
+                    b.Property<int?>("TargetCoverageDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("target_coverage_days");
 
                     b.Property<bool>("TracksLots")
                         .HasColumnType("boolean")
@@ -992,6 +1005,49 @@ namespace Nextflow.Infrastructure.Migrations
                     b.ToTable("stock_locations", (string)null);
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.StockLocationMinimum", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
+                    b.Property<decimal>("MinQuantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("min_quantity");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_location_minimums");
+
+                    b.HasIndex("LocationId")
+                        .HasDatabaseName("ix_stock_location_minimums_location_id");
+
+                    b.HasIndex("VariantId", "LocationId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_stock_location_minimums_variant_id_location_id");
+
+                    b.ToTable("stock_location_minimums", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_location_minimums_min_quantity", "min_quantity >= 0");
+                        });
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.StockMovement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1074,6 +1130,47 @@ namespace Nextflow.Infrastructure.Migrations
                             t.HasCheckConstraint("ck_stock_movements_signed_quantity", "(type = 1 AND quantity > 0) OR (type = 2 AND quantity < 0)");
 
                             t.HasCheckConstraint("ck_stock_movements_unit_cost", "unit_cost IS NULL OR unit_cost >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.StockPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte>("AbcClass")
+                        .HasColumnType("smallint")
+                        .HasColumnName("abc_class");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("SafetyDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("safety_days");
+
+                    b.Property<int>("TargetCoverageDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("target_coverage_days");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_policies");
+
+                    b.HasIndex("AbcClass")
+                        .IsUnique()
+                        .HasDatabaseName("ix_stock_policies_abc_class");
+
+                    b.ToTable("stock_policies", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_policies_safety_days", "safety_days >= 0");
+
+                            t.HasCheckConstraint("ck_stock_policies_target_coverage_days", "target_coverage_days >= 0");
                         });
                 });
 
@@ -1510,6 +1607,27 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("Store");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.StockLocationMinimum", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.StockLocation", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_location_minimums_stock_locations_location_id");
+
+                    b.HasOne("Nextflow.Domain.Models.ProductVariant", "Variant")
+                        .WithMany("LocationMinimums")
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_location_minimums_product_variants_variant_id");
+
+                    b.Navigation("Location");
+
+                    b.Navigation("Variant");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.StockMovement", b =>
                 {
                     b.HasOne("Nextflow.Domain.Models.StockLocation", "Location")
@@ -1604,6 +1722,8 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("AttributeValues");
 
                     b.Navigation("Balances");
+
+                    b.Navigation("LocationMinimums");
 
                     b.Navigation("PriceHistory");
                 });

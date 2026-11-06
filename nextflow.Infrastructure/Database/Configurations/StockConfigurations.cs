@@ -56,3 +56,41 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
         builder.HasIndex(m => new { m.SourceType, m.SourceId });
     }
 }
+
+public class StockLocationMinimumConfiguration : IEntityTypeConfiguration<StockLocationMinimum>
+{
+    public void Configure(EntityTypeBuilder<StockLocationMinimum> builder)
+    {
+        builder.ToTable("stock_location_minimums", table =>
+            table.HasCheckConstraint("ck_stock_location_minimums_min_quantity", "min_quantity >= 0"));
+        builder.HasKey(m => m.Id);
+        builder.Property(m => m.Id).ValueGeneratedNever();
+        builder.Property(m => m.MinQuantity).HasPrecision(14, 3);
+
+        // Sai com a variação (sincronização do formulário, RN-CE51); o local nunca é apagado, só inativado.
+        builder.HasOne(m => m.Variant).WithMany(v => v.LocationMinimums).HasForeignKey(m => m.VariantId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(m => m.Location).WithMany().HasForeignKey(m => m.LocationId).OnDelete(DeleteBehavior.Restrict);
+
+        // Um mínimo por variação × local (RN-CE33); id técnico com índice único, como as tabelas de vínculo (F1.3).
+        builder.HasIndex(m => new { m.VariantId, m.LocationId }).IsUnique();
+        builder.HasIndex(m => m.LocationId);
+    }
+}
+
+public class StockPolicyConfiguration : IEntityTypeConfiguration<StockPolicy>
+{
+    public void Configure(EntityTypeBuilder<StockPolicy> builder)
+    {
+        builder.ToTable("stock_policies", table =>
+        {
+            table.HasCheckConstraint("ck_stock_policies_target_coverage_days", "target_coverage_days >= 0");
+            table.HasCheckConstraint("ck_stock_policies_safety_days", "safety_days >= 0");
+        });
+        builder.HasKey(p => p.Id);
+        builder.Property(p => p.Id).ValueGeneratedNever();
+        builder.Property(p => p.AbcClass).HasConversion<byte>();
+
+        // Uma linha por classe (RN-CE29): a classe é a chave de negócio.
+        builder.HasIndex(p => p.AbcClass).IsUnique();
+    }
+}

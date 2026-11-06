@@ -24,6 +24,12 @@ public class Product : BaseModel, IDeletable
     public Guid? CollectionId { get; private set; }
     public LifecycleEnum Lifecycle { get; private set; } = LifecycleEnum.Active;
     public DateOnly? LaunchedOn { get; private set; }
+    /// <summary>Mínimo de cada variação em todo local sem mínimo próprio (RN-CE33; substitui o fallback fixo da RN-CE06).</summary>
+    public decimal DefaultMinQuantity { get; private set; }
+    /// <summary>Exceção à política da classe (RN-CE29). Nulo = usa a cobertura alvo da classe ABC.</summary>
+    public int? TargetCoverageDays { get; private set; }
+    /// <summary>Calculada pela análise (F3, RN-CE29); nunca vem do formulário. Nula até a primeira análise.</summary>
+    public AbcClassEnum? AbcClass { get; private set; }
     public string? ImageKey { get; private set; }
     public bool IsActive { get; private set; } = true;
     public DateTime? UpdatedAt { get; private set; }
@@ -79,6 +85,14 @@ public class Product : BaseModel, IDeletable
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Mínimo efetivo da variação no local: o do local, se houver; senão o padrão do produto (RN-CE33).</summary>
+    public decimal EffectiveMinimum(ProductVariant variant, Guid locationId)
+        => variant.LocationMinimums.FirstOrDefault(m => m.LocationId == locationId)?.MinQuantity ?? DefaultMinQuantity;
+
+    /// <summary>Estoque baixo: disponível abaixo do mínimo efetivo (RN-CE33). Igual ao mínimo ainda não é baixo.</summary>
+    public bool IsBelowMinimum(ProductVariant variant, Guid locationId, decimal available)
+        => available < EffectiveMinimum(variant, locationId);
+
     private void Apply(ProductRequestDto dto, Guid changedById, DateOnly today)
     {
         Name = dto.Name.Trim();
@@ -94,10 +108,13 @@ public class Product : BaseModel, IDeletable
         CollectionId = dto.CollectionId;
         LaunchedOn = dto.LaunchedOn;
         HasVariants = dto.Attributes.Count > 0;
+        DefaultMinQuantity = dto.DefaultMinQuantity;
+        TargetCoverageDays = dto.TargetCoverageDays;
 
         SyncCategories(dto.CategoryIds);
         var valueIds = SyncAttributes(dto.Attributes);
-        SyncVariants(dto.Variants, valueIds, changedById, today);
+        var variants = SyncVariants(dto.Variants, valueIds, changedById, today);
+        SyncMinimums(dto.LocationMinimums, variants);
         SyncEvents(dto.EventIds);
         SyncSuppliers(dto.Suppliers);
     }
@@ -144,8 +161,10 @@ public class Product : BaseModel, IDeletable
     /// Variação que saiu do formulário é preservada como removida, nunca apagada: ela já tem histórico de preço (RN-CE58).
     /// A F1.5 recusa a remoção antes de chegar aqui, na regra do use case, quando houver saldo ou movimento.
     /// </summary>
-    private void SyncVariants(List<ProductVariantRequestDto> dtos, Dictionary<string, Guid> valueIds, Guid changedById, DateOnly today)
+    /// <returns>As variações gravadas na ordem do formulário: a posição é a chave dos mínimos por local.</returns>
+    private List<ProductVariant> SyncVariants(List<ProductVariantRequestDto> dtos, Dictionary<string, Guid> valueIds, Guid changedById, DateOnly today)
     {
+        var ordered = new List<ProductVariant>(dtos.Count);
         var kept = dtos.Select(dto => dto.Id).ToHashSet();
         foreach (var variant in Variants.Where(variant => variant.RemovedOn == null && !kept.Contains(variant.Id)))
             variant.Remove(today);
@@ -165,6 +184,25 @@ public class Product : BaseModel, IDeletable
             }
 
             variant.SyncValues(dto.AttributeValueIds.Select(key => valueIds[key]).ToList());
+            ordered.Add(variant);
+        }
+
+        return ordered;
+    }
+
+    /// <summary>
+    /// Cada mínimo cita a variação pela posição no formulário, que <see cref="SyncVariants"/> resolve para a variação gravada,
+    /// nova ou não. Variação sem mínimo no formulário fica sem nenhum e usa o padrão do produto (RN-CE33).
+    /// </summary>
+    private static void SyncMinimums(List<ProductLocationMinimumDto> minimums, List<ProductVariant> variants)
+    {
+        for (var index = 0; index < variants.Count; index++)
+        {
+            var position = index;
+            variants[index].SyncMinimums(minimums
+                .Where(m => m.VariantIndex == position)
+                .GroupBy(m => m.LocationId)
+                .ToDictionary(g => g.Key, g => g.Last().MinQuantity));
         }
     }
 

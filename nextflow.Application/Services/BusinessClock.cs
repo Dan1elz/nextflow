@@ -17,6 +17,9 @@ public class BusinessClock : IBusinessClock
 
     public DateOnly ToBusinessDate(DateTime utc) => DateOnly.FromDateTime(ToBusinessTime(utc));
 
+    public DateTime StartOfDayUtc(DateOnly date)
+        => TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), TimeZone);
+
     private static DateTime ToBusinessTime(DateTime utc)
     {
         var value = utc.Kind == DateTimeKind.Utc ? utc : DateTime.SpecifyKind(utc, DateTimeKind.Utc);

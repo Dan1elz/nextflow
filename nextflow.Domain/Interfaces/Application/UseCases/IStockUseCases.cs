@@ -24,3 +24,9 @@ public interface IGetStockPoliciesUseCase
 {
     Task<ResultDto<List<StockPolicyDto>>> Execute(CancellationToken ct = default);
 }
+
+/// <summary>Aviso de falta (T-VD1a): locais ativos com disponível da variação, sem o local excluído (o de venda).</summary>
+public interface IGetStockAvailabilityUseCase
+{
+    Task<ResultDto<StockAvailabilityDto>> Execute(Guid variantId, Guid? excludeLocationId, CancellationToken ct = default);
+}

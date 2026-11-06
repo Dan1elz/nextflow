@@ -41,6 +41,8 @@ public sealed class AccessApiFixture : IAsyncLifetime
             builder.UseSetting("ConnectionStrings:DefaultConnection", _postgres.ConnectionString);
             builder.UseSetting("JwtSettings:Key", "chave-apenas-para-testes-de-integracao-0001");
             builder.UseSetting("Seed:Admin:Password", AdminPassword);
+            // O Development liga o seed demo; aqui o banco nasce só com o essencial e cada teste monta o que precisa.
+            builder.UseSetting("Seed:Demo:Enabled", "false");
             builder.ConfigureTestServices(services => services.AddSingleton<IFileStorage>(Files));
         });
     }

@@ -8,7 +8,10 @@ public class StockLineDto
     public Guid VariantId { get; set; }
     public Guid LocationId { get; set; }
 
-    /// <summary>Nulo até a F1.7 (lotes).</summary>
+    /// <summary>
+    /// Lote (F1.7): obrigatório na entrada de produto que controla lote; na saída, nulo deixa o livro-razão repartir pelo lote
+    /// que vence primeiro (FEFO, RN-CE15). Produto sem lote: sempre nulo.
+    /// </summary>
     public Guid? LotId { get; set; }
 
     public MovementTypeEnum Type { get; set; }

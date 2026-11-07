@@ -3,7 +3,7 @@ using Nextflow.Domain.Models;
 
 namespace Nextflow.Domain.Dtos.PurchaseOrders;
 
-/// <summary>Item no detalhe (T-CP3). Custo médio após a entrada vem do recebimento (F2.8); lotes entram com a F1.7.</summary>
+/// <summary>Item no detalhe (T-CP3). Custo médio após a entrada vem do recebimento (F2.8); lotes recebidos (F1.7) vêm das entradas do livro-razão.</summary>
 public class PurchaseOrderDetailItemDto
 {
     public Guid Id { get; set; }

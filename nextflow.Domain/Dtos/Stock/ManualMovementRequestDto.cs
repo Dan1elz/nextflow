@@ -11,10 +11,10 @@ public class ManualMovementRequestDto
     public Guid VariantId { get; set; }
     public Guid LocationId { get; set; }
 
-    /// <summary>Recusado até a F1.7 (lotes).</summary>
+    /// <summary>Lote (F1.7): obrigatório (existente ou novo) se o produto controla lote; na saída, nulo baixa por FEFO.</summary>
     public Guid? LotId { get; set; }
 
-    /// <summary>Recusado até a F1.7 (lotes).</summary>
+    /// <summary>Lote novo (código + validade), só na entrada; exclui <see cref="LotId"/>.</summary>
     public ManualMovementLotDto? NewLot { get; set; }
 
     public MovementTypeEnum Type { get; set; }

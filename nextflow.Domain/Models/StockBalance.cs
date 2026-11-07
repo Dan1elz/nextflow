@@ -18,6 +18,7 @@ public class StockBalance : BaseModel
 
     public virtual ProductVariant Variant { get; private set; } = null!;
     public virtual StockLocation Location { get; private set; } = null!;
+    public virtual Lot? Lot { get; private set; }
 
     public override string Preposition => "o";
     public override string Singular => "saldo";

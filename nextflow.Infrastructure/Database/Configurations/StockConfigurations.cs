@@ -19,8 +19,9 @@ public class StockBalanceConfiguration : IEntityTypeConfiguration<StockBalance>
 
         builder.HasOne(b => b.Variant).WithMany(v => v.Balances).HasForeignKey(b => b.VariantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(b => b.Location).WithMany(l => l.Balances).HasForeignKey(b => b.LocationId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(b => b.Lot).WithMany().HasForeignKey(b => b.LotId).OnDelete(DeleteBehavior.Restrict);
 
-        // Um saldo por variação × local × lote, com lote nulo contando como valor (a FK do lote entra na F1.7). Duas
+        // Um saldo por variação × local × lote, com lote nulo contando como valor (produto sem lote, RN-CE09). Duas
         // primeiras entradas simultâneas na mesma chave: uma grava e a outra esbarra aqui (409 no middleware).
         builder.HasIndex(b => new { b.VariantId, b.LocationId, b.LotId }).IsUnique().AreNullsDistinct(false);
         builder.HasIndex(b => b.LocationId);
@@ -50,10 +51,29 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
         builder.HasOne(m => m.Variant).WithMany().HasForeignKey(m => m.VariantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(m => m.Location).WithMany().HasForeignKey(m => m.LocationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(m => m.User).WithMany().HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(m => m.Lot).WithMany().HasForeignKey(m => m.LotId).OnDelete(DeleteBehavior.Restrict);
 
         // Kardex (F1.8): por variação e local na ordem do tempo, e por documento de origem.
         builder.HasIndex(m => new { m.VariantId, m.LocationId, m.CreatedAt });
         builder.HasIndex(m => new { m.SourceType, m.SourceId });
+    }
+}
+
+public class LotConfiguration : IEntityTypeConfiguration<Lot>
+{
+    public void Configure(EntityTypeBuilder<Lot> builder)
+    {
+        builder.ToTable("lots");
+        builder.HasKey(l => l.Id);
+        builder.Property(l => l.Id).ValueGeneratedNever();
+        builder.Property(l => l.Code).HasMaxLength(Lot.CodeMaxLength).IsRequired();
+
+        builder.HasOne(l => l.Variant).WithMany().HasForeignKey(l => l.VariantId).OnDelete(DeleteBehavior.Restrict);
+
+        // O código é único por variação (RN-CE10): a mesma chegada em dois locais é o mesmo lote. Dois recebimentos
+        // simultâneos com o mesmo código novo: um grava e o outro esbarra aqui (409 no middleware).
+        builder.HasIndex(l => new { l.VariantId, l.Code }).IsUnique();
+        builder.HasIndex(l => l.ExpiresOn);
     }
 }
 

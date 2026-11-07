@@ -1,6 +1,7 @@
 using FluentValidation;
 using Nextflow.Domain.Dtos.Stock;
 using Nextflow.Domain.Enums;
+using Nextflow.Domain.Models;
 
 namespace Nextflow.Domain.Validators.Stock;
 
@@ -34,14 +35,26 @@ public class ManualMovementRequestDtoValidator : AbstractValidator<ManualMovemen
     public const string SystemReasonMessage = "Venda, compra, transferência e inventário são lançados pelo próprio documento.";
     public const string UnitCostMessage = "Só o saldo de abertura informa custo.";
     public const string NoteRequiredMessage = "Informe a observação do ajuste.";
-    public const string LotUnavailableMessage = "O controle de lote ainda não está disponível.";
+    public const string LotAndNewLotMessage = "Escolha um lote existente ou crie um novo, não os dois.";
+    public const string NewLotOnlyInboundMessage = "Lote novo só na entrada.";
 
     public ManualMovementRequestDtoValidator()
     {
         RuleFor(x => x.VariantId).NotEmpty().WithMessage("Escolha a variação.");
         RuleFor(x => x.LocationId).NotEmpty().WithMessage("Escolha o local.");
-        RuleFor(x => x.LotId).Null().WithMessage(LotUnavailableMessage);
-        RuleFor(x => x.NewLot).Null().WithMessage(LotUnavailableMessage);
+
+        // Lote (F1.7): existente ou novo (código + validade), nunca os dois; lote novo só entra. Se o produto controla lote
+        // quem decide é o livro-razão.
+        RuleFor(x => x.NewLot).Null().WithMessage(LotAndNewLotMessage).When(x => x.LotId.HasValue);
+        RuleFor(x => x.NewLot).Null().WithMessage(NewLotOnlyInboundMessage).When(x => x.Type == MovementTypeEnum.Out);
+        RuleFor(x => x.NewLot!.Code).Cascade(CascadeMode.Stop)
+            .Must(code => !string.IsNullOrWhiteSpace(code)).WithMessage("Informe o código do lote.")
+            .Must(code => code.Trim().Length <= Lot.CodeMaxLength).WithMessage($"O código do lote deve ter no máximo {Lot.CodeMaxLength} caracteres.")
+            .OverridePropertyName("newLot.code")
+            .When(x => x.NewLot is not null);
+        RuleFor(x => x.NewLot!.ExpiresOn).NotEmpty().WithMessage("Informe a validade do lote.")
+            .OverridePropertyName("newLot.expiresOn")
+            .When(x => x.NewLot is not null);
 
         RuleFor(x => x.Type).IsInEnum().WithMessage("Escolha entrada ou saída.");
         RuleFor(x => x.Reason).Cascade(CascadeMode.Stop)

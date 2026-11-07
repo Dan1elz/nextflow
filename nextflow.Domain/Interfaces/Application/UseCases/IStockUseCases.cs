@@ -30,3 +30,15 @@ public interface IGetStockAvailabilityUseCase
 {
     Task<ResultDto<StockAvailabilityDto>> Execute(Guid variantId, Guid? excludeLocationId, CancellationToken ct = default);
 }
+
+/// <summary>Aba Lotes do T3 (F1.7): saldo por lote e local do produto, da loja informada ou de todas.</summary>
+public interface IGetProductLotsUseCase
+{
+    Task<ResultDto<List<LotBalanceDto>>> Execute(Guid id, Guid? storeId, CancellationToken ct = default);
+}
+
+/// <summary>Lotes da variação com o saldo no local, para o ajuste manual (T9, F1.7).</summary>
+public interface IGetLotOptionsUseCase
+{
+    Task<ResultDto<List<LotOptionDto>>> Execute(Guid variantId, Guid locationId, CancellationToken ct = default);
+}

@@ -3,6 +3,7 @@ using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.EntityFrameworkCore;
 using Nextflow.Application.Filters;
+using Nextflow.Application.Services;
 using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Dtos.PurchaseOrders;
@@ -157,6 +158,8 @@ public class CancelPurchaseOrderUseCase(
 public class ReceivePurchaseOrderUseCase(
     IPurchaseOrderRepository repository,
     IStockLedger ledger,
+    ILotRepository lotRepository,
+    IStockMovementRepository movementRepository,
     IOwnerDirectory ownerDirectory,
     IBusinessClock clock,
     IUnitOfWork unitOfWork,
@@ -189,20 +192,40 @@ public class ReceivePurchaseOrderUseCase(
             return resultFactory.FieldFailure("items", "Receba todos os itens do pedido, cada um uma vez: não há recebimento parcial.");
 
         var items = itemIds.Select(itemId => order.Items.Single(i => i.Id == itemId)).ToList();
-        var document = new StockDocumentDto { SourceType = SourceTypeEnum.PurchaseOrder, SourceId = order.Id, UserId = userId };
-        var lines = items.Select(item => new StockLineDto
-        {
-            VariantId = item.VariantId,
-            LocationId = order.ReceiveLocationId,
-            Type = MovementTypeEnum.In,
-            Reason = MovementReasonEnum.Purchase,
-            Quantity = item.Quantity,
-            UnitCost = item.UnitCost,
-        }).ToList();
+        var lotFailures = CheckLots(dto, items);
+        if (lotFailures.Count > 0)
+            return resultFactory.Failure(new ValidationResult(lotFailures), 422);
 
+        // Uma entrada por lote (F1.7): o item que controla lote vira tantas linhas quantos lotes chegaram, todas com o custo
+        // do item (o médio é da variação, RN-CE31). Sem lote, uma linha por item, como antes.
+        var known = await lotRepository.GetForVariants([.. items.Select(i => i.VariantId).Distinct()], ct);
+        var lines = new List<StockLineDto>();
+        var lineItem = new List<int>();
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            var lots = dto.Items[i].Lots ?? [];
+            if (lots.Count == 0)
+            {
+                lines.Add(Line(order, item, null, item.Quantity));
+                lineItem.Add(i);
+                continue;
+            }
+
+            for (var j = 0; j < lots.Count; j++)
+            {
+                var (lot, error) = await LotRegistry.FindOrCreate(lotRepository, known, item.VariantId, lots[j].Code, lots[j].ExpiresOn, ct);
+                if (error is not null)
+                    return resultFactory.FieldFailure($"items[{i}].lots[{j}].code", error);
+                lines.Add(Line(order, item, lot!.Id, lots[j].Quantity));
+                lineItem.Add(i);
+            }
+        }
+
+        var document = new StockDocumentDto { SourceType = SourceTypeEnum.PurchaseOrder, SourceId = order.Id, UserId = userId };
         var failures = await ledger.Post(document, lines, ct);
         if (failures.Count > 0)
-            return resultFactory.Failure(new ValidationResult(failures.Select(ToFormField)), 422);
+            return resultFactory.Failure(new ValidationResult(failures.Select(f => ToFormField(f, lineItem))), 422);
 
         var utcNow = DateTime.UtcNow;
         foreach (var item in items)
@@ -215,11 +238,57 @@ public class ReceivePurchaseOrderUseCase(
         order.Receive(userId, utcNow, clock.Today, clock.ToBusinessDate(order.SentAt!.Value));
         await unitOfWork.CommitAsync(ct);
 
-        return resultFactory.Success((await PurchaseOrderDetails.Load(repository, ownerDirectory, id, ct))!);
+        return resultFactory.Success((await PurchaseOrderDetails.Load(repository, ownerDirectory, id, ct, movementRepository))!);
     }
 
-    /// <summary>"Lines[i].Quantity" do livro-razão vira "items[i].quantity"; local fechado vira "receiveLocationId".</summary>
-    private static ValidationFailure ToFormField(ValidationFailure failure)
+    /// <summary>
+    /// Produto que controla lote recebe ao menos um lote, e os lotes somam a quantidade do item (F1.7); produto sem lote não
+    /// recebe lote. O item vem na ordem do corpo, então o índice é o do formulário.
+    /// </summary>
+    private static List<ValidationFailure> CheckLots(ReceivePurchaseOrderDto dto, List<PurchaseItem> items)
+    {
+        var failures = new List<ValidationFailure>();
+        for (var i = 0; i < items.Count; i++)
+        {
+            var product = items[i].Variant.Product;
+            var lots = dto.Items[i].Lots ?? [];
+            if (!product.TracksLots)
+            {
+                if (lots.Count > 0)
+                    failures.Add(new($"items[{i}].lots", $"{product.Name} não controla lote."));
+                continue;
+            }
+
+            if (lots.Count == 0)
+            {
+                failures.Add(new($"items[{i}].lots", $"Informe o lote e a validade de {product.Name}."));
+                continue;
+            }
+
+            var total = lots.Sum(l => l.Quantity);
+            if (total != items[i].Quantity)
+                failures.Add(new($"items[{i}].lots", $"Os lotes somam {total:0.###}, mas o item tem {items[i].Quantity:0.###}."));
+        }
+
+        return failures;
+    }
+
+    private static StockLineDto Line(PurchaseOrder order, PurchaseItem item, Guid? lotId, decimal quantity) => new()
+    {
+        VariantId = item.VariantId,
+        LocationId = order.ReceiveLocationId,
+        LotId = lotId,
+        Type = MovementTypeEnum.In,
+        Reason = MovementReasonEnum.Purchase,
+        Quantity = quantity,
+        UnitCost = item.UnitCost,
+    };
+
+    /// <summary>
+    /// "Lines[k].Quantity" do livro-razão vira "items[i].quantity" (k é a linha, i o item dela: um item com lote gera várias);
+    /// local fechado vira "receiveLocationId".
+    /// </summary>
+    private static ValidationFailure ToFormField(ValidationFailure failure, List<int> lineItem)
     {
         var name = failure.PropertyName;
         if (name.EndsWith(".LocationId"))
@@ -228,13 +297,15 @@ public class ReceivePurchaseOrderUseCase(
             return failure;
         var close = name.IndexOf(']');
         var field = name[(close + 2)..];
-        return new($"items[{name[LinePrefix.Length..close]}].{char.ToLowerInvariant(field[0])}{field[1..]}", failure.ErrorMessage);
+        var item = lineItem[int.Parse(name[LinePrefix.Length..close])];
+        return new($"items[{item}].{char.ToLowerInvariant(field[0])}{field[1..]}", failure.ErrorMessage);
     }
 }
 
 /// <summary>Visualização (T-CP3), com o contato principal do fornecedor.</summary>
 public class GetPurchaseOrderByIdUseCase(
     IPurchaseOrderRepository repository,
+    IStockMovementRepository movementRepository,
     IOwnerDirectory ownerDirectory,
     IResultFactory<PurchaseOrderDetailDto> resultFactory)
     : GetByIdUseCaseBase<PurchaseOrder, IPurchaseOrderRepository, PurchaseOrderDetailDto>(repository, resultFactory)
@@ -243,7 +314,11 @@ public class GetPurchaseOrderByIdUseCase(
     {
         var result = await base.Execute(id, ct);
         if (result.IsSuccess)
+        {
             result.Data!.Supplier.MainContact = (await ownerDirectory.GetMainContact(OwnerTypeEnum.Supplier, result.Data.Supplier.Id, ct))?.Value;
+            await PurchaseOrderDetails.FillLots(result.Data, movementRepository, ct);
+        }
+
         return result;
     }
 
@@ -535,7 +610,9 @@ internal static class PurchaseOrderDetails
             .Include(p => p.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.AttributeValues)
                 .ThenInclude(link => link.AttributeValue).ThenInclude(value => value.Attribute);
 
-    public static async Task<PurchaseOrderDetailDto?> Load(IPurchaseOrderRepository repository, IOwnerDirectory ownerDirectory, Guid id, CancellationToken ct)
+    /// <summary>Com <paramref name="movements"/>, traz também os lotes recebidos (só existem depois do recebimento).</summary>
+    public static async Task<PurchaseOrderDetailDto?> Load(IPurchaseOrderRepository repository, IOwnerDirectory ownerDirectory, Guid id,
+        CancellationToken ct, IStockMovementRepository? movements = null)
     {
         var order = await repository.GetById(id, Include, ct);
         if (order is null)
@@ -543,7 +620,30 @@ internal static class PurchaseOrderDetails
 
         var dto = new PurchaseOrderDetailDto(order);
         dto.Supplier.MainContact = (await ownerDirectory.GetMainContact(OwnerTypeEnum.Supplier, order.SupplierId, ct))?.Value;
+        if (movements is not null)
+            await FillLots(dto, movements, ct);
         return dto;
+    }
+
+    /// <summary>Lotes recebidos por item (T-CP3, F1.7), lidos das entradas do livro-razão que o recebimento gravou.</summary>
+    public static async Task FillLots(PurchaseOrderDetailDto dto, IStockMovementRepository movements, CancellationToken ct)
+    {
+        if (dto.Items.All(i => !i.TracksLots))
+            return;
+
+        var entries = await movements.GetAll(
+            m => m.SourceType == SourceTypeEnum.PurchaseOrder && m.SourceId == dto.Id && m.LotId != null,
+            0, int.MaxValue, q => q.Include(m => m.Lot), q => q.OrderBy(m => m.CreatedAt).ThenBy(m => m.Id), ct);
+        var byVariant = entries.GroupBy(m => m.VariantId).ToDictionary(g => g.Key, g => g.ToList());
+        foreach (var item in dto.Items.Where(i => i.TracksLots && byVariant.ContainsKey(i.VariantId)))
+        {
+            item.Lots = [.. byVariant[item.VariantId].Select(m => new PurchaseItemLotDto
+            {
+                LotCode = m.Lot!.Code,
+                ExpiresOn = m.Lot.ExpiresOn,
+                Quantity = m.Quantity,
+            })];
+        }
     }
 }
 

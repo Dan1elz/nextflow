@@ -1,5 +1,6 @@
 using FluentValidation;
 using Nextflow.Domain.Dtos.PurchaseOrders;
+using Nextflow.Domain.Models;
 
 namespace Nextflow.Domain.Validators.PurchaseOrders;
 
@@ -40,12 +41,12 @@ public class CancelPurchaseOrderDtoValidator : AbstractValidator<CancelPurchaseO
     }
 }
 
-/// <summary>Formato do recebimento (T-CP4). Itens contra o pedido e status ficam no use case.</summary>
+/// <summary>
+/// Formato do recebimento (T-CP4). Itens contra o pedido, status, lote obrigatório por produto e soma dos lotes igual à
+/// quantidade do item ficam no use case (dependem do pedido gravado).
+/// </summary>
 public class ReceivePurchaseOrderDtoValidator : AbstractValidator<ReceivePurchaseOrderDto>
 {
-    /// <summary>Mesma mensagem do ajuste manual (F1.6): lote entra com a F1.7.</summary>
-    public const string LotUnavailableMessage = "O controle de lote ainda não está disponível.";
-
     public ReceivePurchaseOrderDtoValidator()
     {
         RuleFor(x => x.Version).NotNull().WithMessage("Informe a versão do pedido.");
@@ -53,7 +54,19 @@ public class ReceivePurchaseOrderDtoValidator : AbstractValidator<ReceivePurchas
         RuleForEach(x => x.Items).ChildRules(item =>
         {
             item.RuleFor(i => i.ItemId).NotEmpty().WithMessage("Informe o item.");
-            item.RuleFor(i => i.Lots).Must(lots => lots is null || lots.Count == 0).WithMessage(LotUnavailableMessage);
+            item.RuleFor(i => i.Lots)
+                .Must(lots => lots is null || lots.Select(l => Lot.Normalize(l.Code)).Distinct().Count() == lots.Count)
+                .WithMessage("O mesmo lote aparece duas vezes no item.");
+            item.RuleForEach(i => i.Lots).ChildRules(lot =>
+            {
+                lot.RuleFor(l => l.Code).Cascade(CascadeMode.Stop)
+                    .Must(code => !string.IsNullOrWhiteSpace(code)).WithMessage("Informe o código do lote.")
+                    .Must(code => code.Trim().Length <= Lot.CodeMaxLength).WithMessage($"O código do lote deve ter no máximo {Lot.CodeMaxLength} caracteres.");
+                lot.RuleFor(l => l.ExpiresOn).NotEmpty().WithMessage("Informe a validade do lote.");
+                lot.RuleFor(l => l.Quantity)
+                    .GreaterThan(0).WithMessage("A quantidade do lote precisa ser maior que zero.")
+                    .PrecisionScale(14, 3, true).WithMessage("A quantidade aceita até 3 casas decimais.");
+            });
         });
     }
 }

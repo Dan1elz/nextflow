@@ -3,6 +3,7 @@ using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.EntityFrameworkCore;
 using Nextflow.Application.Filters;
+using Nextflow.Application.Services;
 using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Dtos.Stock;
@@ -21,6 +22,7 @@ namespace Nextflow.Application.UseCases.Inventory;
 /// </summary>
 public class CreateManualMovementUseCase(
     IStockLedger ledger,
+    ILotRepository lotRepository,
     IUnitOfWork unitOfWork,
     IValidator<ManualMovementRequestDto> validator,
     IResultFactory<bool> resultFactory) : ICreateManualMovementUseCase
@@ -36,11 +38,23 @@ public class CreateManualMovementUseCase(
         if (!validation.IsValid)
             return resultFactory.Failure(validation, 422);
 
+        // Lote novo (F1.7): código + validade; o mesmo código com a mesma validade reaproveita o lote da variação.
+        var lotId = dto.LotId;
+        if (dto.NewLot is { } newLot)
+        {
+            var known = await lotRepository.GetForVariants([dto.VariantId], ct);
+            var (lot, error) = await LotRegistry.FindOrCreate(lotRepository, known, dto.VariantId, newLot.Code, newLot.ExpiresOn, ct);
+            if (error is not null)
+                return resultFactory.FieldFailure("newLot.code", error);
+            lotId = lot!.Id;
+        }
+
         var document = new StockDocumentDto { SourceType = SourceTypeEnum.Manual, UserId = userId, Note = dto.Note };
         var line = new StockLineDto
         {
             VariantId = dto.VariantId,
             LocationId = dto.LocationId,
+            LotId = lotId,
             Type = dto.Type,
             Reason = dto.Reason,
             Quantity = dto.Quantity,
@@ -115,5 +129,6 @@ public class GetStockMovementsUseCase(
         => q => q.Include(m => m.Variant).ThenInclude(v => v.Product)
             .Include(m => m.Variant).ThenInclude(v => v.AttributeValues).ThenInclude(link => link.AttributeValue).ThenInclude(value => value.Attribute)
             .Include(m => m.Location)
+            .Include(m => m.Lot)
             .Include(m => m.User);
 }

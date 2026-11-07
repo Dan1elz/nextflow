@@ -6,7 +6,7 @@ namespace Nextflow.Domain.Dtos.Stock;
 
 /// <summary>
 /// Linha do kardex (T8). <see cref="Quantity"/> leva o sinal e <see cref="BalanceAfter"/> é o saldo da variação no local
-/// logo depois do lançamento, gravado pelo livro-razão (RN-CE01). Lote entra na F1.7.
+/// logo depois do lançamento, gravado pelo livro-razão (RN-CE01). Lote do lançamento (F1.7), nulo em produto sem lote.
 /// </summary>
 public class StockMovementListItemDto
 {
@@ -44,6 +44,7 @@ public class StockMovementListItemDto
 
         LocationId = entity.LocationId;
         LocationName = entity.Location != null ? entity.Location.Name : string.Empty;
+        LotCode = entity.Lot?.Code;
         Type = entity.Type.GetApiName();
         Reason = entity.Reason.GetApiName();
         Quantity = entity.Quantity;

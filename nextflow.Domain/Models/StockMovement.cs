@@ -28,6 +28,7 @@ public class StockMovement : BaseModel
 
     public virtual ProductVariant Variant { get; private set; } = null!;
     public virtual StockLocation Location { get; private set; } = null!;
+    public virtual Lot? Lot { get; private set; }
     public virtual User User { get; private set; } = null!;
 
     public override string Preposition => "a";

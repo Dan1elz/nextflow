@@ -459,6 +459,43 @@ namespace Nextflow.Infrastructure.Migrations
                     b.ToTable("countries", (string)null);
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.Lot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly>("ExpiresOn")
+                        .HasColumnType("date")
+                        .HasColumnName("expires_on");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_lots");
+
+                    b.HasIndex("ExpiresOn")
+                        .HasDatabaseName("ix_lots_expires_on");
+
+                    b.HasIndex("VariantId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_lots_variant_id_code");
+
+                    b.ToTable("lots", (string)null);
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1437,6 +1474,9 @@ namespace Nextflow.Infrastructure.Migrations
                     b.HasIndex("LocationId")
                         .HasDatabaseName("ix_stock_balances_location_id");
 
+                    b.HasIndex("LotId")
+                        .HasDatabaseName("ix_stock_balances_lot_id");
+
                     b.HasIndex("VariantId", "LocationId", "LotId")
                         .IsUnique()
                         .HasDatabaseName("ix_stock_balances_variant_id_location_id_lot_id");
@@ -1597,6 +1637,9 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("LocationId")
                         .HasDatabaseName("ix_stock_movements_location_id");
+
+                    b.HasIndex("LotId")
+                        .HasDatabaseName("ix_stock_movements_lot_id");
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_stock_movements_user_id");
@@ -1911,6 +1954,18 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasConstraintName("fk_cities_state_state_id");
 
                     b.Navigation("State");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Lot", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.ProductVariant", "Variant")
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_lots_product_variant_variant_id");
+
+                    b.Navigation("Variant");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>
@@ -2241,6 +2296,12 @@ namespace Nextflow.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_stock_balances_stock_location_location_id");
 
+                    b.HasOne("Nextflow.Domain.Models.Lot", "Lot")
+                        .WithMany()
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_stock_balances_lots_lot_id");
+
                     b.HasOne("Nextflow.Domain.Models.ProductVariant", "Variant")
                         .WithMany("Balances")
                         .HasForeignKey("VariantId")
@@ -2249,6 +2310,8 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasConstraintName("fk_stock_balances_product_variants_variant_id");
 
                     b.Navigation("Location");
+
+                    b.Navigation("Lot");
 
                     b.Navigation("Variant");
                 });
@@ -2295,6 +2358,12 @@ namespace Nextflow.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_stock_movements_stock_locations_location_id");
 
+                    b.HasOne("Nextflow.Domain.Models.Lot", "Lot")
+                        .WithMany()
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_stock_movements_lots_lot_id");
+
                     b.HasOne("Nextflow.Domain.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -2310,6 +2379,8 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasConstraintName("fk_stock_movements_product_variants_variant_id");
 
                     b.Navigation("Location");
+
+                    b.Navigation("Lot");
 
                     b.Navigation("User");
 

@@ -19,6 +19,12 @@ public class ProductVariant : BaseModel
     public decimal? LastCost { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// Token de concorrência do custo médio (RN-CE31): só a entrada com custo incrementa. Duas entradas simultâneas da mesma
+    /// variação em locais diferentes não colidem no saldo, então colidem aqui e a segunda vira 409 (pendência da F1.5).
+    /// </summary>
+    public int Version { get; private set; }
+
     public virtual Product Product { get; private set; } = null!;
     public virtual ICollection<ProductVariantValue> AttributeValues { get; private set; } = [];
     public virtual ICollection<PriceHistory> PriceHistory { get; private set; } = [];
@@ -70,6 +76,7 @@ public class ProductVariant : BaseModel
     public void ApplyInboundCost(decimal companyQuantityBefore, decimal quantity, decimal unitCost)
     {
         LastCost = unitCost;
+        Version++;
         AverageCost = AverageCost is not { } average || companyQuantityBefore <= 0
             ? unitCost
             : Math.Round((companyQuantityBefore * average + quantity * unitCost) / (companyQuantityBefore + quantity), 4, MidpointRounding.AwayFromZero);

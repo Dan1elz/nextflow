@@ -12,6 +12,9 @@ public class ProductSupplier : BaseModel
     public int? LeadTimeDays { get; private set; }
     public decimal? MinOrderQty { get; private set; }
     public decimal? OrderMultiple { get; private set; }
+
+    /// <summary>Custo unitário do último recebimento deste fornecedor (RN-CP02, informativo). Gravado só pelo recebimento.</summary>
+    public decimal? LastCost { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
     public virtual Product Product { get; private set; } = null!;
@@ -34,6 +37,13 @@ public class ProductSupplier : BaseModel
     {
         Apply(dto);
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Recebimento de compra deste fornecedor (F2.8).</summary>
+    public void RecordLastCost(decimal unitCost, DateTime utcNow)
+    {
+        LastCost = unitCost;
+        UpdatedAt = utcNow;
     }
 
     private void Apply(ProductSupplierRequestDto dto)

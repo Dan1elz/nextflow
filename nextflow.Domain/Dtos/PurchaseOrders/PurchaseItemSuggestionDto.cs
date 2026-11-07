@@ -46,6 +46,7 @@ public class PurchaseItemSuggestionDto
         Lifecycle = product?.Lifecycle ?? LifecycleEnum.Active;
         MinOrderQty = link?.MinOrderQty;
         OrderMultiple = link?.OrderMultiple;
+        LastCostFromSupplier = link?.LastCost;
         AverageCost = variant.AverageCost;
         AvailableAtStore = availableAtStore;
         IncomingQuantity = incomingQuantity;

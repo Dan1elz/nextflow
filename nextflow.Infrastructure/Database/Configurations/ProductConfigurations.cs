@@ -83,6 +83,9 @@ public class ProductVariantConfiguration : IEntityTypeConfiguration<ProductVaria
         builder.Property(v => v.AverageCost).HasPrecision(14, 4);
         builder.Property(v => v.LastCost).HasPrecision(14, 4);
 
+        // Só a entrada com custo muda a versão: duas entradas simultâneas na mesma variação → DbUpdateConcurrencyException → 409.
+        builder.Property(v => v.Version).IsConcurrencyToken();
+
         // RN-CE51: as tabelas da F1.5 apontam para cá com Restrict, e é isso que barra apagar variação com histórico.
         builder.HasOne(v => v.Product).WithMany(p => p.Variants).HasForeignKey(v => v.ProductId).OnDelete(DeleteBehavior.Cascade);
 

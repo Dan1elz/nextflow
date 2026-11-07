@@ -4,7 +4,7 @@ using Nextflow.Domain.Models;
 
 namespace Nextflow.Domain.Dtos.PurchaseOrders;
 
-/// <summary>Visualização do pedido (T-CP3) e resposta de criar, editar, enviar e cancelar.</summary>
+/// <summary>Visualização do pedido (T-CP3) e resposta de criar, editar, enviar, cancelar e receber.</summary>
 public class PurchaseOrderDetailDto
 {
     public Guid Id { get; set; }
@@ -49,6 +49,8 @@ public class PurchaseOrderDetailDto
         SentAt = entity.SentAt;
         ExpectedOn = entity.ExpectedOn;
         ReceivedAt = entity.ReceivedAt;
+        ReceivedByName = entity.ReceivedBy != null ? $"{entity.ReceivedBy.Name} {entity.ReceivedBy.LastName}" : null;
+        RealLeadTimeDays = entity.RealLeadTimeDays;
         CanceledAt = entity.CanceledAt;
         CancelReason = entity.CancelReason;
         Items = [.. entity.Items.OrderBy(i => i.SortOrder).Select(i => new PurchaseOrderDetailItemDto(i, entity.SupplierId))];

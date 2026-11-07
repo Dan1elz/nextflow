@@ -38,6 +38,12 @@ public interface ISendPurchaseOrderUseCase
     Task<ResultDto<PurchaseOrderDetailDto>> Execute(Guid id, PurchaseOrderVersionDto? dto, CancellationToken ct = default);
 }
 
+/// <summary>Receber (T-CP4): Pendente → Recebido, o pedido inteiro, com entrada no estoque pelo livro-razão.</summary>
+public interface IReceivePurchaseOrderUseCase
+{
+    Task<ResultDto<PurchaseOrderDetailDto>> Execute(Guid id, ReceivePurchaseOrderDto? dto, Guid userId, CancellationToken ct = default);
+}
+
 /// <summary>Cancelar (T-CP5): Orçamento ou Pendente, com motivo.</summary>
 public interface ICancelPurchaseOrderUseCase
 {

@@ -930,6 +930,11 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_preferred");
 
+                    b.Property<decimal?>("LastCost")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)")
+                        .HasColumnName("last_cost");
+
                     b.Property<int?>("LeadTimeDays")
                         .HasColumnType("integer")
                         .HasColumnName("lead_time_days");
@@ -1029,6 +1034,11 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
 
                     b.HasKey("Id")
                         .HasName("pk_product_variants");
@@ -1168,6 +1178,11 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal?>("AverageCostAfter")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)")
+                        .HasColumnName("average_cost_after");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1260,6 +1275,10 @@ namespace Nextflow.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Number"));
 
+                    b.Property<int?>("RealLeadTimeDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("real_lead_time_days");
+
                     b.Property<Guid>("ReceiveLocationId")
                         .HasColumnType("uuid")
                         .HasColumnName("receive_location_id");
@@ -1267,6 +1286,10 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Property<DateTime?>("ReceivedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("received_at");
+
+                    b.Property<Guid?>("ReceivedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("received_by");
 
                     b.Property<DateTime?>("SentAt")
                         .HasColumnType("timestamp with time zone")
@@ -1311,6 +1334,9 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("ReceiveLocationId")
                         .HasDatabaseName("ix_purchase_orders_receive_location_id");
+
+                    b.HasIndex("ReceivedById")
+                        .HasDatabaseName("ix_purchase_orders_received_by_id");
 
                     b.HasIndex("StoreId", "Status")
                         .HasDatabaseName("ix_purchase_orders_store_id_status");
@@ -2163,6 +2189,12 @@ namespace Nextflow.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_purchase_orders_stock_location_receive_location_id");
 
+                    b.HasOne("Nextflow.Domain.Models.User", "ReceivedBy")
+                        .WithMany()
+                        .HasForeignKey("ReceivedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_purchase_orders_user_received_by_id");
+
                     b.HasOne("Nextflow.Domain.Models.Store", "Store")
                         .WithMany()
                         .HasForeignKey("StoreId")
@@ -2180,6 +2212,8 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("CreatedBy");
 
                     b.Navigation("ReceiveLocation");
+
+                    b.Navigation("ReceivedBy");
 
                     b.Navigation("Store");
 

@@ -39,3 +39,21 @@ public class CancelPurchaseOrderDtoValidator : AbstractValidator<CancelPurchaseO
             .MaximumLength(500).WithMessage("O motivo aceita até 500 caracteres.");
     }
 }
+
+/// <summary>Formato do recebimento (T-CP4). Itens contra o pedido e status ficam no use case.</summary>
+public class ReceivePurchaseOrderDtoValidator : AbstractValidator<ReceivePurchaseOrderDto>
+{
+    /// <summary>Mesma mensagem do ajuste manual (F1.6): lote entra com a F1.7.</summary>
+    public const string LotUnavailableMessage = "O controle de lote ainda não está disponível.";
+
+    public ReceivePurchaseOrderDtoValidator()
+    {
+        RuleFor(x => x.Version).NotNull().WithMessage("Informe a versão do pedido.");
+        RuleFor(x => x.Items).NotEmpty().WithMessage("Informe os itens recebidos.");
+        RuleForEach(x => x.Items).ChildRules(item =>
+        {
+            item.RuleFor(i => i.ItemId).NotEmpty().WithMessage("Informe o item.");
+            item.RuleFor(i => i.Lots).Must(lots => lots is null || lots.Count == 0).WithMessage(LotUnavailableMessage);
+        });
+    }
+}

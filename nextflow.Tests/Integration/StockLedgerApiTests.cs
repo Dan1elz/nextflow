@@ -154,6 +154,28 @@ public class StockLedgerApiTests(AccessApiFixture api)
     }
 
     [Fact]
+    [Trait("Rule", "RN-CE31")]
+    public async Task Should_Return409_When_ConcurrentInboundCostOnVariant()
+    {
+        var setup = await Arrange();
+        (await Post(Line(setup.VariantId, setup.MainLocationId, MovementTypeEnum.In, 10, 4m))).ShouldBeEmpty();
+        var document = new StockDocumentDto { SourceType = SourceTypeEnum.Manual, UserId = await AdminId() };
+
+        // Locais diferentes: o saldo não colide, só o custo médio da variação. A segunda entrada chega com a versão velha.
+        await using var first = api.CreateContext();
+        await using var second = api.CreateContext();
+        (await Ledger(first).Post(document, [Line(setup.VariantId, setup.MainLocationId, MovementTypeEnum.In, 10, 6m)], CancellationToken.None)).ShouldBeEmpty();
+        (await Ledger(second).Post(document, [Line(setup.VariantId, setup.DepositId, MovementTypeEnum.In, 10, 10m)], CancellationToken.None)).ShouldBeEmpty();
+
+        (await RunThroughMiddleware(() => first.SaveChangesAsync())).ShouldBe(StatusCodes.Status200OK);
+        (await RunThroughMiddleware(() => second.SaveChangesAsync())).ShouldBe(StatusCodes.Status409Conflict);
+
+        await using var read = api.CreateContext();
+        (await read.Set<ProductVariant>().SingleAsync(v => v.Id == setup.VariantId)).AverageCost.ShouldBe(5m);
+        (await read.Set<StockMovement>().Where(m => m.VariantId == setup.VariantId).SumAsync(m => m.Quantity)).ShouldBe(20m);
+    }
+
+    [Fact]
     [Trait("Rule", "RN-CE14")]
     public async Task Should_Return409_When_FirstBalanceOfTheKeyIsCreatedConcurrently()
     {

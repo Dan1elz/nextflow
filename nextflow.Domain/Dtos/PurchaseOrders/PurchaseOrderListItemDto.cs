@@ -43,6 +43,7 @@ public class PurchaseOrderListItemDto
         SentAt = entity.SentAt;
         ExpectedOn = entity.ExpectedOn;
         ReceivedAt = entity.ReceivedAt;
+        RealLeadTimeDays = entity.RealLeadTimeDays;
         IsLate = entity.IsLate(today);
     }
 }

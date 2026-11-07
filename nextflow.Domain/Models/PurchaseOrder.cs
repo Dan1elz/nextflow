@@ -23,6 +23,10 @@ public class PurchaseOrder : BaseModel, IVersioned
     public Guid CreatedById { get; private set; }
     public DateTime? SentAt { get; private set; }
     public DateTime? ReceivedAt { get; private set; }
+    public Guid? ReceivedById { get; private set; }
+
+    /// <summary>Dias entre o envio e o recebimento, em dias de negócio (RN-CP08, RN-CP06).</summary>
+    public int? RealLeadTimeDays { get; private set; }
     public DateTime? CanceledAt { get; private set; }
     public string? CancelReason { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
@@ -32,6 +36,7 @@ public class PurchaseOrder : BaseModel, IVersioned
     public virtual Store Store { get; private set; } = null!;
     public virtual StockLocation ReceiveLocation { get; private set; } = null!;
     public virtual User CreatedBy { get; private set; } = null!;
+    public virtual User? ReceivedBy { get; private set; }
     public virtual ICollection<PurchaseItem> Items { get; private set; } = [];
 
     public override string Preposition => "o";
@@ -73,6 +78,19 @@ public class PurchaseOrder : BaseModel, IVersioned
         Status = PurchaseStatusEnum.Pending;
         SentAt = utcNow;
         ExpectedOn = today.AddDays(LeadTimeDays);
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>
+    /// Receber (T-CP4, RN-CP04): o pedido inteiro, já lançado no livro-razão pelo use case. Lead time real = dia do
+    /// recebimento − dia do envio (RN-CP08).
+    /// </summary>
+    public void Receive(Guid receivedById, DateTime utcNow, DateOnly today, DateOnly sentOn)
+    {
+        Status = PurchaseStatusEnum.Received;
+        ReceivedAt = utcNow;
+        ReceivedById = receivedById;
+        RealLeadTimeDays = today.DayNumber - sentOn.DayNumber;
         UpdatedAt = utcNow;
     }
 

@@ -22,6 +22,7 @@ public class PurchaseOrderConfiguration : IEntityTypeConfiguration<PurchaseOrder
         builder.Property(p => p.CancelReason).HasMaxLength(500);
         builder.Property(p => p.Total).HasPrecision(14, 2);
         builder.Property(p => p.CreatedById).HasColumnName("created_by");
+        builder.Property(p => p.ReceivedById).HasColumnName("received_by");
 
         // Concorrência otimista pelo xmin: o update leva a versão lida e 409 se outra gravação passou no meio.
         builder.Property(p => p.Version).IsRowVersion();
@@ -30,6 +31,7 @@ public class PurchaseOrderConfiguration : IEntityTypeConfiguration<PurchaseOrder
         builder.HasOne(p => p.Store).WithMany().HasForeignKey(p => p.StoreId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(p => p.ReceiveLocation).WithMany().HasForeignKey(p => p.ReceiveLocationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(p => p.CreatedBy).WithMany().HasForeignKey(p => p.CreatedById).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(p => p.ReceivedBy).WithMany().HasForeignKey(p => p.ReceivedById).OnDelete(DeleteBehavior.Restrict);
 
         // Listagem por loja e status (T-CP1) e lead time real por fornecedor (F2.8, RN-CP06).
         builder.HasIndex(p => new { p.StoreId, p.Status });
@@ -51,6 +53,7 @@ public class PurchaseItemConfiguration : IEntityTypeConfiguration<PurchaseItem>
         builder.Property(i => i.Quantity).HasPrecision(14, 3);
         builder.Property(i => i.UnitCost).HasPrecision(14, 4);
         builder.Property(i => i.Subtotal).HasPrecision(14, 2);
+        builder.Property(i => i.AverageCostAfter).HasPrecision(14, 4);
 
         // Sai com o pedido (sincronização do formulário); a variação nunca é apagada (RN-CE58).
         builder.HasOne(i => i.PurchaseOrder).WithMany(p => p.Items).HasForeignKey(i => i.PurchaseOrderId).OnDelete(DeleteBehavior.Cascade);

@@ -8,7 +8,7 @@ using Nextflow.Utils;
 
 namespace Nextflow.Controllers;
 
-/// <summary>Pedido de compra (T-CP1, T-CP2, T-CP3, T-CP5). O recebimento (T-CP4) entra na F2.8.</summary>
+/// <summary>Pedido de compra (T-CP1 a T-CP5).</summary>
 [Authorize]
 [Route("api/purchase-orders")]
 public class PurchaseOrdersController(
@@ -20,7 +20,8 @@ public class PurchaseOrdersController(
     ICreateUseCase<SavePurchaseOrderDto, PurchaseOrderDetailDto> createUseCase,
     IUpdateUseCase<SavePurchaseOrderDto, PurchaseOrderDetailDto> updateUseCase,
     ISendPurchaseOrderUseCase sendUseCase,
-    ICancelPurchaseOrderUseCase cancelUseCase) : ApiController
+    ICancelPurchaseOrderUseCase cancelUseCase,
+    IReceivePurchaseOrderUseCase receiveUseCase) : ApiController
 {
     [HttpGet]
     public async Task<IActionResult> GetAll(
@@ -63,4 +64,8 @@ public class PurchaseOrdersController(
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelPurchaseOrderDto dto, CancellationToken ct)
         => Handle(await cancelUseCase.Execute(id, dto, ct));
+
+    [HttpPost("{id:guid}/receive")]
+    public async Task<IActionResult> Receive(Guid id, [FromBody] ReceivePurchaseOrderDto dto, CancellationToken ct)
+        => Handle(await receiveUseCase.Execute(id, dto, UserId, ct));
 }

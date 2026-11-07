@@ -34,6 +34,7 @@ public class ProductSupplierConfiguration : IEntityTypeConfiguration<ProductSupp
         builder.Property(ps => ps.SupplierSku).HasMaxLength(50);
         builder.Property(ps => ps.MinOrderQty).HasPrecision(12, 3);
         builder.Property(ps => ps.OrderMultiple).HasPrecision(12, 3);
+        builder.Property(ps => ps.LastCost).HasPrecision(14, 4);
 
         // Um preferido só no validador: índice filtrado recusaria trocar o preferido entre dois vínculos no mesmo commit.
         builder.HasOne(ps => ps.Product).WithMany(p => p.Suppliers).HasForeignKey(ps => ps.ProductId).OnDelete(DeleteBehavior.Cascade);

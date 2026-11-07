@@ -6,6 +6,7 @@ using Nextflow.Application.Filters;
 using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Dtos.PurchaseOrders;
+using Nextflow.Domain.Dtos.Stock;
 using Nextflow.Domain.Dtos.Stores;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Application.Services;
@@ -144,6 +145,90 @@ public class CancelPurchaseOrderUseCase(
         await unitOfWork.CommitAsync(ct);
 
         return resultFactory.Success((await PurchaseOrderDetails.Load(repository, ownerDirectory, id, ct))!);
+    }
+}
+
+/// <summary>
+/// Receber (T-CP4): só Pendente, o pedido inteiro (RN-CP04). Uma entrada `Purchase` por item no local de entrega pelo
+/// <see cref="IStockLedger"/> (RN-CE14), que recalcula o custo médio e o último custo da variação (RN-CE31); grava o último
+/// custo no vínculo com o fornecedor, o custo médio após a entrada por item, quem recebeu e o lead time real (RN-CP08).
+/// Tudo num commit; entrada simultânea na mesma variação estoura no token dela e vira 409.
+/// </summary>
+public class ReceivePurchaseOrderUseCase(
+    IPurchaseOrderRepository repository,
+    IStockLedger ledger,
+    IOwnerDirectory ownerDirectory,
+    IBusinessClock clock,
+    IUnitOfWork unitOfWork,
+    IValidator<ReceivePurchaseOrderDto> validator,
+    IResultFactory<PurchaseOrderDetailDto> resultFactory) : IReceivePurchaseOrderUseCase
+{
+    private const string LinePrefix = "Lines[";
+
+    public async Task<ResultDto<PurchaseOrderDetailDto>> Execute(Guid id, ReceivePurchaseOrderDto? dto, Guid userId, CancellationToken ct = default)
+    {
+        if (dto is null)
+            return resultFactory.Failure("O corpo da requisição é obrigatório.", 400);
+
+        var validation = await validator.ValidateAsync(dto, ct);
+        if (!validation.IsValid)
+            return resultFactory.Failure(validation, 422);
+
+        var order = await repository.GetByIdForUpdate(id, q => q
+            .Include(p => p.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.Product).ThenInclude(p => p.Suppliers), ct);
+        if (order is null)
+            return resultFactory.Failure($"Entidade com id {id} não encontrada.", 404);
+
+        if (PurchaseOrderRules.CheckState(order, dto.Version, resultFactory) is { } failure)
+            return failure;
+        if (order.Status != PurchaseStatusEnum.Pending)
+            return resultFactory.Failure("Só um pedido pendente (enviado ao fornecedor) pode ser recebido.", 400);
+
+        var itemIds = dto.Items.Select(i => i.ItemId).ToList();
+        if (itemIds.Count != itemIds.Distinct().Count() || !itemIds.ToHashSet().SetEquals(order.Items.Select(i => i.Id)))
+            return resultFactory.FieldFailure("items", "Receba todos os itens do pedido, cada um uma vez: não há recebimento parcial.");
+
+        var items = itemIds.Select(itemId => order.Items.Single(i => i.Id == itemId)).ToList();
+        var document = new StockDocumentDto { SourceType = SourceTypeEnum.PurchaseOrder, SourceId = order.Id, UserId = userId };
+        var lines = items.Select(item => new StockLineDto
+        {
+            VariantId = item.VariantId,
+            LocationId = order.ReceiveLocationId,
+            Type = MovementTypeEnum.In,
+            Reason = MovementReasonEnum.Purchase,
+            Quantity = item.Quantity,
+            UnitCost = item.UnitCost,
+        }).ToList();
+
+        var failures = await ledger.Post(document, lines, ct);
+        if (failures.Count > 0)
+            return resultFactory.Failure(new ValidationResult(failures.Select(ToFormField)), 422);
+
+        var utcNow = DateTime.UtcNow;
+        foreach (var item in items)
+        {
+            // A variação rastreada é a mesma instância que o livro-razão atualizou: o médio já inclui esta entrada.
+            item.RecordReceipt(item.Variant.AverageCost);
+            item.Variant.Product.Suppliers.FirstOrDefault(s => s.SupplierId == order.SupplierId)?.RecordLastCost(item.UnitCost, utcNow);
+        }
+
+        order.Receive(userId, utcNow, clock.Today, clock.ToBusinessDate(order.SentAt!.Value));
+        await unitOfWork.CommitAsync(ct);
+
+        return resultFactory.Success((await PurchaseOrderDetails.Load(repository, ownerDirectory, id, ct))!);
+    }
+
+    /// <summary>"Lines[i].Quantity" do livro-razão vira "items[i].quantity"; local fechado vira "receiveLocationId".</summary>
+    private static ValidationFailure ToFormField(ValidationFailure failure)
+    {
+        var name = failure.PropertyName;
+        if (name.EndsWith(".LocationId"))
+            return new("receiveLocationId", failure.ErrorMessage);
+        if (!name.StartsWith(LinePrefix))
+            return failure;
+        var close = name.IndexOf(']');
+        var field = name[(close + 2)..];
+        return new($"items[{name[LinePrefix.Length..close]}].{char.ToLowerInvariant(field[0])}{field[1..]}", failure.ErrorMessage);
     }
 }
 
@@ -445,6 +530,7 @@ internal static class PurchaseOrderDetails
         => query.Include(p => p.Supplier)
             .Include(p => p.ReceiveLocation).ThenInclude(l => l.Store)
             .Include(p => p.CreatedBy)
+            .Include(p => p.ReceivedBy)
             .Include(p => p.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.Product).ThenInclude(p => p.Suppliers)
             .Include(p => p.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.AttributeValues)
                 .ThenInclude(link => link.AttributeValue).ThenInclude(value => value.Attribute);

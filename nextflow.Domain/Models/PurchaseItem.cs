@@ -12,6 +12,9 @@ public class PurchaseItem : BaseModel
     public decimal Subtotal { get; private set; }
     public short SortOrder { get; private set; }
 
+    /// <summary>Custo médio da variação logo após a entrada deste item (T-CP3). Nulo até o recebimento.</summary>
+    public decimal? AverageCostAfter { get; private set; }
+
     public virtual PurchaseOrder PurchaseOrder { get; private set; } = null!;
     public virtual ProductVariant Variant { get; private set; } = null!;
 
@@ -26,6 +29,8 @@ public class PurchaseItem : BaseModel
         PurchaseOrderId = purchaseOrderId;
         Update(dto, sortOrder);
     }
+
+    public void RecordReceipt(decimal? averageCostAfter) => AverageCostAfter = averageCostAfter;
 
     public void Update(SavePurchaseItemDto dto, short sortOrder)
     {

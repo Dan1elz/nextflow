@@ -9,4 +9,6 @@ public interface IAddressRepository : IBaseRepository<Address>
     Task<Dictionary<Guid, string>> GetMainCityStates(OwnerTypeEnum ownerType, IReadOnlyCollection<Guid> ownerIds, CancellationToken ct = default);
 
     Task<List<Guid>> GetOwnerIdsByCity(OwnerTypeEnum ownerType, Guid cityId, CancellationToken ct = default);
+
+    Task<List<Guid>> GetOwnerIdsByState(OwnerTypeEnum ownerType, Guid stateId, CancellationToken ct = default);
 }

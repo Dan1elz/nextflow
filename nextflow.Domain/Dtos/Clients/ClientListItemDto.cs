@@ -4,8 +4,8 @@ using Nextflow.Domain.Models;
 namespace Nextflow.Domain.Dtos.Clients;
 
 /// <summary>
-/// Linha da listagem (T-CD3). <see cref="OrderCount"/>, <see cref="TotalSpent"/> e <see cref="LastPurchaseOn"/> dependem
-/// de pedidos: ficam zero ou nulos até a fase 2.
+/// Linha da listagem (T-CD3). <see cref="OrderCount"/>, <see cref="TotalSpent"/> e <see cref="LastPurchaseOn"/> vêm das
+/// vendas pagas do cliente; zero ou nulos sem venda.
 /// </summary>
 public class ClientListItemDto
 {

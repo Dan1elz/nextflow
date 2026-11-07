@@ -4,8 +4,8 @@ using Nextflow.Domain.Models;
 namespace Nextflow.Domain.Dtos.Suppliers;
 
 /// <summary>
-/// Linha da listagem (T-CD1). <see cref="RealLeadTimeDays"/> e <see cref="LastPurchaseOn"/> dependem de compras: ficam
-/// nulos até a fase 2. <see cref="ProductCount"/> conta os produtos ativos vinculados.
+/// Linha da listagem (T-CD1). <see cref="RealLeadTimeDays"/> (média do prazo real dos recebidos) e <see cref="LastPurchaseOn"/>
+/// (último envio) vêm dos pedidos de compra; nulos sem pedido. <see cref="ProductCount"/> conta os produtos ativos vinculados.
 /// </summary>
 public class SupplierListItemDto
 {

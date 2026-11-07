@@ -37,7 +37,8 @@ public class GetAllOrdersUseCase(
         var set = new FilterSet(filters);
         var builder = new FilterExpressionBuilder<Order>()
             .WhereEnumEquals(set, "status", o => o.Status)
-            .WhereEnumEquals(set, "channel", o => o.Channel);
+            .WhereEnumEquals(set, "channel", o => o.Channel)
+            .WhereGuidEquals(set, "clientId", o => o.ClientId);
 
         if (_storeId is { } storeId)
             builder.And(o => o.StoreId == storeId);

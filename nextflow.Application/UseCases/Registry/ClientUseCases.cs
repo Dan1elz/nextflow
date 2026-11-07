@@ -127,26 +127,38 @@ public class GetClientByIdUseCase(
 }
 
 /// <summary>
-/// Listagem (T-CD3). Filtros: <c>search</c> (nome, CPF, telefone), <c>isActive</c> e <c>birthdaysThisMonth</c>
-/// (aniversariantes no mês da data de negócio, L-CP7).
+/// Listagem (T-CD3). Filtros: <c>search</c> (nome, CPF, telefone), <c>isActive</c>, <c>birthdaysThisMonth</c>
+/// (aniversariantes no mês da data de negócio, L-CP7), <c>cityId</c>, <c>stateId</c> e <c>purchases</c> (ver
+/// <see cref="RegistryListFilters.Purchases"/>). Número de compras, total e última compra vêm das vendas pagas.
 /// </summary>
 public class GetAllClientsUseCase(
     IClientRepository clientRepository,
     IContactRepository contactRepository,
+    IAddressRepository addressRepository,
+    IOrderRepository orderRepository,
     IOwnerDirectory ownerDirectory,
     IBusinessClock clock,
     IResultFactory<PaginationDto<ClientListItemDto>> resultFactory)
     : GetAllUseCaseBase<Client, IClientRepository, ClientListItemDto>(clientRepository, resultFactory)
 {
     private List<Guid> _ownersByPhone = [];
+    private readonly List<IdFilter> _idFilters = [];
     private IReadOnlyDictionary<Guid, OwnerSummaryDto> _summaries = new Dictionary<Guid, OwnerSummaryDto>();
+    private Dictionary<Guid, PurchaseStatsDto> _stats = [];
 
     public override async Task<ResultDto<PaginationDto<ClientListItemDto>>> Execute(
         int offset, int limit, IReadOnlyDictionary<string, string>? filters,
         string? sort = null, string? order = null, CancellationToken ct = default)
     {
-        if (new FilterSet(filters).TryGetString("search", out var search) && Digits.Only(search) is { Length: > 0 } digits)
+        var set = new FilterSet(filters);
+        if (set.TryGetString("search", out var search) && Digits.Only(search) is { Length: > 0 } digits)
             _ownersByPhone = await contactRepository.GetOwnerIdsByPhone(OwnerTypeEnum.Client, digits, ct);
+
+        _idFilters.Clear();
+        if (await RegistryListFilters.Place(set, addressRepository, OwnerTypeEnum.Client, ct) is { } place)
+            _idFilters.Add(place);
+        if (await RegistryListFilters.Purchases(set, clock, orderRepository.GetClientIdsWithPurchase, ct) is { } purchases)
+            _idFilters.Add(purchases);
 
         return await base.Execute(offset, limit, filters, sort, order, ct);
     }
@@ -167,11 +179,21 @@ public class GetAllClientsUseCase(
             builder.And(c => c.BirthDate != null && c.BirthDate.Value.Month == month);
         }
 
+        foreach (var filter in _idFilters)
+        {
+            var ids = filter.Ids;
+            builder.And(filter.Include ? c => ids.Contains(c.Id) : c => !ids.Contains(c.Id));
+        }
+
         return builder.Predicate;
     }
 
     protected override async Task PrepareMapping(IReadOnlyList<Client> items, CancellationToken ct)
-        => _summaries = await ownerDirectory.GetSummaries(OwnerTypeEnum.Client, [.. items.Select(c => c.Id)], ct);
+    {
+        var ids = items.Select(c => c.Id).ToList();
+        _summaries = await ownerDirectory.GetSummaries(OwnerTypeEnum.Client, ids, ct);
+        _stats = await orderRepository.GetClientStats(ids, ct);
+    }
 
     protected override Func<IQueryable<Client>, IOrderedQueryable<Client>> GetOrderBy()
         => q => q.OrderBy(c => c.Name).ThenBy(c => c.LastName).ThenBy(c => c.Id);
@@ -184,7 +206,17 @@ public class GetAllClientsUseCase(
             ["createdAt"] = c => c.CreatedAt,
         };
 
-    protected override ClientListItemDto MapToResponseDto(Client entity) => new(entity, _summaries.GetValueOrDefault(entity.Id));
+    protected override ClientListItemDto MapToResponseDto(Client entity)
+    {
+        var dto = new ClientListItemDto(entity, _summaries.GetValueOrDefault(entity.Id));
+        if (_stats.TryGetValue(entity.Id, out var stats))
+        {
+            dto.OrderCount = stats.Count;
+            dto.TotalSpent = stats.Total;
+            dto.LastPurchaseOn = stats.LastAt is { } last ? clock.ToBusinessDate(last) : null;
+        }
+        return dto;
+    }
 }
 
 /// <summary>Combo de cliente na venda: só ativos, com CPF mascarado e telefone (T-CD4).</summary>

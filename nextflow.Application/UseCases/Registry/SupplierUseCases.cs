@@ -89,23 +89,36 @@ public class GetSupplierByIdUseCase(
     protected override SupplierResponseDto MapToResponseDto(Supplier entity) => new(entity);
 }
 
-/// <summary>Listagem (T-CD1). Filtros: <c>search</c> (nome, CNPJ), <c>isActive</c>, <c>cityId</c>.</summary>
+/// <summary>
+/// Listagem (T-CD1). Filtros: <c>search</c> (nome, CNPJ), <c>isActive</c>, <c>cityId</c>, <c>stateId</c>, <c>purchases</c>
+/// (ver <see cref="RegistryListFilters.Purchases"/>) e <c>pendingOrders</c>. Última compra e prazo real vêm dos pedidos.
+/// </summary>
 public class GetAllSuppliersUseCase(
     ISupplierRepository supplierRepository,
     IAddressRepository addressRepository,
+    IPurchaseOrderRepository purchaseOrderRepository,
     IOwnerDirectory ownerDirectory,
+    IBusinessClock clock,
     IResultFactory<PaginationDto<SupplierListItemDto>> resultFactory)
     : GetAllUseCaseBase<Supplier, ISupplierRepository, SupplierListItemDto>(supplierRepository, resultFactory)
 {
-    private List<Guid>? _ownersInCity;
+    private readonly List<IdFilter> _idFilters = [];
     private IReadOnlyDictionary<Guid, OwnerSummaryDto> _summaries = new Dictionary<Guid, OwnerSummaryDto>();
+    private Dictionary<Guid, PurchaseStatsDto> _stats = [];
 
     public override async Task<ResultDto<PaginationDto<SupplierListItemDto>>> Execute(
         int offset, int limit, IReadOnlyDictionary<string, string>? filters,
         string? sort = null, string? order = null, CancellationToken ct = default)
     {
-        if (new FilterSet(filters).TryGetString("cityId", out var raw) && Guid.TryParse(raw, out var cityId))
-            _ownersInCity = await addressRepository.GetOwnerIdsByCity(OwnerTypeEnum.Supplier, cityId, ct);
+        var set = new FilterSet(filters);
+        _idFilters.Clear();
+
+        if (await RegistryListFilters.Place(set, addressRepository, OwnerTypeEnum.Supplier, ct) is { } place)
+            _idFilters.Add(place);
+        if (await RegistryListFilters.Purchases(set, clock, purchaseOrderRepository.GetSupplierIdsWithPurchase, ct) is { } purchases)
+            _idFilters.Add(purchases);
+        if (set.TryGetString("pendingOrders", out var rawPending) && FilterValueParsers.TryParseBool(rawPending, out var pending))
+            _idFilters.Add(new IdFilter(await purchaseOrderRepository.GetSupplierIdsWithPendingOrders(ct), pending));
 
         return await base.Execute(offset, limit, filters, sort, order, ct);
     }
@@ -118,14 +131,21 @@ public class GetAllSuppliersUseCase(
         if (set.TryGetString("search", out var search))
             builder.And(SupplierSearch.By(search));
 
-        if (_ownersInCity is { } owners)
-            builder.And(s => owners.Contains(s.Id));
+        foreach (var filter in _idFilters)
+        {
+            var ids = filter.Ids;
+            builder.And(filter.Include ? s => ids.Contains(s.Id) : s => !ids.Contains(s.Id));
+        }
 
         return builder.Predicate;
     }
 
     protected override async Task PrepareMapping(IReadOnlyList<Supplier> items, CancellationToken ct)
-        => _summaries = await ownerDirectory.GetSummaries(OwnerTypeEnum.Supplier, [.. items.Select(s => s.Id)], ct);
+    {
+        var ids = items.Select(s => s.Id).ToList();
+        _summaries = await ownerDirectory.GetSummaries(OwnerTypeEnum.Supplier, ids, ct);
+        _stats = await purchaseOrderRepository.GetSupplierStats(ids, ct);
+    }
 
     protected override Func<IQueryable<Supplier>, IQueryable<Supplier>> GetInclude()
         => q => q.Include(s => s.Products.Where(link => link.Product.IsActive));
@@ -141,7 +161,16 @@ public class GetAllSuppliersUseCase(
             ["createdAt"] = s => s.CreatedAt,
         };
 
-    protected override SupplierListItemDto MapToResponseDto(Supplier entity) => new(entity, _summaries.GetValueOrDefault(entity.Id));
+    protected override SupplierListItemDto MapToResponseDto(Supplier entity)
+    {
+        var dto = new SupplierListItemDto(entity, _summaries.GetValueOrDefault(entity.Id));
+        if (_stats.TryGetValue(entity.Id, out var stats))
+        {
+            dto.LastPurchaseOn = stats.LastAt is { } last ? clock.ToBusinessDate(last) : null;
+            dto.RealLeadTimeDays = stats.AverageRealLeadTimeDays is { } average ? (int)Math.Round(average) : null;
+        }
+        return dto;
+    }
 }
 
 /// <summary>Combo de fornecedor: só ativos, label "nome · CNPJ" (T-CD2).</summary>
@@ -172,4 +201,20 @@ internal static class SupplierSearch
             ? s => s.Name.ToLower().Contains(term) || ((string)(object)s.Cnpj).Contains(digits)
             : s => s.Name.ToLower().Contains(term);
     }
+}
+
+/// <summary>
+/// Aba Produtos do fornecedor (T-CD2): produtos vinculados, ativos primeiro, o preferencial antes, depois por nome.
+/// </summary>
+public class GetSupplierProductsUseCase(
+    ISupplierRepository supplierRepository,
+    IResultFactory<List<SupplierProductDto>> resultFactory)
+    : GetByIdUseCaseBase<Supplier, ISupplierRepository, List<SupplierProductDto>>(supplierRepository, resultFactory)
+{
+    protected override List<SupplierProductDto> MapToResponseDto(Supplier entity)
+        => [.. entity.Products.Select(link => new SupplierProductDto(link, entity))
+            .OrderByDescending(p => p.ProductIsActive).ThenByDescending(p => p.IsPreferred).ThenBy(p => p.ProductName)];
+
+    protected override Func<IQueryable<Supplier>, IQueryable<Supplier>> GetInclude()
+        => q => q.Include(s => s.Products).ThenInclude(link => link.Product);
 }

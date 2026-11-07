@@ -13,6 +13,7 @@ namespace Nextflow.Controllers;
 public class SuppliersController(
     IGetAllUseCase<Supplier, SupplierListItemDto> getAllUseCase,
     IGetByIdUseCase<Supplier, SupplierResponseDto> getByIdUseCase,
+    IGetByIdUseCase<Supplier, List<SupplierProductDto>> getProductsUseCase,
     IGetOptionsUseCase<Supplier, Option> getOptionsUseCase,
     ICreateUseCase<SupplierRequestDto, SupplierResponseDto> createUseCase,
     IUpdateUseCase<SupplierRequestDto, SupplierResponseDto> updateUseCase,
@@ -32,6 +33,10 @@ public class SuppliersController(
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
         => Handle(await getByIdUseCase.Execute(id, ct));
+
+    [HttpGet("{id:guid}/products")]
+    public async Task<IActionResult> Products(Guid id, CancellationToken ct)
+        => Handle(await getProductsUseCase.Execute(id, ct));
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] SupplierRequestDto dto, CancellationToken ct)

@@ -25,4 +25,11 @@ public class AddressRepository(AppDbContext context) : BaseRepository<Address>(c
             .Select(a => a.OwnerId)
             .Distinct()
             .ToListAsync(ct);
+
+    public Task<List<Guid>> GetOwnerIdsByState(OwnerTypeEnum ownerType, Guid stateId, CancellationToken ct = default)
+        => _context.Set<Address>().AsNoTracking()
+            .Where(a => a.OwnerType == ownerType && a.City.StateId == stateId)
+            .Select(a => a.OwnerId)
+            .Distinct()
+            .ToListAsync(ct);
 }

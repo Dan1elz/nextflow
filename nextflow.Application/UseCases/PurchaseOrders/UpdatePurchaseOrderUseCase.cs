@@ -20,6 +20,9 @@ public class UpdatePurchaseOrderUseCase(
     private readonly IProductRepository _productRepository = productRepository;
     private readonly ICreateStockMovementUseCase _stockMovementUseCase = stockMovementUseCase;
 
+    /// <summary>True quando esta atualização muda o status para Recebido (transição, não reenvio).</summary>
+    private bool _isBeingReceived;
+
     protected override PurchaseOrderResponseDto MapToResponseDto(PurchaseOrder entity) => new(entity);
 
     protected override Func<IQueryable<PurchaseOrder>, IQueryable<PurchaseOrder>>? GetInclude() =>
@@ -32,6 +35,8 @@ public class UpdatePurchaseOrderUseCase(
 
         if (dto.Items != null && (entity.PurchaseStatus == PurchaseStatus.Received || entity.PurchaseStatus == PurchaseStatus.Canceled))
             throw new BadRequestException("Não é possível atualizar itens de um pedido recebido ou cancelado.");
+
+        _isBeingReceived = dto.Status == PurchaseStatus.Received && entity.PurchaseStatus != PurchaseStatus.Received;
     }
 
     protected override async Task BeforePersistence(PurchaseOrder entity, UpdatePurchaseOrderDto dto, CancellationToken ct)
@@ -57,12 +62,16 @@ public class UpdatePurchaseOrderUseCase(
             }
             entity.SetTotalAmount(totalAmount);
         }
+
+        // Registra a data de recebimento (lead time real)
+        if (_isBeingReceived)
+            entity.MarkAsReceived();
     }
 
     protected override async Task AfterPersistence(PurchaseOrder entity, UpdatePurchaseOrderDto dto, CancellationToken ct)
     {
-        // Se o status mudou para Received, aumenta estoque
-        if (dto.Status.HasValue && dto.Status.Value == PurchaseStatus.Received)
+        // Se o status mudou para Received: aumenta estoque e atualiza o custo de referência dos produtos
+        if (_isBeingReceived)
         {
             foreach (var item in entity.PurchaseItems)
             {
@@ -77,6 +86,17 @@ public class UpdatePurchaseOrderUseCase(
                     UserId = dto.UserId
                 }, ct);
             }
+
+            var lastCostByProduct = entity.PurchaseItems
+                .GroupBy(i => i.ProductId)
+                .ToDictionary(g => g.Key, g => g.Last().CostPrice);
+            var productIds = lastCostByProduct.Keys.ToList();
+            var products = await _productRepository.GetAllAsync(p => productIds.Contains(p.Id), 0, int.MaxValue, ct);
+
+            foreach (var product in products)
+                product.UpdateCostPrice(lastCostByProduct[product.Id]);
+
+            await _productRepository.SaveAsync(ct);
         }
     }
 }

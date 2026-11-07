@@ -1,27 +1,33 @@
+using System.Globalization;
 using System.Net;
 using System.Security.Claims; // <<-- MUDANÇA 1: Adicionar este using
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Microsoft.Extensions.FileProviders;
 using Newtonsoft.Json;
+using Nextflow.Application.Services;
+using Nextflow.Application.Services.Ai;
 using Nextflow.Application.UseCases.Users;
 using Nextflow.Application.Utils;
+using Nextflow.Domain.Interfaces.Repositories;
 using Nextflow.Domain.Interfaces.Utils;
 using Nextflow.Infrastructure.Database;
 using Nextflow.Infrastructure.Repositories;
 using Nextflow.Infrastructure.Seeders;
+using Nextflow.Infrastructure.Seeders.Demo;
+using Nextflow.Infrastructure.Storage;
 using Nextflow.Middlewares;
 
 namespace Nextflow;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
 
@@ -158,8 +164,22 @@ public class Program
             .AsImplementedInterfaces()
             .WithScopedLifetime());
 
-        builder.Services.AddScoped<IStorageService, LocalStorageService>();
+        // Seeders: toda implementação de ISeeder, executadas em ordem pelo SeederRunner no startup
+        builder.Services.Scan(scan => scan
+            .FromAssemblyOf<ISeeder>()
+            .AddClasses(classes => classes.AssignableTo<ISeeder>())
+            .As<ISeeder>()
+            .WithScopedLifetime());
+        builder.Services.AddScoped<SeederRunner>();
+        builder.Services.Configure<DemoSeedSettings>(builder.Configuration.GetSection(DemoSeedSettings.SectionName));
+
+        builder.Services.AddStorage(builder.Configuration);
+        builder.Services.AddScoped<IProductPricingService, ProductPricingService>();
+        builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
         builder.Services.AddScoped<JwtUtils>();
+
+        // *** IA (Previsão de demanda) — seção "Ai" (Provider, ApiKey, Model, TimeoutSeconds) ***
+        builder.Services.AddHttpClient<IAiClient, GeminiAiClient>();
 
         builder.Services.Configure<ApiBehaviorOptions>(options =>
         {
@@ -172,25 +192,12 @@ public class Program
         // Primeiro middleware: os demais (HTTPS redirect, HSTS, logs) já enxergam o esquema e o IP reais
         app.UseForwardedHeaders();
 
-        // *** VERIFICAÇÃO DE MIGRAÇÕES ***
+        // *** MIGRATIONS E SEEDERS ***
+        // Sem try/catch: se o banco ou o storage não estiverem prontos, a API não sobe (e o erro aparece no log)
         using (var scope = app.Services.CreateScope())
         {
-            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            try
-            {
-                dbContext.Database.Migrate();
-                // *** SEEDERS ***
-                UsersSeeder.Seed(dbContext);
-                CountriesSeeder.Seed(dbContext);
-                CitiesSeeder.Seed(dbContext);
-                SuppliersSeeder.Seed(dbContext);
-                CategoriesSeeder.Seed(dbContext);
-                ProductsSeeder.Seed(dbContext);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Erro ao aplicar migrações: " + ex.Message);
-            }
+            await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+            await scope.ServiceProvider.GetRequiredService<SeederRunner>().RunAsync(CancellationToken.None);
         }
 
 
@@ -212,16 +219,18 @@ public class Program
         }
 
         app.UseHttpsRedirection();
-        app.UseStaticFiles();
-        // Servir arquivos salvos em "assets/" (ex.: imagens de produtos)
-        var assetsRoot = Path.Combine(app.Environment.ContentRootPath, "assets");
-        Directory.CreateDirectory(assetsRoot);
-        app.UseStaticFiles(new StaticFileOptions
-        {
-            FileProvider = new PhysicalFileProvider(assetsRoot),
-            RequestPath = "/assets"
-        });
         app.UseCors();
+
+        // *** CULTURA INVARIANTE ***
+        // O model binding de form/query usa a cultura atual: num servidor pt-BR, "5.1" (multipart de produtos)
+        // viraria 51. Fixa a cultura invariante por requisição — mesmo comportamento do container Linux.
+        app.UseRequestLocalization(new RequestLocalizationOptions
+        {
+            DefaultRequestCulture = new RequestCulture(CultureInfo.InvariantCulture),
+            SupportedCultures = [CultureInfo.InvariantCulture],
+            SupportedUICultures = [CultureInfo.InvariantCulture]
+        });
+
         app.UseRouting();
 
         // *** MIDDLEWARES ***
@@ -237,6 +246,6 @@ public class Program
         app.MapHealthChecks("/health");
 
         // *** EXECUÇÃO DA APLICAÇÃO ***
-        app.Run();
+        await app.RunAsync();
     }
 }

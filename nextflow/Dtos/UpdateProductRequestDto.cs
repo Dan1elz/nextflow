@@ -33,4 +33,13 @@ public class UpdateProductRequestDto
     public decimal Price { get; set; }
 
     public DateOnly? Validity { get; set; }
+
+    [StringLength(60, ErrorMessage = "A marca não pode exceder 60 caracteres")]
+    public string? Brand { get; set; }
+
+    [Range(0.0, double.MaxValue, ErrorMessage = "O preço de custo não pode ser negativo")]
+    public decimal? CostPrice { get; set; }
+
+    [Range(0.0, double.MaxValue, ErrorMessage = "O estoque mínimo não pode ser negativo")]
+    public decimal MinStock { get; set; }
 }

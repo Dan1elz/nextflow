@@ -1,23 +1,29 @@
 using Nextflow.Application.UseCases.Base;
+using Nextflow.Application.Utils;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Exceptions;
 using Nextflow.Domain.Interfaces.Repositories;
 using Nextflow.Domain.Interfaces.UseCases;
+using Nextflow.Domain.Interfaces.Utils;
 using Nextflow.Domain.Models;
+using Nextflow.Domain.Utils;
 
 namespace Nextflow.Application.UseCases.Orders;
 public class CreateOrderUseCase(
     IOrderRepository repository,
     IProductRepository productRepository,
-    ICreateStockMovementUseCase createStockMovement
+    ICreateStockMovementUseCase createStockMovement,
+    IProductPricingService pricingService
 )
     : CreateUseCaseBase<Order, IOrderRepository, CreateOrderDto, OrderResponseDto>(repository), ICreateOrderUseCase
 {
     private readonly IProductRepository _productRepository = productRepository;
     private readonly ICreateStockMovementUseCase _createStockMovement = createStockMovement;
+    private readonly IProductPricingService _pricingService = pricingService;
 
-    private Dictionary<Guid, ProductResponseDto>? _productMap;
+    private Dictionary<Guid, Product>? _productMap;
+    private DateOnly _pricingDate;
 
     protected override Order MapToEntity(CreateOrderDto dto) => new(dto);
     protected override OrderResponseDto MapToResponseDto(Order entity) => new(entity);
@@ -29,13 +35,15 @@ public class CreateOrderUseCase(
 
         var productsId = dto.Items.Select(i => i.ProductId).Distinct().ToList();
 
-        var products = await _productRepository.GetAllAsync(p => productsId.Contains(p.Id), 0, int.MaxValue, ct);
-        var productDtos = products.Select(p => new ProductResponseDto(p)).ToList();
+        _pricingDate = BusinessClock.Today;
+        var pricingDate = _pricingDate;
+        var products = (await _productRepository.GetAllAsync(p => productsId.Contains(p.Id), 0, int.MaxValue, ct,
+            query => query.IncludeCurrentPromotions(pricingDate))).ToList();
 
-        if (productDtos.Count != productsId.Count)
+        if (products.Count != productsId.Count)
             throw new BadRequestException("Um ou mais produtos não foram encontrados.");
 
-        _productMap = productDtos.ToDictionary(p => p.Id);
+        _productMap = products.ToDictionary(p => p.Id);
 
         foreach (var item in dto.Items)
         {
@@ -62,7 +70,8 @@ public class CreateOrderUseCase(
             itemDto.OrderId = entity.Id;
             var orderItem = new OrderItem(itemDto);
 
-            var unitPrice = product.Price;
+            // Preço efetivo: aplica a promoção vigente (se houver)
+            var unitPrice = _pricingService.GetEffectivePrice(product, _pricingDate);
             var totalPrice = unitPrice * itemDto.Quantity;
 
             totalAmount += totalPrice;

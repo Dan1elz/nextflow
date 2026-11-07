@@ -2,11 +2,13 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Nextflow.Application.Filters;
 using Nextflow.Application.UseCases.Base;
+using Nextflow.Application.Utils;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Repositories;
 using Nextflow.Domain.Interfaces.Utils;
 using Nextflow.Domain.Models;
+using Nextflow.Domain.Utils;
 
 namespace Nextflow.Application.UseCases.Products;
 
@@ -17,14 +19,19 @@ public class GetAllProductsUseCase(IProductRepository repository, IStorageServic
     {
         var dto = new ProductResponseDto(entity)
         {
-            Image = storageService.GetFileUrl(entity.Image)
+            Image = storageService.GetPublicUrl(entity.Image)
         };
         return dto;
     }
-    protected override Func<IQueryable<Product>, IQueryable<Product>>? GetInclude() => query => query
-        .Include(s => s.Supplier)
-        .Include(c => c.CategoryProducts)
-            .ThenInclude(cp => cp.Category);
+    protected override Func<IQueryable<Product>, IQueryable<Product>>? GetInclude()
+    {
+        var today = BusinessClock.Today;
+        return query => query
+            .Include(s => s.Supplier)
+            .Include(c => c.CategoryProducts)
+                .ThenInclude(cp => cp.Category)
+            .IncludeCurrentPromotions(today);
+    }
 
     protected override void ApplyFilters(FilterExpressionBuilder<Product> builder, FilterSet filters)
     {

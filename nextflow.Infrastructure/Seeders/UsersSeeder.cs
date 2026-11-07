@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Nextflow.Infrastructure.Database;
 using Nextflow.Domain.Models;
 using Nextflow.Domain.Dtos;
@@ -5,11 +6,13 @@ using Nextflow.Domain.Enums;
 
 namespace Nextflow.Infrastructure.Seeders;
 
-public class UsersSeeder
+public class UsersSeeder(AppDbContext context) : ISeeder
 {
-    public static void Seed(AppDbContext context)
+    public int Order => 10;
+
+    public async Task SeedAsync(CancellationToken ct)
     {
-        if (context.Users.Any())
+        if (await context.Users.AnyAsync(ct))
         {
             return;
         }
@@ -31,6 +34,6 @@ public class UsersSeeder
 
         context.Users.AddRange(users);
 
-        context.SaveChanges();
+        await context.SaveChangesAsync(ct);
     }
 }

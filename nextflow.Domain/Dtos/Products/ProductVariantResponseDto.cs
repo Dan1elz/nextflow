@@ -1,3 +1,4 @@
+using Nextflow.Domain.Dtos.Promotions;
 using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Domain.Models;
 
@@ -5,7 +6,7 @@ namespace Nextflow.Domain.Dtos.Products;
 
 /// <summary>
 /// Linha da aba Variações (T3). <see cref="Label"/> é "P / Azul", na ordem da grade, e vazio na variação padrão oculta.
-/// Disponível é o físico da empresa inteira enquanto não houver orçamento (RN-CE08); promoção entra na F2.3.
+/// Disponível é o físico da empresa inteira enquanto não houver orçamento (RN-CE08); <see cref="ActivePromotion"/> é a promoção vigente (F2.3).
 /// </summary>
 public class ProductVariantResponseDto
 {
@@ -15,6 +16,7 @@ public class ProductVariantResponseDto
     public string? Barcode { get; set; }
     public decimal Price { get; set; }
     public decimal EffectivePrice { get; set; }
+    public PromotionSummaryDto? ActivePromotion { get; set; }
     public decimal? AverageCost { get; set; }
     public decimal? LastCost { get; set; }
     public decimal? MarginPercent { get; set; }
@@ -31,6 +33,7 @@ public class ProductVariantResponseDto
         Barcode = entity.Barcode;
         Price = entity.Price;
         EffectivePrice = pricing.GetEffectivePrice(entity);
+        ActivePromotion = pricing.GetActivePromotion(entity) is { } promotion ? new PromotionSummaryDto(promotion) : null;
         AverageCost = entity.AverageCost;
         LastCost = entity.LastCost;
         MarginPercent = AverageCost is { } cost && EffectivePrice > 0

@@ -90,13 +90,13 @@ public class ProductUseCaseRulesTests
     private static Supplier NewSupplier(string name = "Doces Ltda") => new(new SupplierRequestDto { Name = name, Cnpj = "11222333000181" });
 
     private CreateProductUseCase CreateWith(params Supplier[] suppliers)
-        => new(Products(), Categories(), Collections(), Variants(), Events(), Suppliers(suppliers), Substitute.For<IStockLocationRepository>(), _storage, new ProductPricingService(), ProductTestData.Clock(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
+        => new(Products(), Categories(), Collections(), Variants(), Events(), Suppliers(suppliers), Substitute.For<IStockLocationRepository>(), _storage, new ProductPricingService(ProductTestData.Clock()), ProductTestData.Clock(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
 
     private CreateProductUseCase Create(ICategoryRepository? categories = null, ICollectionRepository? collections = null, IProductVariantRepository? variants = null, IProductRepository? products = null)
-        => new(products ?? Products(), categories ?? Categories(), collections ?? Collections(), variants ?? Variants(), Events(), Suppliers(), Substitute.For<IStockLocationRepository>(), _storage, new ProductPricingService(), ProductTestData.Clock(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
+        => new(products ?? Products(), categories ?? Categories(), collections ?? Collections(), variants ?? Variants(), Events(), Suppliers(), Substitute.For<IStockLocationRepository>(), _storage, new ProductPricingService(ProductTestData.Clock()), ProductTestData.Clock(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
 
     private UpdateProductUseCase Update(Product product, ICategoryRepository? categories = null, ICollectionRepository? collections = null, IProductVariantRepository? variants = null, IProductRepository? products = null)
-        => new(products ?? Products(product), categories ?? Categories(), collections ?? Collections(), variants ?? Variants([.. product.Variants]), Events(), Suppliers(), Substitute.For<IStockLocationRepository>(), Substitute.For<IStockBalanceRepository>(), _storage, new ProductPricingService(), ProductTestData.Clock(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
+        => new(products ?? Products(product), categories ?? Categories(), collections ?? Collections(), variants ?? Variants([.. product.Variants]), Events(), Suppliers(), Substitute.For<IStockLocationRepository>(), Substitute.For<IStockBalanceRepository>(), _storage, new ProductPricingService(ProductTestData.Clock()), ProductTestData.Clock(), _unitOfWork, new ProductRequestDtoValidator(), new ResultFactory<ProductResponseDto>());
 
     private static ProductRequestDto Simple(string sku = "CAD-1", string? barcode = null) => new()
     {

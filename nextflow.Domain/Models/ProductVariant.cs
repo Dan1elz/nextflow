@@ -31,9 +31,10 @@ public class ProductVariant : BaseModel
 
     private ProductVariant() { }
 
-    public ProductVariant(ProductVariantRequestDto dto, Guid productId, short sortOrder, Guid changedById, DateOnly today)
+    public ProductVariant(ProductVariantRequestDto dto, Product product, short sortOrder, Guid changedById, DateOnly today)
     {
-        ProductId = productId;
+        ProductId = product.Id;
+        Product = product;
         Apply(dto, sortOrder);
         PriceHistory.Add(new PriceHistory(Id, Price, today, changedById));
     }

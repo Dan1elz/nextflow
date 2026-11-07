@@ -7,8 +7,8 @@ namespace Nextflow.Domain.Dtos.Products;
 
 /// <summary>
 /// Cabeçalho da tela T3. Disponível é o físico da empresa inteira, somado entre as variações ativas (RN-CE08, sem orçamento
-/// ainda); custo médio é a faixa entre as variações ativas que já têm custo (RN-CE31). Promoção entra na F2.3; classe ABC
-/// e cobertura alvo, na F1.8.
+/// ainda); custo médio é a faixa entre as variações ativas que já têm custo (RN-CE31). Promoção: maior desconto vigente entre
+/// as variações não removidas (F2.3); classe ABC e cobertura alvo, na F1.8.
 /// </summary>
 public class ProductResponseDto
 {
@@ -65,6 +65,7 @@ public class ProductResponseDto
         HasVariants = entity.HasVariants;
         MinEffectivePrice = prices.DefaultIfEmpty(0).Min();
         MaxEffectivePrice = prices.DefaultIfEmpty(0).Max();
+        ActivePromotionPercent = ProductListItemDto.ActivePercentOf(entity, pricing);
         MinAverageCost = costs.Count > 0 ? costs.Min() : null;
         MaxAverageCost = costs.Count > 0 ? costs.Max() : null;
         AvailableQuantity = entity.Variants.SelectMany(v => v.Balances).Sum(b => b.Quantity);

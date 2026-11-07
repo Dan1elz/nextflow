@@ -442,7 +442,7 @@ public class ProductDtoMappingTests
         })],
     });
 
-    private static readonly ProductPricingService Pricing = new();
+    private static readonly ProductPricingService Pricing = new(ProductTestData.Clock());
 
     [Fact]
     [Trait("Rule", "RN-VD02")]

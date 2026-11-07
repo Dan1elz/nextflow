@@ -1,4 +1,5 @@
 using Nextflow.Domain.Dtos.Products;
+using Nextflow.Domain.Dtos.Promotions;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Domain.Models;
@@ -8,7 +9,7 @@ namespace Nextflow.Domain.Dtos.Sales;
 /// <summary>
 /// Opção do seletor de venda (T-VD1), uma por variação. <see cref="EffectivePrice"/> vem do <c>IProductPricingService</c>
 /// (RN-VD02). <see cref="AvailableQuantity"/> é o disponível no local de venda (RN-CE08): enquanto não houver orçamento
-/// (F2.5), é o saldo físico. <see cref="ActivePromotion"/> entra na F2.3 e <see cref="NextLot"/> na F1.7.
+/// (F2.5), é o saldo físico. <see cref="ActivePromotion"/> é a promoção vigente (F2.3); <see cref="NextLot"/> entra na F1.7.
 /// </summary>
 public class VariantSaleOptionDto
 {
@@ -25,7 +26,7 @@ public class VariantSaleOptionDto
     public bool AllowsNegative { get; set; }
     public decimal ListPrice { get; set; }
     public decimal EffectivePrice { get; set; }
-    public SaleOptionPromotionDto? ActivePromotion { get; set; }
+    public PromotionSummaryDto? ActivePromotion { get; set; }
     public decimal AvailableQuantity { get; set; }
     /// <summary>Local de venda resolvido (o informado ou o padrão da loja): de onde a venda baixa e o que o aviso de falta exclui.</summary>
     public Guid LocationId { get; set; }
@@ -49,6 +50,7 @@ public class VariantSaleOptionDto
         ImageUrl = imageUrl;
         ListPrice = entity.Price;
         EffectivePrice = pricing.GetEffectivePrice(entity);
+        ActivePromotion = pricing.GetActivePromotion(entity) is { } promotion ? new PromotionSummaryDto(promotion) : null;
         LocationId = locationId;
         AvailableQuantity = availableQuantity;
         IsActive = entity.IsActive;

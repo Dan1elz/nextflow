@@ -868,6 +868,90 @@ namespace Nextflow.Infrastructure.Migrations
                     b.ToTable("product_variant_values", (string)null);
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.Promotion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("BelowCostConfirmed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("below_cost_confirmed");
+
+                    b.Property<DateTime?>("CanceledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("canceled_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<decimal>("DiscountPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("discount_percent");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
+
+                    b.Property<Guid?>("ForecastRecommendationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("forecast_recommendation_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reason");
+
+                    b.Property<byte>("Source")
+                        .HasColumnType("smallint")
+                        .HasColumnName("source");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
+
+                    b.Property<Guid?>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_promotions");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_promotions_created_by_id");
+
+                    b.HasIndex("StartDate")
+                        .HasDatabaseName("ix_promotions_start_date");
+
+                    b.HasIndex("VariantId")
+                        .HasDatabaseName("ix_promotions_variant_id");
+
+                    b.HasIndex("ProductId", "StartDate", "EndDate")
+                        .HasDatabaseName("ix_promotions_product_id_start_date_end_date")
+                        .HasFilter("is_active");
+
+                    b.ToTable("promotions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_promotions_discount", "discount_percent >= 1 AND discount_percent <= 90");
+
+                            t.HasCheckConstraint("ck_promotions_period", "end_date >= start_date");
+                        });
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.State", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1562,6 +1646,35 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("Variant");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.Promotion", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_promotions_user_created_by_id");
+
+                    b.HasOne("Nextflow.Domain.Models.Product", "Product")
+                        .WithMany("Promotions")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_promotions_products_product_id");
+
+                    b.HasOne("Nextflow.Domain.Models.ProductVariant", "Variant")
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_promotions_product_variants_variant_id");
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Variant");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.State", b =>
                 {
                     b.HasOne("Nextflow.Domain.Models.Country", "Country")
@@ -1706,6 +1819,8 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("Categories");
 
                     b.Navigation("Events");
+
+                    b.Navigation("Promotions");
 
                     b.Navigation("Suppliers");
 

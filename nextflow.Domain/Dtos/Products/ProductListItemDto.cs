@@ -8,7 +8,7 @@ namespace Nextflow.Domain.Dtos.Products;
 /// Linha da listagem (T1), uma por produto. <see cref="AvailableQuantity"/> é o físico na loja do filtro (ou na empresa),
 /// enquanto não houver orçamento (RN-CE08). <see cref="HasLowStock"/>: alguma variação abaixo do mínimo efetivo em algum
 /// local do mesmo recorte (RN-CE33);
-/// <see cref="ActivePromotionPercent"/> entra na F2.3.
+/// <see cref="ActivePromotionPercent"/> é o maior desconto vigente entre as variações não removidas (F2.3).
 /// </summary>
 public class ProductListItemDto
 {
@@ -52,7 +52,15 @@ public class ProductListItemDto
         SaleUnit = entity.SaleUnit.GetApiName();
         DecimalPlaces = entity.DecimalPlaces;
         HasLowStock = hasLowStock;
+        ActivePromotionPercent = ActivePercentOf(entity, pricing);
     }
+
+    /// <summary>Maior desconto vigente entre as variações não removidas; nulo sem promoção (RN-VD12).</summary>
+    public static decimal? ActivePercentOf(Product entity, IProductPricingService pricing)
+        => entity.Variants
+            .Where(v => v.RemovedOn == null)
+            .Select(v => pricing.GetActivePromotion(v)?.DiscountPercent)
+            .Max();
 
     /// <summary>RN-CE52: categoria principal é a mais específica; entre iguais, a primeira pelo caminho.</summary>
     private static string? MainCategoryPath(Product entity)

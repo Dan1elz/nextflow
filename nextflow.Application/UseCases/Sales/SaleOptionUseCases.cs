@@ -66,6 +66,6 @@ public class GetVariantSaleOptionsUseCase(
     }
 
     private static Func<IQueryable<ProductVariant>, IQueryable<ProductVariant>> GetInclude()
-        => q => q.Include(v => v.Product)
+        => q => q.Include(v => v.Product).ThenInclude(p => p.Promotions.Where(promotion => promotion.IsActive))
             .Include(v => v.AttributeValues).ThenInclude(link => link.AttributeValue).ThenInclude(value => value.Attribute);
 }

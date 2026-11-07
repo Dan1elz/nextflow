@@ -247,7 +247,8 @@ public class CreateProductUseCase(
         => q => q.Include(p => p.Categories).ThenInclude(c => c.Category).ThenInclude(c => c.Parent)
             .Include(p => p.Collection)
             .Include(p => p.Variants).ThenInclude(v => v.Balances)
-            .Include(p => p.Events).ThenInclude(e => e.Event);
+            .Include(p => p.Events).ThenInclude(e => e.Event)
+            .Include(p => p.Promotions.Where(promotion => promotion.IsActive));
 }
 
 /// <summary>Trocar o tipo não apaga nada: ele só define padrões e campos da tela (RN-CE20, RN-CE55). Inativo não edita (RN-CE04, na base).</summary>
@@ -311,7 +312,8 @@ public class UpdateProductUseCase(
             .Include(p => p.Variants).ThenInclude(v => v.Balances)
             .Include(p => p.Variants).ThenInclude(v => v.LocationMinimums)
             .Include(p => p.Events).ThenInclude(e => e.Event)
-            .Include(p => p.Suppliers);
+            .Include(p => p.Suppliers)
+            .Include(p => p.Promotions.Where(promotion => promotion.IsActive));
 }
 
 public class DeleteProductUseCase(
@@ -340,7 +342,8 @@ public class GetProductByIdUseCase(
         => q => q.Include(p => p.Categories).ThenInclude(c => c.Category).ThenInclude(c => c.Parent)
             .Include(p => p.Collection)
             .Include(p => p.Variants).ThenInclude(v => v.Balances)
-            .Include(p => p.Events).ThenInclude(e => e.Event);
+            .Include(p => p.Events).ThenInclude(e => e.Event)
+            .Include(p => p.Promotions.Where(promotion => promotion.IsActive));
 }
 
 /// <summary>
@@ -361,7 +364,8 @@ public class GetProductVariantsUseCase(
             .Include(p => p.Variants)
             .ThenInclude(v => v.AttributeValues)
             .ThenInclude(link => link.AttributeValue)
-            .ThenInclude(value => value.Attribute);
+            .ThenInclude(value => value.Attribute)
+            .Include(p => p.Promotions.Where(promotion => promotion.IsActive));
 }
 
 /// <summary>Aba Fornecedores do T3: o preferido primeiro, depois pelo nome.</summary>
@@ -465,7 +469,8 @@ public class GetAllProductsUseCase(
 
     protected override Func<IQueryable<Product>, IQueryable<Product>> GetInclude()
         => q => q.Include(p => p.Categories).ThenInclude(c => c.Category).ThenInclude(c => c.Parent)
-            .Include(p => p.Variants);
+            .Include(p => p.Variants)
+            .Include(p => p.Promotions.Where(promotion => promotion.IsActive));
 
     protected override Func<IQueryable<Product>, IOrderedQueryable<Product>> GetOrderBy()
         => q => q.OrderBy(p => p.Name).ThenBy(p => p.Id);

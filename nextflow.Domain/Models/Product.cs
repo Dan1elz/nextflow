@@ -40,6 +40,8 @@ public class Product : BaseModel, IDeletable
     public virtual ICollection<ProductVariant> Variants { get; private set; } = [];
     public virtual ICollection<ProductEvent> Events { get; private set; } = [];
     public virtual ICollection<ProductSupplier> Suppliers { get; private set; } = [];
+    /// <summary>Promoções do produto inteiro ou de uma variação (T-VD7); o preço efetivo lê as vigentes (RN-VD02).</summary>
+    public virtual ICollection<Promotion> Promotions { get; private set; } = [];
 
     public override string Preposition => "o";
     public override string Singular => "produto";
@@ -175,7 +177,7 @@ public class Product : BaseModel, IDeletable
             var variant = Variants.FirstOrDefault(v => v.Id == dto.Id);
             if (variant is null)
             {
-                variant = new ProductVariant(dto, Id, (short)index, changedById, today);
+                variant = new ProductVariant(dto, this, (short)index, changedById, today);
                 Variants.Add(variant);
             }
             else

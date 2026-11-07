@@ -74,12 +74,42 @@ public class ManualMovementValidatorTests
 
     [Fact]
     [Trait("Rule", "T9")]
-    public void Should_RejectLot_When_LotInformedBeforeLotControl()
+    public void Should_RejectNewLot_When_ExistingLotAlsoInformed()
     {
         var dto = Dto(MovementTypeEnum.In, MovementReasonEnum.Opening);
         dto.LotId = Guid.NewGuid();
         dto.NewLot = new ManualMovementLotDto { Code = "L1", ExpiresOn = new DateOnly(2027, 1, 1) };
 
-        Fields(dto).ShouldBe(["LotId", "NewLot"], ignoreOrder: true);
+        Fields(dto).ShouldBe(["NewLot"]);
+    }
+
+    [Fact]
+    [Trait("Rule", "T9")]
+    public void Should_RejectNewLot_When_Outbound()
+    {
+        var dto = Dto(MovementTypeEnum.Out, MovementReasonEnum.Breakage);
+        dto.NewLot = new ManualMovementLotDto { Code = "L1", ExpiresOn = new DateOnly(2027, 1, 1) };
+
+        Fields(dto).ShouldBe(["NewLot"]);
+    }
+
+    [Fact]
+    [Trait("Rule", "T9")]
+    public void Should_RequireCodeAndExpiry_When_NewLot()
+    {
+        var dto = Dto(MovementTypeEnum.In, MovementReasonEnum.Opening);
+        dto.NewLot = new ManualMovementLotDto { Code = " " };
+
+        Fields(dto).ShouldBe(["newLot.code", "newLot.expiresOn"], ignoreOrder: true);
+    }
+
+    [Fact]
+    [Trait("Rule", "T9")]
+    public void Should_Accept_When_NewLotOnInbound()
+    {
+        var dto = Dto(MovementTypeEnum.In, MovementReasonEnum.Opening);
+        dto.NewLot = new ManualMovementLotDto { Code = "L1", ExpiresOn = new DateOnly(2027, 1, 1) };
+
+        Fields(dto).ShouldBeEmpty();
     }
 }

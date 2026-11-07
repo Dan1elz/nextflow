@@ -152,7 +152,7 @@ public class ManualMovementApiTests(AccessApiFixture api)
 
     [Fact]
     [Trait("Rule", "T9")]
-    public async Task Should_Return422_When_LotInformedBeforeLotControl()
+    public async Task Should_Return422_When_LotInformedForProductWithoutLotTracking()
     {
         var setup = await Arrange();
 

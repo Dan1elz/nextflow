@@ -19,13 +19,16 @@ public class StockLedgerTests
     private readonly IStockMovementRepository _movements = Substitute.For<IStockMovementRepository>();
     private readonly StockLocation _location = new(new LocationRequestDto { StoreId = Guid.NewGuid(), Name = "Loja" });
     private readonly List<StockMovement> _added = [];
+    private readonly List<Lot> _lots = [];
 
-    private static Product NewProduct(bool allowsNegative) => ProductTestData.NewProduct(new ProductRequestDto
+    private static Product NewProduct(bool allowsNegative, bool tracksLots = false) => ProductTestData.NewProduct(new ProductRequestDto
     {
         Name = "Caderno",
         ProductType = ProductTypeEnum.Standard,
         SaleUnit = SaleUnitEnum.Unit,
         AllowsNegative = allowsNegative,
+        TracksLots = tracksLots,
+        ShelfLifeDays = tracksLots ? 90 : null,
         Variants = [new() { Sku = $"CAD-{Guid.NewGuid():N}"[..12], Price = 20m }],
     });
 
@@ -50,7 +53,22 @@ public class StockLedgerTests
             .Returns(new Dictionary<Guid, decimal> { [product.Variants.Single().Id] = companyQuantity });
         _movements.AddAsync(Arg.Do<StockMovement>(_added.Add), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        return new StockLedger(_balances, _movements, variants, products, locations);
+        var lots = Substitute.For<ILotRepository>();
+        lots.GetForVariants(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>()).Returns(_ => _lots.ToList());
+
+        return new StockLedger(_balances, _movements, variants, products, locations, lots);
+    }
+
+    /// <summary>Lote da variação com saldo no local, já registrado no repositório substituído.</summary>
+    private StockBalance LotBalance(Product product, string code, DateOnly expiresOn, decimal quantity)
+    {
+        var lot = new Lot(product.Variants.Single().Id, code, expiresOn);
+        _lots.Add(lot);
+        var line = Line(product, MovementTypeEnum.In, quantity);
+        line.LotId = lot.Id;
+        var balance = new StockBalance(line);
+        balance.Apply(quantity);
+        return balance;
     }
 
     private StockLineDto Line(Product product, MovementTypeEnum type, decimal quantity, decimal? unitCost = null) => new()
@@ -168,6 +186,66 @@ public class StockLedgerTests
         balance.Quantity.ShouldBe(-2m);
         _added.Single().Quantity.ShouldBe(-5m);
         _added.Single().BalanceAfter.ShouldBe(-2m);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE10")]
+    public async Task Should_Reject_When_InboundOfLotTrackedProductWithoutLot()
+    {
+        var product = NewProduct(allowsNegative: false, tracksLots: true);
+        var ledger = Ledger(product, companyQuantity: 0);
+
+        var failures = await ledger.Post(Document(), [Line(product, MovementTypeEnum.In, 5, unitCost: 2m)], CancellationToken.None);
+
+        failures.Single().PropertyName.ShouldBe("Lines[0].LotId");
+        failures.Single().ErrorMessage.ShouldBe(StockLedger.LotRequiredMessage);
+        _added.ShouldBeEmpty();
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE10")]
+    public async Task Should_Reject_When_LotGivenForProductWithoutLotTracking()
+    {
+        var product = NewProduct(allowsNegative: false);
+        var ledger = Ledger(product, companyQuantity: 0);
+        var line = Line(product, MovementTypeEnum.In, 5, unitCost: 2m);
+        line.LotId = Guid.NewGuid();
+
+        var failures = await ledger.Post(Document(), [line], CancellationToken.None);
+
+        failures.Single().PropertyName.ShouldBe("Lines[0].LotId");
+        failures.Single().ErrorMessage.ShouldBe(StockLedger.LotNotTrackedMessage);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE15")]
+    public async Task Should_SplitOutboundByEarliestExpiry_When_NoLotChosen()
+    {
+        var product = NewProduct(allowsNegative: false, tracksLots: true);
+        var later = LotBalance(product, "L-B", new DateOnly(2027, 3, 1), 5);
+        var earlier = LotBalance(product, "L-A", new DateOnly(2027, 1, 1), 3);
+        var ledger = Ledger(product, companyQuantity: 8, later, earlier);
+
+        var failures = await ledger.Post(Document(), [Line(product, MovementTypeEnum.Out, 6)], CancellationToken.None);
+
+        failures.ShouldBeEmpty();
+        _added.Select(m => (m.LotId, m.Quantity, m.BalanceAfter))
+            .ShouldBe(new (Guid?, decimal, decimal)[] { (earlier.LotId, -3m, 0m), (later.LotId, -3m, 2m) });
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE32")]
+    public async Task Should_Reject_When_LotsDoNotCoverOutboundAndFlagOff()
+    {
+        var product = NewProduct(allowsNegative: false, tracksLots: true);
+        var balance = LotBalance(product, "L-A", new DateOnly(2027, 1, 1), 2);
+        var ledger = Ledger(product, companyQuantity: 2, balance);
+
+        var failures = await ledger.Post(Document(), [Line(product, MovementTypeEnum.Out, 3)], CancellationToken.None);
+
+        failures.Single().PropertyName.ShouldBe("Lines[0].Quantity");
+        balance.Quantity.ShouldBe(2m);
+        _added.ShouldBeEmpty();
     }
 
     [Fact]

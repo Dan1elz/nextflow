@@ -34,10 +34,10 @@ public class PurchaseReceivingApiTests(AccessApiFixture api)
         return string.Concat(digits);
     }
 
-    private sealed record Setup(HttpClient Client, Guid SupplierId, Guid VariantId, Guid StoreId, Guid ShopId);
+    private sealed record Setup(HttpClient Client, Guid SupplierId, Guid VariantId, Guid StoreId, Guid ShopId, Guid ProductId);
 
     /// <summary>Fornecedor, produto simples vinculado a ele e uma loja nova com o local "Loja".</summary>
-    private async Task<Setup> Arrange(bool linked = true)
+    private async Task<Setup> Arrange(bool linked = true, bool tracksLots = false)
     {
         var client = await api.AdminAsync();
         var supplier = await client.PostAsJsonAsync("/api/suppliers", new { name = Unique("Forn"), cnpj = NewCnpj(), leadTimeDays = 5 });
@@ -48,6 +48,8 @@ public class PurchaseReceivingApiTests(AccessApiFixture api)
         {
             name = Unique("Bombom"),
             productType = "Standard",
+            tracksLots,
+            shelfLifeDays = tracksLots ? 90 : (int?)null,
             saleUnit = "Unit",
             decimalPlaces = 0,
             variants = new[] { new { sku = Unique("BOM"), price = 10m, isActive = true } },
@@ -58,7 +60,7 @@ public class PurchaseReceivingApiTests(AccessApiFixture api)
         var variantId = Id((await Json(await client.GetAsync($"/api/products/{productId}/variants")))[0]);
 
         var store = await Json(await client.PostAsJsonAsync("/api/stores", new { name = Unique("Loja") }));
-        return new(client, supplierId, variantId, Id(store), Id(store.GetProperty("locations")[0]));
+        return new(client, supplierId, variantId, Id(store), Id(store.GetProperty("locations")[0]), productId);
     }
 
     /// <summary>Pedido com um item, já enviado ao fornecedor (Pendente).</summary>
@@ -164,6 +166,94 @@ public class PurchaseReceivingApiTests(AccessApiFixture api)
         await using var read = api.CreateContext();
         (await read.Set<StockMovement>().CountAsync(m => m.VariantId == setup.VariantId)).ShouldBe(0);
         (await read.Set<PurchaseOrder>().SingleAsync(p => p.Id == Id(order))).Status.ShouldBe(PurchaseStatusEnum.Pending);
+    }
+
+    private static object LotsBody(JsonElement order, params (string Code, string ExpiresOn, decimal Quantity)[] lots) => new
+    {
+        version = Version(order),
+        items = new[]
+        {
+            new
+            {
+                itemId = Id(order.GetProperty("items")[0]),
+                lots = lots.Select(l => new { code = l.Code, expiresOn = l.ExpiresOn, quantity = l.Quantity }).ToArray(),
+            },
+        },
+    };
+
+    [Fact]
+    [Trait("Rule", "RN-CE10")]
+    public async Task Should_Return422_When_LotTrackedItemReceivedWithoutLotsOrWrongSum()
+    {
+        var setup = await Arrange(tracksLots: true);
+        var order = await PendingOrder(setup, 10, 2m);
+        var url = $"{Route}/{Id(order)}/receive";
+
+        await ShouldFailOn(await setup.Client.PostAsJsonAsync(url, ReceiveBody(order)), "items[0].lots");
+        await ShouldFailOn(await setup.Client.PostAsJsonAsync(url, LotsBody(order, ("A1", "2027-01-01", 4m))), "items[0].lots");
+        await ShouldFailOn(await setup.Client.PostAsJsonAsync(url, LotsBody(order, ("A1", "2027-01-01", 4m), ("a1 ", "2027-01-01", 6m))), "items[0].lots");
+
+        await using var read = api.CreateContext();
+        (await read.Set<StockMovement>().CountAsync(m => m.VariantId == setup.VariantId)).ShouldBe(0);
+        (await read.Set<Lot>().CountAsync(l => l.VariantId == setup.VariantId)).ShouldBe(0);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE15")]
+    public async Task Should_RecordLotsAndConsumeEarliestExpiryFirst_When_ReceivingLotTrackedItem()
+    {
+        var setup = await Arrange(tracksLots: true);
+        var order = await PendingOrder(setup, 10, 2m);
+
+        var response = await setup.Client.PostAsJsonAsync($"{Route}/{Id(order)}/receive",
+            LotsBody(order, ("B-LATE", "2027-03-01", 6m), ("A-SOON", "2027-01-01", 4m)));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var received = await Json(response);
+
+        var item = received.GetProperty("items")[0];
+        item.GetProperty("averageCostAfter").GetDecimal().ShouldBe(2m);
+        item.GetProperty("lots").EnumerateArray().Select(l => (l.GetProperty("lotCode").GetString(), l.GetProperty("quantity").GetDecimal()))
+            .ShouldBe(new (string?, decimal)[] { ("B-LATE", 6m), ("A-SOON", 4m) }, ignoreOrder: true);
+
+        // Saída sem lote escolhido: o que vence primeiro sai antes (FEFO).
+        var loss = await setup.Client.PostAsJsonAsync("/api/stock-movements/manual", new
+        {
+            variantId = setup.VariantId,
+            locationId = setup.ShopId,
+            type = "Out",
+            reason = "Breakage",
+            quantity = 5,
+        });
+        loss.StatusCode.ShouldBe(HttpStatusCode.NoContent, await loss.Content.ReadAsStringAsync());
+
+        var lots = await Json(await setup.Client.GetAsync($"/api/products/{setup.ProductId}/lots?storeId={setup.StoreId}"));
+        lots.EnumerateArray().Select(l => (l.GetProperty("code").GetString(), l.GetProperty("quantity").GetDecimal()))
+            .ShouldBe(new (string?, decimal)[] { ("B-LATE", 5m) });
+
+        await using var read = api.CreateContext();
+        (await read.Set<StockBalance>().Where(b => b.VariantId == setup.VariantId).SumAsync(b => b.Quantity)).ShouldBe(5m);
+        (await read.Set<StockMovement>().CountAsync(m => m.VariantId == setup.VariantId)).ShouldBe(4);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE10")]
+    public async Task Should_Return422_When_LotCodeExistsWithAnotherExpiry()
+    {
+        var setup = await Arrange(tracksLots: true);
+        var first = await PendingOrder(setup, 2, 2m);
+        (await setup.Client.PostAsJsonAsync($"{Route}/{Id(first)}/receive", LotsBody(first, ("L-9", "2027-01-01", 2m))))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var second = await PendingOrder(setup, 2, 2m);
+        await ShouldFailOn(await setup.Client.PostAsJsonAsync($"{Route}/{Id(second)}/receive", LotsBody(second, ("L-9", "2027-02-01", 2m))),
+            "items[0].lots[0].code");
+
+        // Mesmo código e mesma validade: é o mesmo lote, a entrada soma no saldo dele.
+        (await setup.Client.PostAsJsonAsync($"{Route}/{Id(second)}/receive", LotsBody(second, ("l-9", "2027-01-01", 2m))))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await using var read = api.CreateContext();
+        (await read.Set<Lot>().CountAsync(l => l.VariantId == setup.VariantId)).ShouldBe(1);
+        (await read.Set<StockBalance>().SingleAsync(b => b.VariantId == setup.VariantId)).Quantity.ShouldBe(4m);
     }
 
     [Fact]

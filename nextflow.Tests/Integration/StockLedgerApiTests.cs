@@ -34,7 +34,7 @@ public class StockLedgerApiTests(AccessApiFixture api)
 
     private static StockLedger Ledger(AppDbContext context)
         => new(new StockBalanceRepository(context), new StockMovementRepository(context), new ProductVariantRepository(context),
-            new ProductRepository(context), new StockLocationRepository(context));
+            new ProductRepository(context), new StockLocationRepository(context), new LotRepository(context));
 
     private sealed record Setup(HttpClient Client, string ProductId, Guid VariantId, string StoreId, Guid MainLocationId, Guid DepositId);
 

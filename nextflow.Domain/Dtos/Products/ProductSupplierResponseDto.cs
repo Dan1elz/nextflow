@@ -4,7 +4,8 @@ namespace Nextflow.Domain.Dtos.Products;
 
 /// <summary>
 /// Linha da aba Fornecedores (T3). <see cref="LeadTimeDays"/> é o efetivo: o do vínculo ou, sem ele, o do fornecedor (RN-CE60).
-/// Provisório: <see cref="LastCost"/> e <see cref="LastPurchaseOn"/> ficam nulos até o recebimento de compra (F2.8).
+/// <see cref="LastCost"/> vem do último recebimento desse fornecedor (F2.8). <see cref="LastPurchaseOn"/> segue nulo: o
+/// vínculo ainda não guarda a data da compra.
 /// </summary>
 public class ProductSupplierResponseDto
 {
@@ -31,5 +32,6 @@ public class ProductSupplierResponseDto
         LeadTimeDays = entity.LeadTimeDays ?? (entity.Supplier != null ? entity.Supplier.LeadTimeDays : 0);
         MinOrderQty = entity.MinOrderQty;
         OrderMultiple = entity.OrderMultiple;
+        LastCost = entity.LastCost;
     }
 }

@@ -6,7 +6,8 @@ namespace Nextflow.Domain.Dtos.PurchaseOrders;
 
 /// <summary>
 /// O que a linha do pedido mostra ao escolher a variação (T-CP2): vínculo com o fornecedor (RN-CE27, RN-CE30), custo médio
-/// (RN-CE31), disponível na loja e a caminho (RN-CP05). O último custo pago ao fornecedor fica nulo até a F2.8.
+/// (RN-CE31), disponível na loja e a caminho (RN-CP05). O custo inicial da linha é o último pago a esse fornecedor
+/// (<see cref="LastCostFromSupplier"/>) ou, sem ele, o último custo da variação (<see cref="LastCost"/>).
 /// </summary>
 public class PurchaseItemSuggestionDto
 {
@@ -23,6 +24,7 @@ public class PurchaseItemSuggestionDto
     public decimal? MinOrderQty { get; set; }
     public decimal? OrderMultiple { get; set; }
     public decimal? LastCostFromSupplier { get; set; }
+    public decimal? LastCost { get; set; }
     public decimal? AverageCost { get; set; }
     public decimal AvailableAtStore { get; set; }
     public decimal IncomingQuantity { get; set; }
@@ -47,6 +49,7 @@ public class PurchaseItemSuggestionDto
         MinOrderQty = link?.MinOrderQty;
         OrderMultiple = link?.OrderMultiple;
         LastCostFromSupplier = link?.LastCost;
+        LastCost = variant.LastCost;
         AverageCost = variant.AverageCost;
         AvailableAtStore = availableAtStore;
         IncomingQuantity = incomingQuantity;

@@ -25,3 +25,11 @@ public interface IPreviewQuickSaleUseCase
 {
     Task<ResultDto<QuickSalePreviewDto>> Execute(QuickSaleDto? dto, Guid userId, CancellationToken ct = default);
 }
+
+/// <summary>Listagem de pedidos (T-VD3) da loja, mais recente primeiro, com filtro de período, status, canal e busca.</summary>
+public interface IGetOrdersUseCase
+{
+    Task<ResultDto<PaginationDto<OrderListItemDto>>> Execute(
+        int offset, int limit, IReadOnlyDictionary<string, string>? filters, string? sort, string? order, Guid? storeId,
+        CancellationToken ct = default);
+}

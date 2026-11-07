@@ -171,7 +171,7 @@ public class CreateQuickSaleUseCase(
         await orderRepository.AddAsync(order, ct);
         await unitOfWork.CommitAsync(ct);
 
-        var saved = await orderRepository.GetById(order.Id, GetInclude(), ct);
+        var saved = await orderRepository.GetById(order.Id, OrderDetails.Include, ct);
         return resultFactory.Success(new OrderDetailDto(saved ?? order));
     }
 
@@ -183,14 +183,6 @@ public class CreateQuickSaleUseCase(
     private static ValidationFailure ToItemField(ValidationFailure failure)
         => new(failure.PropertyName.StartsWith("Lines[") ? "Items" + failure.PropertyName["Lines".Length..] : failure.PropertyName,
             failure.ErrorMessage);
-
-    private static Func<IQueryable<Order>, IQueryable<Order>> GetInclude()
-        => q => q.Include(o => o.Store).Include(o => o.SaleLocation).Include(o => o.Client).Include(o => o.User)
-            .Include(o => o.Payments)
-            .Include(o => o.Items).ThenInclude(i => i.Promotion)
-            .Include(o => o.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.Product)
-            .Include(o => o.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.AttributeValues)
-                .ThenInclude(link => link.AttributeValue).ThenInclude(value => value.Attribute);
 }
 
 /// <summary>

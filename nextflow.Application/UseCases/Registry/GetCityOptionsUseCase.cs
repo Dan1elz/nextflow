@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Domain.Interfaces.Infrastructure.Repositories;
 using Nextflow.Domain.Models;
+using Nextflow.Domain.Utils;
 
 namespace Nextflow.Application.UseCases.Registry;
 
@@ -15,7 +16,7 @@ public class GetCityOptionsUseCase(
     : GetOptionsUseCaseBase<City, ICityRepository, Option>(repository, resultFactory)
 {
     protected override Expression<Func<City, bool>> BuildSearch(string term)
-        => c => c.Name.ToLower().Contains(term);
+        => SearchKey.From(term) is { Length: > 0 } key ? c => c.SearchName.Contains(key) : c => true;
 
     protected override Func<IQueryable<City>, IOrderedQueryable<City>> GetOrderBy() => q => q.OrderBy(c => c.Name).ThenBy(c => c.Id);
 

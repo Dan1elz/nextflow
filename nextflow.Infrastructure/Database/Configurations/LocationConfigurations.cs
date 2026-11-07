@@ -42,6 +42,7 @@ public class CityConfiguration : IEntityTypeConfiguration<City>
         builder.Property(c => c.Id).ValueGeneratedNever();
         builder.Property(c => c.Name).IsRequired().HasMaxLength(100);
         builder.Property(c => c.IbgeCode).IsRequired().HasMaxLength(7);
+        builder.Property(c => c.SearchName).IsRequired().HasMaxLength(100);
         builder.HasIndex(c => c.IbgeCode).IsUnique();
         builder.HasOne(c => c.State).WithMany(s => s.Cities).HasForeignKey(c => c.StateId).OnDelete(DeleteBehavior.Restrict);
     }

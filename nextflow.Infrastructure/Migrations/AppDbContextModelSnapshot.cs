@@ -267,6 +267,12 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
+                    b.Property<string>("SearchName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("search_name");
+
                     b.Property<Guid>("StateId")
                         .HasColumnType("uuid")
                         .HasColumnName("state_id");

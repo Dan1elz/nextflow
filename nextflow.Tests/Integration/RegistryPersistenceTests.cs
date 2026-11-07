@@ -5,6 +5,7 @@ using Nextflow.Domain.Dtos.Contacts;
 using Nextflow.Domain.Dtos.Suppliers;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Models;
+using Nextflow.Infrastructure.Database;
 using Nextflow.Infrastructure.Repositories;
 using Nextflow.Infrastructure.Seeders;
 using Npgsql;
@@ -90,14 +91,38 @@ public class RegistryPersistenceTests(PostgresFixture fixture)
         for (var run = 0; run < 2; run++)
         {
             await using var context = fixture.CreateContext();
-            await new LocationsSeeder(new CountryRepository(context), new UnitOfWork(context)).SeedAsync(CancellationToken.None);
+            await Seeder(context).SeedAsync(CancellationToken.None);
         }
 
         await using var read = fixture.CreateContext();
         (await read.Set<State>().CountAsync()).ShouldBe(27);
         (await read.Set<City>().CountAsync()).ShouldBe(5570);
         (await read.Set<Country>().CountAsync()).ShouldBeGreaterThan(0);
+        (await read.Set<City>().CountAsync(c => c.SearchName == "")).ShouldBe(0);
     }
+
+    [Fact]
+    public async Task Should_FixNamesAndSearchKeys_When_CitiesWereLoadedBeforeSearchName()
+    {
+        await using (var context = fixture.CreateContext())
+            await Seeder(context).SeedAsync(CancellationToken.None);
+
+        await using (var context = fixture.CreateContext())
+            await context.Database.ExecuteSqlRawAsync(
+                "UPDATE cities SET search_name = '', name = 'Santa Bárbarad''Oeste' WHERE ibge_code = '3545803'");
+
+        await using (var context = fixture.CreateContext())
+            await Seeder(context).SeedAsync(CancellationToken.None);
+
+        await using var read = fixture.CreateContext();
+        var city = await read.Set<City>().SingleAsync(c => c.IbgeCode == "3545803");
+        city.Name.ShouldBe("Santa Bárbara d'Oeste");
+        city.SearchName.ShouldBe("santabarbaradoeste");
+        (await read.Set<City>().CountAsync(c => c.SearchName == "")).ShouldBe(0);
+    }
+
+    private static LocationsSeeder Seeder(AppDbContext context)
+        => new(new CountryRepository(context), new CityRepository(context), new UnitOfWork(context));
 
     [Fact]
     [Trait("Rule", "RN-CD01")]

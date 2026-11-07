@@ -71,6 +71,31 @@ public class RegistryApiTests(AccessApiFixture api)
         countries[0].GetProperty("label").GetString().ShouldBe("Brasil");
     }
 
+    [Theory]
+    [InlineData("Santa Barbara")]
+    [InlineData("santa bárbara d'oeste")]
+    [InlineData("SANTA BARBARA D OESTE")]
+    [InlineData("barbara d'o")]
+    public async Task Should_IgnoreAccentCaseAndPunctuation_When_SearchingCities(string search)
+    {
+        var client = await api.AdminAsync();
+
+        var cities = await Json(await client.GetAsync($"/api/cities/options?search={Uri.EscapeDataString(search)}"));
+
+        cities.EnumerateArray().Select(c => c.GetProperty("label").GetString()).ShouldContain("Santa Bárbara d'Oeste/SP");
+    }
+
+    [Fact]
+    public async Task Should_FindCityByIbgeCode_When_ViaCepReturnsIt()
+    {
+        var client = await api.AdminAsync();
+
+        var cities = await Json(await client.GetAsync($"/api/cities/options?filters={Filters(new { ibgeCode = "3545803" })}"));
+
+        cities.GetArrayLength().ShouldBe(1);
+        cities[0].GetProperty("label").GetString().ShouldBe("Santa Bárbara d'Oeste/SP");
+    }
+
     [Fact]
     public async Task Should_LimitToTwentyItems_When_ListingCityOptions()
     {

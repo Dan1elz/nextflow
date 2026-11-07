@@ -9,6 +9,7 @@ using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Domain.Interfaces.Infrastructure.Repositories;
 using Nextflow.Domain.Models;
+using Nextflow.Domain.ValueObjects;
 
 namespace Nextflow.Infrastructure.Seeders.Demo;
 
@@ -72,10 +73,15 @@ public class DemoCatalogSeeder(
             categories[name] = category.Id;
         }
 
+        // Fornecedor já cadastrado com o mesmo CNPJ (cadastro manual no dev) é reaproveitado: o CNPJ é único.
+        var documents = DemoCatalog.Suppliers.Select(s => TaxDocument.ParseCnpj(s.Cnpj)).ToList();
+        var existing = (await supplierRepository.GetAll(s => documents.Contains(s.Cnpj), 0, int.MaxValue, ct: ct))
+            .ToDictionary(s => s.Cnpj.Value);
         var suppliers = DemoCatalog.Suppliers
-            .Select(s => new Supplier(new SupplierRequestDto { Name = s.Name, Cnpj = s.Cnpj, LeadTimeDays = s.LeadTimeDays }))
+            .Select((s, i) => existing.GetValueOrDefault(documents[i].Value)
+                ?? new Supplier(new SupplierRequestDto { Name = s.Name, Cnpj = s.Cnpj, LeadTimeDays = s.LeadTimeDays }))
             .ToList();
-        await supplierRepository.AddRangeAsync(suppliers, ct);
+        await supplierRepository.AddRangeAsync(suppliers.Where(s => !existing.ContainsKey(s.Cnpj.Value)), ct);
 
         var eventNames = DemoCatalog.Products.SelectMany(p => p.Events).Distinct().ToList();
         var events = (await calendarEventRepository.GetAll(e => eventNames.Contains(e.Name), 0, int.MaxValue, ct: ct))

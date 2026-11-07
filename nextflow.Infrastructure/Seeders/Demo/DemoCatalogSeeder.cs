@@ -35,6 +35,7 @@ public class DemoCatalogSeeder(
     IUserRepository userRepository,
     IStoreMembership storeMembership,
     IStockLedger stockLedger,
+    ILotRepository lotRepository,
     IBusinessClock clock,
     IUnitOfWork unitOfWork) : ISeeder
 {
@@ -127,6 +128,8 @@ public class DemoCatalogSeeder(
             ProductType = product.IsFood ? ProductTypeEnum.Perishable : ProductTypeEnum.Standard,
             SaleUnit = SaleUnitEnum.Unit,
             DecimalPlaces = 0,
+            TracksLots = product.IsFood,
+            ShelfLifeDays = DemoCatalog.ShelfLifeDays(product),
             CategoryIds = [categoryId],
             DefaultMinQuantity = product.MinStock,
             EventIds = product.Events.Where(events.ContainsKey).Select(name => events[name]).ToList(),
@@ -205,6 +208,18 @@ public class DemoCatalogSeeder(
         var variantIds = (await variantRepository.GetAll(v => skus.Contains(v.Sku), 0, int.MaxValue, ct: ct))
             .ToDictionary(v => v.Sku, v => v.Id);
 
+        // Alimento controla lote (F1.7): um lote de abertura por variação, vencendo na vida útil a partir de hoje.
+        var openingLots = new Dictionary<Guid, Guid>();
+        foreach (var product in DemoCatalog.Products.Where(p => p.MinStock > 0 && DemoCatalog.ShelfLifeDays(p) is not null))
+        {
+            foreach (var variant in DemoCatalog.VariantsOf(product).Where(v => variantIds.ContainsKey(v.Sku)))
+            {
+                var lot = new Lot(variantIds[variant.Sku], DemoCatalog.OpeningLotCode, clock.Today.AddDays(DemoCatalog.ShelfLifeDays(product)!.Value));
+                await lotRepository.AddAsync(lot, ct);
+                openingLots[lot.VariantId] = lot.Id;
+            }
+        }
+
         var lines = new List<StockLineDto>();
         for (var storeIndex = 0; storeIndex < stores.Count; storeIndex++)
         {
@@ -221,6 +236,7 @@ public class DemoCatalogSeeder(
                         {
                             VariantId = variantIds[variant.Sku],
                             LocationId = location.Id,
+                            LotId = openingLots.TryGetValue(variantIds[variant.Sku], out var lotId) ? lotId : null,
                             Type = MovementTypeEnum.In,
                             Reason = MovementReasonEnum.Opening,
                             Quantity = quantity,

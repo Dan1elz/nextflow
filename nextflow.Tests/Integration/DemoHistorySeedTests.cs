@@ -28,23 +28,30 @@ public class DemoHistorySeedTests(DemoSeedFixture fixture)
         await using var context = fixture.CreateContext(connection);
 
         var sums = (await context.Set<StockMovement>()
-                .GroupBy(m => new { m.VariantId, m.LocationId })
+                .GroupBy(m => new { m.VariantId, m.LocationId, m.LotId })
                 .Select(g => new
                 {
                     g.Key.VariantId,
                     g.Key.LocationId,
+                    g.Key.LotId,
                     Quantity = g.Sum(m => m.Quantity), // a quantidade já vem com o sinal do sentido
                 })
                 .ToListAsync())
-            .ToDictionary(x => (x.VariantId, x.LocationId), x => x.Quantity);
+            .ToDictionary(x => (x.VariantId, x.LocationId, x.LotId), x => x.Quantity);
 
+        // Saldo por variação × local × lote (RN-CE09): o alimento tem um saldo por lote (F1.7), o resto um saldo sem lote.
         var balances = await context.Set<StockBalance>().ToListAsync();
         balances.Count.ShouldBe(sums.Count);
         foreach (var balance in balances)
         {
-            balance.Quantity.ShouldBe(sums[(balance.VariantId, balance.LocationId)]);
+            balance.Quantity.ShouldBe(sums[(balance.VariantId, balance.LocationId, balance.LotId)]);
             balance.Quantity.ShouldBeGreaterThanOrEqualTo(0);
         }
+
+        var foodVariantIds = await context.Set<ProductVariant>().Where(v => v.Product.TracksLots).Select(v => v.Id).ToListAsync();
+        foodVariantIds.ShouldNotBeEmpty();
+        balances.Where(b => foodVariantIds.Contains(b.VariantId)).ShouldAllBe(b => b.LotId != null);
+        balances.Where(b => !foodVariantIds.Contains(b.VariantId)).ShouldAllBe(b => b.LotId == null);
 
         (await context.Set<StockMovement>().AnyAsync(m => m.Reason == MovementReasonEnum.Sale)).ShouldBeTrue();
         (await context.Set<StockMovement>().AnyAsync(m => m.Reason == MovementReasonEnum.Purchase)).ShouldBeTrue();
@@ -67,12 +74,14 @@ public class DemoHistorySeedTests(DemoSeedFixture fixture)
         orders.ShouldAllBe(o => o.PaidAt > windowStart && o.PaidAt < windowEnd && o.CreatedAt == o.PaidAt);
         orders.ShouldAllBe(o => o.Items.Count > 0 && o.Payments.Sum(p => p.Amount) == o.Total);
 
-        // Cada item de venda tem a sua saída Out/Sale no salão, apontando para o pedido.
+        // Cada item de venda sai em Out/Sale no salão, apontando para o pedido; o alimento pode sair em mais de um lote
+        // (FEFO, F1.7), então a conta é a soma por pedido × variação.
         var saleMovements = await context.Set<StockMovement>().Where(m => m.Reason == MovementReasonEnum.Sale).ToListAsync();
         saleMovements.ShouldAllBe(m => m.Type == MovementTypeEnum.Out && m.SourceType == SourceTypeEnum.Order);
-        saleMovements.Count.ShouldBe(orders.Sum(o => o.Items.Count));
-        var movementsByOrder = saleMovements.ToLookup(m => m.SourceId);
-        orders.ShouldAllBe(o => movementsByOrder[o.Id].Count() == o.Items.Count);
+        saleMovements.Count.ShouldBeGreaterThanOrEqualTo(orders.Sum(o => o.Items.Count));
+        var soldByOrderVariant = saleMovements.GroupBy(m => (m.SourceId, m.VariantId)).ToDictionary(g => g.Key, g => -g.Sum(m => m.Quantity));
+        foreach (var item in orders.SelectMany(o => o.Items.Select(i => (OrderId: (Guid?)o.Id, i.VariantId, i.Quantity))))
+            soldByOrderVariant[(item.OrderId, item.VariantId)].ShouldBe(item.Quantity);
 
         var purchases = await context.Set<PurchaseOrder>().Include(p => p.Items).ToListAsync();
         var received = purchases.Where(p => p.Status == PurchaseStatusEnum.Received).ToList();

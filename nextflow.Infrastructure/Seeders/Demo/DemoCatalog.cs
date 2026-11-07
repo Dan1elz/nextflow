@@ -50,6 +50,18 @@ public static class DemoCatalog
     /// <summary>Fração do saldo e do mínimo da loja principal que vale para a segunda loja, menor.</summary>
     public const decimal SecondStoreFactor = 0.6m;
 
+    /// <summary>Vida útil dos alimentos (F1.7): o produto alimentício controla lote, e cada chegada vence neste prazo.</summary>
+    public const int FoodShelfLifeDays = 180;
+
+    /// <summary>Código do lote do saldo de abertura (um por variação, nos dois locais das duas lojas).</summary>
+    public const string OpeningLotCode = "ABERTURA";
+
+    /// <summary>Vida útil do produto: só os alimentos controlam lote.</summary>
+    public static int? ShelfLifeDays(DemoProduct product) => product.IsFood ? FoodShelfLifeDays : null;
+
+    /// <summary>Código do lote de uma chegada de compra: a data de recebimento ("C261107").</summary>
+    public static string PurchaseLotCode(DateOnly receivedOn) => $"C{receivedOn:yyMMdd}";
+
     /// <summary>Itens principais: a partir deste mínimo padrão, cada local ganha um mínimo próprio (RN-CE33).</summary>
     public const decimal MainItemMinStock = 20m;
 

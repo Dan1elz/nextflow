@@ -37,6 +37,7 @@ public class DemoHistorySeeder(
     IPurchaseOrderRepository purchaseOrderRepository,
     IUserRepository userRepository,
     IStockLedger stockLedger,
+    ILotRepository lotRepository,
     IBusinessClock clock,
     IUnitOfWork unitOfWork,
     ILogger<DemoHistorySeeder> logger) : ISeeder
@@ -48,6 +49,7 @@ public class DemoHistorySeeder(
     public const int RandomSeed = 42;
 
     private readonly HashSet<BaseModel> _stamped = [];
+    private readonly Dictionary<(Guid VariantId, string Code), Guid> _lots = [];
 
     public int Order => 60;
 
@@ -141,15 +143,19 @@ public class DemoHistorySeeder(
     private async Task PostOpening(Plan plan, Dictionary<string, ProductVariant> variants, DateTime at, CancellationToken ct)
     {
         var simulation = plan.Simulation;
+        var openedOn = simulation.DateOf(0);
         var lines = new List<StockLineDto>();
         for (var s = 0; s < plan.Stores.Count; s++)
         {
             for (var i = 0; i < simulation.Items.Count; i++)
             {
-                var variant = variants[simulation.Items[i].Variant.Sku];
-                var cost = simulation.Items[i].Variant.Cost;
-                AddOpeningLine(lines, variant, plan.SaleLocation(s), simulation.SaleOpening[s, i], cost);
-                AddOpeningLine(lines, variant, plan.DepositLocation(s), simulation.DepositOpening[s, i], cost);
+                var item = simulation.Items[i];
+                var variant = variants[item.Variant.Sku];
+                var cost = item.Variant.Cost;
+                // Alimento controla lote (F1.7): um lote de abertura por variação, o mesmo nos dois locais das duas lojas.
+                var lotId = await LotFor(variant.Id, item.Product, DemoCatalog.OpeningLotCode, openedOn, ct);
+                AddOpeningLine(lines, variant, plan.SaleLocation(s), simulation.SaleOpening[s, i], cost, lotId);
+                AddOpeningLine(lines, variant, plan.DepositLocation(s), simulation.DepositOpening[s, i], cost, lotId);
             }
         }
 
@@ -162,7 +168,24 @@ public class DemoHistorySeeder(
         await unitOfWork.CommitAsync(ct);
     }
 
-    private static void AddOpeningLine(List<StockLineDto> lines, ProductVariant variant, Guid locationId, int quantity, decimal cost)
+    /// <summary>
+    /// Lote de uma chegada do alimento (F1.7), vencendo na vida útil a partir do dia da chegada; nulo para o que não é
+    /// alimento. Mesmo código no mesmo dia (duas lojas recebendo a mesma variação) reaproveita o lote.
+    /// </summary>
+    private async Task<Guid?> LotFor(Guid variantId, DemoProduct product, string code, DateOnly arrivedOn, CancellationToken ct)
+    {
+        if (DemoCatalog.ShelfLifeDays(product) is not { } shelfLife)
+            return null;
+        if (_lots.TryGetValue((variantId, code), out var existing))
+            return existing;
+
+        var lot = new Lot(variantId, code, arrivedOn.AddDays(shelfLife));
+        await lotRepository.AddAsync(lot, ct);
+        _lots[(variantId, code)] = lot.Id;
+        return lot.Id;
+    }
+
+    private static void AddOpeningLine(List<StockLineDto> lines, ProductVariant variant, Guid locationId, int quantity, decimal cost, Guid? lotId)
     {
         if (quantity <= 0)
             return;
@@ -170,6 +193,7 @@ public class DemoHistorySeeder(
         {
             VariantId = variant.Id,
             LocationId = locationId,
+            LotId = lotId,
             Type = MovementTypeEnum.In,
             Reason = MovementReasonEnum.Opening,
             Quantity = quantity,
@@ -185,15 +209,23 @@ public class DemoHistorySeeder(
         CancellationToken ct)
     {
         var order = await AddPurchaseOrder(plan, purchase, variants, ct);
-        var lines = order.Items.OrderBy(i => i.SortOrder).Select(item => new StockLineDto
+        var arrivedOn = plan.Simulation.DateOf(purchase.ReceiveDay!.Value);
+        var products = purchase.Lines.ToDictionary(
+            line => variants[plan.Simulation.Items[line.Item].Variant.Sku].Id, line => plan.Simulation.Items[line.Item].Product);
+        var lines = new List<StockLineDto>();
+        foreach (var item in order.Items.OrderBy(i => i.SortOrder))
         {
-            VariantId = item.VariantId,
-            LocationId = order.ReceiveLocationId,
-            Type = MovementTypeEnum.In,
-            Reason = MovementReasonEnum.Purchase,
-            Quantity = item.Quantity,
-            UnitCost = item.UnitCost,
-        }).ToList();
+            lines.Add(new StockLineDto
+            {
+                VariantId = item.VariantId,
+                LocationId = order.ReceiveLocationId,
+                LotId = await LotFor(item.VariantId, products[item.VariantId], DemoCatalog.PurchaseLotCode(arrivedOn), arrivedOn, ct),
+                Type = MovementTypeEnum.In,
+                Reason = MovementReasonEnum.Purchase,
+                Quantity = item.Quantity,
+                UnitCost = item.UnitCost,
+            });
+        }
 
         await Post(new StockDocumentDto { SourceType = SourceTypeEnum.PurchaseOrder, SourceId = order.Id, UserId = plan.UserId }, lines, ct);
 

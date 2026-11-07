@@ -2,6 +2,9 @@ using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Nextflow.Application.Services;
+using Nextflow.Application.Forecast;
+using Nextflow.Application.Services.DerivedData;
+using Nextflow.Application.Services.Forecast;
 using Nextflow.Application.UseCases.Health;
 using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Domain.Models;
@@ -19,6 +22,10 @@ public static class DependencyInjection
         services.AddScoped<IStoreMembership, StoreMembership>();
         services.AddScoped<IProductPricingService, ProductPricingService>();
         services.AddScoped<IStockLedger, StockLedger>();
+        services.AddScoped<IDerivedDataService, DerivedDataService>();
+        services.AddScoped<ForecastInputBuilder>();
+        services.AddScoped<ForecastAiOrchestrator>();
+        services.AddScoped<IForecastEngine, ForecastEngine>();
 
         services.Scan(scan => scan
             .FromAssemblyOf<GetHealthUseCase>()

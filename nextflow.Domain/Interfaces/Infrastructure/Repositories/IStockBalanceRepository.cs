@@ -1,3 +1,4 @@
+using Nextflow.Domain.Dtos.Forecasts;
 using Nextflow.Domain.Models;
 
 namespace Nextflow.Domain.Interfaces.Infrastructure.Repositories;
@@ -17,4 +18,7 @@ public interface IStockBalanceRepository : IBaseRepository<StockBalance>
     /// conta como zero. Sem <paramref name="productIds"/>, olha todos os produtos ativos.
     /// </summary>
     Task<HashSet<Guid>> GetLowStockProductIds(IReadOnlyCollection<Guid>? productIds, Guid? storeId, CancellationToken ct = default);
+
+    /// <summary>Saldo positivo por variação e lote com validade, somando os locais (previsão, RN-DF07). Só leitura.</summary>
+    Task<List<ExpiringLotBalanceDto>> GetLotBalances(CancellationToken ct = default);
 }

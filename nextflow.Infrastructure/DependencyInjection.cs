@@ -29,6 +29,9 @@ public static class DependencyInjection
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddStorage(configuration);
 
+        // IA da previsão (ADR 0005): HttpClient tipado; sem Ai:ApiKey o cliente fica não configurado e a análise segue só com o cálculo.
+        services.AddHttpClient<IAiClient, GeminiAiClient>();
+
         services.Scan(scan => scan
             .FromAssemblyOf<UnitOfWork>()
             .AddClasses(classes => classes.AssignableTo<ISeeder>())

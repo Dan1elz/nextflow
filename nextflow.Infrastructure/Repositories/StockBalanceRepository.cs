@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Nextflow.Domain.Dtos.Forecasts;
 using Nextflow.Domain.Interfaces.Infrastructure.Repositories;
 using Nextflow.Domain.Models;
 using Nextflow.Infrastructure.Database;
@@ -23,6 +24,16 @@ public class StockBalanceRepository(AppDbContext context) : BaseRepository<Stock
             .GroupBy(b => b.Variant.ProductId)
             .Select(g => new { ProductId = g.Key, Quantity = g.Sum(b => b.Quantity) })
             .ToDictionaryAsync(row => row.ProductId, row => row.Quantity, ct);
+
+    public async Task<List<ExpiringLotBalanceDto>> GetLotBalances(CancellationToken ct = default)
+    {
+        var rows = await _context.Set<StockBalance>().AsNoTracking()
+            .Where(b => b.LotId != null && b.Quantity > 0)
+            .GroupBy(b => new { b.VariantId, b.Lot!.ExpiresOn })
+            .Select(g => new { g.Key.VariantId, g.Key.ExpiresOn, Quantity = g.Sum(b => b.Quantity) })
+            .ToListAsync(ct);
+        return rows.Select(r => new ExpiringLotBalanceDto(r.VariantId, r.ExpiresOn, r.Quantity)).ToList();
+    }
 
     public async Task<HashSet<Guid>> GetLowStockProductIds(IReadOnlyCollection<Guid>? productIds, Guid? storeId, CancellationToken ct = default)
     {

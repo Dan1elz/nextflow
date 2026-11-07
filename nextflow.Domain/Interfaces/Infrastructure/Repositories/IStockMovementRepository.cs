@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Nextflow.Domain.Dtos.DerivedData;
 using Nextflow.Domain.Models;
 
 namespace Nextflow.Domain.Interfaces.Infrastructure.Repositories;
@@ -12,6 +13,9 @@ public interface IStockMovementRepository
     Task AddAsync(StockMovement movement, CancellationToken ct = default);
     Task<bool> Exists(Expression<Func<StockMovement, bool>> predicate, CancellationToken ct = default);
     Task<int> Count(Expression<Func<StockMovement, bool>> predicate, CancellationToken ct = default);
+
+    /// <summary>Todas as movimentações até o instante, reduzidas ao necessário para o saldo diário (F3.1). Só leitura.</summary>
+    Task<List<MovementDeltaDto>> GetDeltasUntil(DateTime untilUtc, CancellationToken ct = default);
 
     /// <summary>Página do kardex (T8), só leitura.</summary>
     Task<IEnumerable<StockMovement>> GetAll(

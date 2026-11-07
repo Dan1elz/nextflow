@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Nextflow.Domain.Dtos;
+using Nextflow.Domain.Dtos.DerivedData;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Infrastructure.Repositories;
 using Nextflow.Domain.Models;
@@ -21,6 +22,19 @@ public class OrderRepository(AppDbContext context) : BaseRepository<Order>(conte
             .ToListAsync(ct);
         return rows.ToDictionary(r => r.ClientId, r => new PurchaseStatsDto(r.Count, r.Total, r.LastAt));
     }
+
+    public Task<List<SaleLineDto>> GetPaidSaleLines(CancellationToken ct = default)
+        => _context.Set<OrderItem>().AsNoTracking()
+            .Where(i => i.Order.Status == OrderStatusEnum.Paid && i.Order.PaidAt != null)
+            .Select(i => new SaleLineDto(i.Variant.ProductId, i.Order.PaidAt!.Value, i.Quantity, i.PromotionId != null, i.LineTotal))
+            .ToListAsync(ct);
+
+    public async Task<Dictionary<Guid, decimal>> GetPaidQuantityByVariant(DateTime sinceUtc, CancellationToken ct = default)
+        => await _context.Set<OrderItem>().AsNoTracking()
+            .Where(i => i.Order.Status == OrderStatusEnum.Paid && i.Order.PaidAt != null && i.Order.PaidAt >= sinceUtc)
+            .GroupBy(i => i.VariantId)
+            .Select(g => new { VariantId = g.Key, Quantity = g.Sum(i => i.Quantity) })
+            .ToDictionaryAsync(row => row.VariantId, row => row.Quantity, ct);
 
     public Task<List<Guid>> GetClientIdsWithPurchase(DateTime? since, CancellationToken ct = default)
         => _context.Set<Order>().AsNoTracking()

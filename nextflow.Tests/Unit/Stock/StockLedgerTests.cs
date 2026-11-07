@@ -249,6 +249,53 @@ public class StockLedgerTests
     }
 
     [Fact]
+    [Trait("Rule", "RN-CE32")]
+    public async Task Should_PutRemainderOnFirstLot_When_LotsDoNotCoverOutboundAndFlagOn()
+    {
+        var product = NewProduct(allowsNegative: true, tracksLots: true);
+        var later = LotBalance(product, "L-B", new DateOnly(2027, 3, 1), 1);
+        var earlier = LotBalance(product, "L-A", new DateOnly(2027, 1, 1), 2);
+        var ledger = Ledger(product, companyQuantity: 3, later, earlier);
+
+        var failures = await ledger.Post(Document(), [Line(product, MovementTypeEnum.Out, 5)], CancellationToken.None);
+
+        failures.ShouldBeEmpty();
+        _added.Select(m => (m.LotId, m.Quantity, m.BalanceAfter))
+            .ShouldBe(new (Guid?, decimal, decimal)[] { (earlier.LotId, -2m, 0m), (later.LotId, -1m, 0m), (earlier.LotId, -2m, -2m) });
+        _added.ShouldAllBe(m => m.LotId != null);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE32")]
+    public async Task Should_UseEarliestLotOfVariant_When_NoLotBalanceInLocationAndFlagOn()
+    {
+        var product = NewProduct(allowsNegative: true, tracksLots: true);
+        var lot = new Lot(product.Variants.Single().Id, "L-OUTRO-LOCAL", new DateOnly(2027, 1, 1));
+        _lots.Add(lot);
+        var ledger = Ledger(product, companyQuantity: 4);
+
+        var failures = await ledger.Post(Document(), [Line(product, MovementTypeEnum.Out, 3)], CancellationToken.None);
+
+        failures.ShouldBeEmpty();
+        _added.Single().LotId.ShouldBe(lot.Id);
+        _added.Single().BalanceAfter.ShouldBe(-3m);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE32")]
+    public async Task Should_Reject_When_OutboundOfLotTrackedVariantThatNeverReceivedLot()
+    {
+        var product = NewProduct(allowsNegative: true, tracksLots: true);
+        var ledger = Ledger(product, companyQuantity: 0);
+
+        var failures = await ledger.Post(Document(), [Line(product, MovementTypeEnum.Out, 1)], CancellationToken.None);
+
+        failures.Single().PropertyName.ShouldBe("Lines[0].LotId");
+        failures.Single().ErrorMessage.ShouldBe(StockLedger.NoLotYetMessage);
+        _added.ShouldBeEmpty();
+    }
+
+    [Fact]
     [Trait("Rule", "RN-CE01")]
     public async Task Should_CreateBalance_When_FirstMovementOfVariantInLocation()
     {

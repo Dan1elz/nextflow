@@ -25,6 +25,7 @@ public class StockLedger(
     public const string LotRequiredMessage = "Informe o lote: o produto controla lote e validade.";
     public const string LotNotTrackedMessage = "Este produto não controla lote.";
     public const string LotNotFoundMessage = "Lote não encontrado nesta variação.";
+    public const string NoLotYetMessage = "Esta variação ainda não recebeu nenhum lote: lance uma entrada com lote antes da saída.";
 
     /// <summary>Linha já com o lote resolvido; <see cref="Index"/> é a linha original, para a falha voltar no campo certo.</summary>
     private sealed record ResolvedLine(int Index, StockLineDto Line);
@@ -88,8 +89,8 @@ public class StockLedger(
     /// Produto sem lote: a linha segue sem lote (lote informado é recusado). Produto com lote: lote informado precisa ser da
     /// variação; entrada sem lote é recusada; saída sem lote é repartida entre os lotes com saldo no local, do que vence
     /// primeiro ao último (FEFO, RN-CE15), vencidos inclusive, que saem antes. Se os lotes não cobrem a saída, o produto que
-    /// não permite negativo é recusado; o que permite joga o resto no primeiro lote da fila (ou sem lote, se nunca entrou
-    /// lote no local).
+    /// não permite negativo é recusado; o que permite joga o resto no primeiro lote da fila (sem saldo no local, no lote da
+    /// variação que vence primeiro; sem nenhum lote na variação, recusa).
     /// </summary>
     private static List<ResolvedLine> ResolveLots(
         IReadOnlyList<StockLineDto> lines,
@@ -178,13 +179,22 @@ public class StockLedger(
                 continue;
             }
 
+            // O resto nunca fica sem lote: um saldo sem lote de produto com lote não teria como zerar (a entrada exige lote
+            // e a saída vai por FEFO). Vai para o primeiro lote da fila; sem saldo em lote no local, para o lote da
+            // variação que vence primeiro; variação que nunca recebeu lote é recusada.
             var fallback = queue.Count > 0
                 ? queue[0].Lot.Id
                 : lots.Values
-                    .Where(l => l.VariantId == line.VariantId && balances.Any(b => b.LotId == l.Id && b.LocationId == line.LocationId))
-                    .OrderBy(l => l.ExpiresOn)
+                    .Where(l => l.VariantId == line.VariantId)
+                    .OrderBy(l => l.ExpiresOn).ThenBy(l => l.Code).ThenBy(l => l.Id)
                     .Select(l => (Guid?)l.Id)
                     .FirstOrDefault();
+            if (fallback is null)
+            {
+                failures.Add(new($"Lines[{i}].LotId", NoLotYetMessage));
+                continue;
+            }
+
             Add(i, WithLot(line, fallback, remaining));
         }
 

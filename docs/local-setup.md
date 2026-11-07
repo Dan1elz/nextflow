@@ -16,6 +16,9 @@ API em `http://localhost:8081` (health `/health`, Swagger em `/swagger`), Postgr
 (`nextflow_db`, `nextflow_user`, `nextflow_password`), storage S3 em `http://localhost:9010` (painel `:9011`).
 O `storage-initial-setup` termina com `Exited (0)` e "Storage pronto.": é o normal. Migrations e seeders rodam no startup.
 
+O front buildado no nginx (`localhost:8082`) só sobe com `--profile front`; no dia a dia use o compose de dev do
+próprio front (hot reload em `localhost:5174`). Ele espera o repo do front em `../nextflow-front` (outro caminho: `FRONT_CONTEXT`).
+
 Fora do Docker (só o banco do compose no ar):
 ```
 docker compose -f compose.development.yaml up -d postgres

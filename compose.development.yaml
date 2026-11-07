@@ -3,6 +3,7 @@
 # juntos e subir este não toca no banco antigo.
 #   docker compose -f compose.development.yaml up -d postgres   # só o banco (API rodando com dotnet run)
 #   docker compose -f compose.development.yaml up -d            # banco + storage + API em watch
+#   docker compose -f compose.development.yaml --profile front up -d   # + front buildado no nginx (8082)
 name: nextflow-v2-development
 
 services:
@@ -120,13 +121,16 @@ services:
       storage-initial-setup:
         condition: service_completed_successfully
 
-  # Front (repo irmão ../nextflow-front-v2): build de produção (Dockerfile multi-stage) servido pelo nginx.
+  # Front (repo irmão, padrão ../nextflow-front; outro caminho via FRONT_CONTEXT): build de produção servido pelo nginx.
+  # Opcional (profile "front"): no dia a dia o front roda com hot reload no compose.development.yaml do próprio repo
+  # (5174); suba este só para conferir o build de produção:  docker compose -f compose.development.yaml --profile front up -d
   # A URL da API entra no build do Vite (fica embutida no JS) e é a que o NAVEGADOR chama: mudou, rode com --build.
   # Em localhost:8082 (porta 80 do nginx); o hot reload segue no compose.development.yaml do próprio front (5174).
   frontend:
+    profiles: ["front"]
     image: nextflow-v2-front:compose
     build:
-      context: ../nextflow-front-v2
+      context: ${FRONT_CONTEXT:-../nextflow-front}
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8081}

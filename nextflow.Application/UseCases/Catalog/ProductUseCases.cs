@@ -103,6 +103,21 @@ internal static class ProductRules
             : [];
     }
 
+    /// <summary>
+    /// Ligar ou desligar o controle de lote com saldo em algum local quebraria a chave do saldo (RN-CE09): o saldo sem lote
+    /// ficaria preso, ou o de lote deixaria de baixar por FEFO. Só troca com o produto zerado (RN-CE55, F1.7).
+    /// </summary>
+    public static async Task<List<ValidationFailure>> LotTrackingWithBalance(
+        IStockBalanceRepository balances, ProductRequestDto dto, Product product, CancellationToken ct)
+    {
+        if (dto.TracksLots == product.TracksLots)
+            return [];
+
+        return await balances.Exists(b => b.Variant.ProductId == product.Id && b.Quantity != 0, ct)
+            ? [new(nameof(dto.TracksLots), "O produto tem saldo de estoque. Zere o saldo antes de ligar ou desligar o controle de lote.")]
+            : [];
+    }
+
     /// <summary>Evento existe e está ativo; o já vinculado pode estar inativo, para o produto seguir editável (RN-CE61).</summary>
     public static async Task<List<ValidationFailure>> Events(
         ICalendarEventRepository events, ProductRequestDto dto, ICollection<Guid> linked, CancellationToken ct)
@@ -281,6 +296,7 @@ public class UpdateProductUseCase(
         failures.AddRange(await ProductRules.Categories(categoryRepository, dto, [.. entity.Categories.Select(c => c.CategoryId)], ct));
         failures.AddRange(await ProductRules.Collection(collectionRepository, dto, entity.CollectionId, ct));
         failures.AddRange(await ProductRules.RemovedVariantsWithBalance(balanceRepository, dto, entity, ct));
+        failures.AddRange(await ProductRules.LotTrackingWithBalance(balanceRepository, dto, entity, ct));
         failures.AddRange(await ProductRules.Codes(variantRepository, dto, ct));
         failures.AddRange(await ProductRules.Events(calendarEventRepository, dto, [.. entity.Events.Select(e => e.EventId)], ct));
         failures.AddRange(await ProductRules.Suppliers(supplierRepository, dto, [.. entity.Suppliers.Select(s => s.SupplierId)], ct));

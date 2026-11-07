@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Nextflow.Infrastructure.Database.Configurations;
 
 namespace Nextflow.Infrastructure.Database;
 
@@ -10,6 +11,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Número do pedido (T-VD5): sequência única da empresa; um insert desfeito deixa buraco, o que é aceito.
+        modelBuilder.HasSequence<int>(OrderConfiguration.NumberSequence);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

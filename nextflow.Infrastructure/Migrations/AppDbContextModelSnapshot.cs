@@ -22,6 +22,8 @@ namespace Nextflow.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence<int>("order_number_seq");
+
             modelBuilder.Entity("Nextflow.Domain.Models.Address", b =>
                 {
                     b.Property<Guid>("Id")
@@ -455,6 +457,214 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasDatabaseName("ix_countries_acronym_iso");
 
                     b.ToTable("countries", (string)null);
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("CashReceived")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("cash_received");
+
+                    b.Property<decimal?>("Change")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("change");
+
+                    b.Property<byte>("Channel")
+                        .HasColumnType("smallint")
+                        .HasColumnName("channel");
+
+                    b.Property<Guid?>("ClientId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal>("DiscountTotal")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("discount_total");
+
+                    b.Property<int>("Number")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("number")
+                        .HasDefaultValueSql("nextval('order_number_seq')");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<Guid>("SaleLocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sale_location_id");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("store_id");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("subtotal");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_orders");
+
+                    b.HasIndex("ClientId")
+                        .HasDatabaseName("ix_orders_client_id");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_orders_number");
+
+                    b.HasIndex("SaleLocationId")
+                        .HasDatabaseName("ix_orders_sale_location_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_orders_user_id");
+
+                    b.HasIndex("StoreId", "Status", "CreatedAt")
+                        .HasDatabaseName("ix_orders_store_id_status_created_at");
+
+                    b.ToTable("orders", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_orders_change", "change IS NULL OR change >= 0");
+
+                            t.HasCheckConstraint("ck_orders_totals", "subtotal >= 0 AND discount_total >= 0 AND total >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.OrderItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal>("Discount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("discount");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("line_total");
+
+                    b.Property<decimal>("ListPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("list_price");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<Guid?>("PromotionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("promotion_id");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)")
+                        .HasColumnName("unit_cost");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("unit_price");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_order_items");
+
+                    b.HasIndex("PromotionId")
+                        .HasDatabaseName("ix_order_items_promotion_id");
+
+                    b.HasIndex("VariantId")
+                        .HasDatabaseName("ix_order_items_variant_id");
+
+                    b.HasIndex("OrderId", "Position")
+                        .IsUnique()
+                        .HasDatabaseName("ix_order_items_order_id_position");
+
+                    b.ToTable("order_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_order_items_discount", "discount >= 0 AND line_total >= 0");
+
+                            t.HasCheckConstraint("ck_order_items_quantity", "quantity > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Payment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<byte>("Method")
+                        .HasColumnType("smallint")
+                        .HasColumnName("method");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_payments");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("ix_payments_order_id");
+
+                    b.ToTable("payments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_payments_amount", "amount > 0");
+                        });
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.PriceHistory", b =>
@@ -1677,6 +1887,85 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("State");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_orders_clients_client_id");
+
+                    b.HasOne("Nextflow.Domain.Models.StockLocation", "SaleLocation")
+                        .WithMany()
+                        .HasForeignKey("SaleLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_orders_stock_location_sale_location_id");
+
+                    b.HasOne("Nextflow.Domain.Models.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_orders_store_store_id");
+
+                    b.HasOne("Nextflow.Domain.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_orders_user_user_id");
+
+                    b.Navigation("Client");
+
+                    b.Navigation("SaleLocation");
+
+                    b.Navigation("Store");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.OrderItem", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Order", "Order")
+                        .WithMany("Items")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_items_orders_order_id");
+
+                    b.HasOne("Nextflow.Domain.Models.Promotion", "Promotion")
+                        .WithMany()
+                        .HasForeignKey("PromotionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_order_items_promotion_promotion_id");
+
+                    b.HasOne("Nextflow.Domain.Models.ProductVariant", "Variant")
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_items_product_variant_variant_id");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Promotion");
+
+                    b.Navigation("Variant");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Payment", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.Order", "Order")
+                        .WithMany("Payments")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payments_orders_order_id");
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.PriceHistory", b =>
                 {
                     b.HasOne("Nextflow.Domain.Models.User", "ChangedBy")
@@ -2032,6 +2321,13 @@ namespace Nextflow.Infrastructure.Migrations
             modelBuilder.Entity("Nextflow.Domain.Models.Country", b =>
                 {
                     b.Navigation("States");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("Payments");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Product", b =>

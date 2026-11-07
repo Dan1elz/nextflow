@@ -54,7 +54,9 @@ public class DemoCatalogSeeder(
         if (!await categoryRepository.Exists(c => c.Name == DemoCatalog.RootCategory, ct))
             await SeedCatalog(user.Id, ct);
 
-        await SeedOpeningBalances(user.Id, ct);
+        // Com o histórico da F2.9 ligado, a abertura é o dia 0 do histórico (DemoHistorySeeder), datada no passado.
+        if (DemoHistorySeeder.HistoryMonths(configuration) == 0)
+            await SeedOpeningBalances(user.Id, ct);
     }
 
     private async Task SeedCatalog(Guid userId, CancellationToken ct)

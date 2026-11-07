@@ -37,7 +37,7 @@ public sealed class DemoSeedFixture : IAsyncLifetime
     }
 
     /// <summary>Sobe a API sobre o banco: migrations e seeders rodam, como num restart.</summary>
-    public void StartApi(string connectionString, bool demoEnabled)
+    public void StartApi(string connectionString, bool demoEnabled, int historyMonths = 0)
     {
         var host = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -46,6 +46,7 @@ public sealed class DemoSeedFixture : IAsyncLifetime
             builder.UseSetting("JwtSettings:Key", "chave-apenas-para-testes-de-integracao-0001");
             builder.UseSetting("Seed:Admin:Password", AccessApiFixture.AdminPassword);
             builder.UseSetting("Seed:Demo:Enabled", demoEnabled ? "true" : "false");
+            builder.UseSetting("Seed:Demo:HistoryMonths", historyMonths.ToString(System.Globalization.CultureInfo.InvariantCulture));
             builder.ConfigureTestServices(services => services.AddSingleton<IFileStorage>(new InMemoryFileStorage()));
         });
         _ = host.Services; // constrói o host: roda Program.cs até o startup

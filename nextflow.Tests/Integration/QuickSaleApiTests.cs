@@ -276,6 +276,18 @@ public class QuickSaleApiTests(AccessApiFixture api)
         preview.GetProperty("remaining").GetDecimal().ShouldBe(3m);
         preview.GetProperty("change").GetDecimal().ShouldBe(10m);
         (await Available(client, storeId, product.VariantId)).ShouldBe(5m);
+
+        var invalid = await client.PostAsJsonAsync($"{Route}/preview", new
+        {
+            storeId,
+            items = new[] { Item(product.VariantId, 0m, 4.5m), Item(product.VariantId, 1m, 4.5m, lotId: Guid.NewGuid()) },
+            payments = Array.Empty<object>(),
+        });
+        invalid.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        var fields = FieldErrors(await Json(invalid)).ToList();
+        fields.ShouldContain("items[0].quantity");
+        fields.ShouldContain("items[1].lotId");
+        fields.ShouldNotContain("payments");
     }
 
     [Fact]

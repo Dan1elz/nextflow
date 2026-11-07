@@ -195,7 +195,7 @@ public class CreateQuickSaleUseCase(
 
 /// <summary>
 /// Prévia da venda rápida (T-VD2): o rodapé da tela (preço efetivo, totais, falta pagar e troco) calculado pela API com a
-/// mesma regra da venda, sem gravar nada. Falhas de item voltam por campo; pagamento incompleto não é erro aqui.
+/// mesma regra e o mesmo validador da venda, sem gravar nada. Falhas de item voltam por campo; pagamento incompleto não é erro aqui.
 /// </summary>
 public class PreviewQuickSaleUseCase(
     IStoreRepository storeRepository,
@@ -204,12 +204,19 @@ public class PreviewQuickSaleUseCase(
     IProductVariantRepository variantRepository,
     IProductPricingService pricing,
     IBusinessClock clock,
+    IValidator<QuickSaleDto> validator,
     IResultFactory<QuickSalePreviewDto> resultFactory) : IPreviewQuickSaleUseCase
 {
     public async Task<ResultDto<QuickSalePreviewDto>> Execute(QuickSaleDto? dto, Guid userId, CancellationToken ct = default)
     {
         if (dto is null)
             return resultFactory.Failure("O corpo da requisição é obrigatório.", 400);
+
+        // Mesmo formato da venda (quantidade, desconto, lote, valores); só a lista de pagamentos pode vir vazia na prévia.
+        var validation = await validator.ValidateAsync(dto, ct);
+        var formatFailures = validation.Errors.Where(e => e.PropertyName != nameof(QuickSaleDto.Payments)).ToList();
+        if (formatFailures.Count > 0)
+            return resultFactory.Failure(new ValidationResult(formatFailures), 422);
 
         var cart = await QuickSaleCart.Build(
             dto, new(storeRepository, locationRepository, clientRepository, variantRepository, pricing, clock), userId, ct);

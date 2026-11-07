@@ -19,7 +19,7 @@ namespace Nextflow.Infrastructure.Seeders.Demo;
 /// <summary>
 /// Histórico de demonstração (F2.9), só com <c>Seed:Demo:Enabled</c> e <c>Seed:Demo:HistoryMonths</c> &gt; 0: lança no
 /// livro-razão, em ordem de data, o plano da <see cref="DemoHistorySimulation"/> (abertura no dia 0, vendas pagas de balcão e
-/// pedidos de compra recebidos) com as datas no passado. Saldo = soma dos movimentos por construção (RN-CE01, RN-CE14).
+/// pedidos de compra recebidos) com as datas no passado. Parte das vendas leva um cliente do <see cref="DemoRegistry"/>. Saldo = soma dos movimentos por construção (RN-CE01, RN-CE14).
 /// <para>
 /// Roda só se nenhum local das lojas demo tem movimento (a abertura da F1.11 não roda com histórico ligado). Commit por dia,
 /// com o rastreador limpo depois, para a memória não crescer com 36 meses de registros. O <c>CreatedAt</c> dos registros
@@ -36,6 +36,7 @@ public class DemoHistorySeeder(
     IOrderRepository orderRepository,
     IPurchaseOrderRepository purchaseOrderRepository,
     IUserRepository userRepository,
+    IClientRepository clientRepository,
     IStockLedger stockLedger,
     ILotRepository lotRepository,
     IBusinessClock clock,
@@ -50,6 +51,9 @@ public class DemoHistorySeeder(
 
     private readonly HashSet<BaseModel> _stamped = [];
     private readonly Dictionary<(Guid VariantId, string Code), Guid> _lots = [];
+
+    /// <summary>Sorteio do cliente da venda, separado do da simulação para não mudar o plano de vendas e compras.</summary>
+    private readonly Random _clientRandom = new(RandomSeed + 1);
 
     public int Order => 60;
 
@@ -82,7 +86,7 @@ public class DemoHistorySeeder(
         var simulation = new DemoHistorySimulation(Anchor(), months, stores.Count, new Random(RandomSeed));
         simulation.Run();
 
-        await Persist(new Plan(simulation, stores, user.Id, await SupplierIds(ct)), ct);
+        await Persist(new Plan(simulation, stores, user.Id, await SupplierIds(ct), await WeightedClientIds(ct)), ct);
 
         logger.LogInformation(
             "Histórico demo: {Sales} vendas e {Purchases} compras de {First} a {Last} ({Lost} un. de venda perdida) em {Seconds} s.",
@@ -99,6 +103,17 @@ public class DemoHistorySeeder(
         var byCnpj = (await supplierRepository.GetAll(s => documents.Contains(s.Cnpj), 0, int.MaxValue, ct: ct))
             .ToDictionary(s => s.Cnpj.Value, s => s.Id);
         return documents.Select(d => byCnpj[d.Value]).ToList();
+    }
+
+    /// <summary>Clientes demo com compra, cada um repetido pelo peso (o sorteio é uniforme na lista).</summary>
+    private async Task<List<Guid>> WeightedClientIds(CancellationToken ct)
+    {
+        var documents = DemoRegistry.Clients.Select(c => TaxDocument.ParseCpf(c.Cpf)).ToList();
+        var byCpf = (await clientRepository.GetAll(c => c.Cpf != null && documents.Contains(c.Cpf), 0, int.MaxValue, ct: ct))
+            .ToDictionary(c => c.Cpf!.Value, c => c.Id);
+        return DemoRegistry.Clients
+            .SelectMany((client, i) => byCpf.TryGetValue(documents[i].Value, out var id) ? Enumerable.Repeat(id, client.Weight) : [])
+            .ToList();
     }
 
     private async Task Persist(Plan plan, CancellationToken ct)
@@ -274,7 +289,8 @@ public class DemoHistorySeeder(
         CancellationToken ct)
     {
         var saleLocationId = plan.SaleLocation(sale.Store);
-        var order = new SaleOrder(new QuickSaleDto { StoreId = plan.Stores[sale.Store].Id, SaleLocationId = saleLocationId },
+        var order = new SaleOrder(
+            new QuickSaleDto { StoreId = plan.Stores[sale.Store].Id, SaleLocationId = saleLocationId, ClientId = PickClient(plan) },
             saleLocationId, plan.UserId, paidAt);
 
         foreach (var line in sale.Lines)
@@ -297,6 +313,12 @@ public class DemoHistorySeeder(
         await orderRepository.AddAsync(order, ct);
         Stamp(paidAt);
     }
+
+    /// <summary>Cliente identificado em parte das vendas (<see cref="DemoRegistry.IdentifiedSaleShare"/>); o resto é balcão anônimo.</summary>
+    private Guid? PickClient(Plan plan)
+        => plan.ClientIds.Count > 0 && _clientRandom.NextDouble() < DemoRegistry.IdentifiedSaleShare
+            ? plan.ClientIds[_clientRandom.Next(plan.ClientIds.Count)]
+            : null;
 
     private async Task Post(StockDocumentDto document, List<StockLineDto> lines, CancellationToken ct)
     {
@@ -345,12 +367,13 @@ public class DemoHistorySeeder(
     }
 
     /// <summary>Ids resolvidos uma vez: lojas, locais, fornecedores e SKUs do catálogo demo.</summary>
-    private sealed class Plan(DemoHistorySimulation simulation, List<Store> stores, Guid userId, List<Guid> supplierIds)
+    private sealed class Plan(DemoHistorySimulation simulation, List<Store> stores, Guid userId, List<Guid> supplierIds, List<Guid> clientIds)
     {
         public DemoHistorySimulation Simulation { get; } = simulation;
         public List<Store> Stores { get; } = stores;
         public Guid UserId { get; } = userId;
         public List<Guid> SupplierIds { get; } = supplierIds;
+        public List<Guid> ClientIds { get; } = clientIds;
         public List<string> Skus { get; } = simulation.Items.Select(i => i.Variant.Sku).ToList();
 
         public Guid SaleLocation(int store) => Stores[store].DefaultSaleLocationId!.Value;

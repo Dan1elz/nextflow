@@ -41,7 +41,9 @@ public class ForecastRecommendation : BaseModel
     public Guid? AppliedById { get; private set; }
     public Guid? AppliedPurchaseOrderId { get; private set; }
     public Guid? AppliedPromotionId { get; private set; }
+    /// <summary>Texto livre do descarte (T-DF8); obrigatório com o motivo "Outro".</summary>
     public string? DismissReason { get; private set; }
+    public DismissReasonEnum? DismissReasonCode { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
     public virtual ForecastRun ForecastRun { get; private set; } = null!;
@@ -88,6 +90,55 @@ public class ForecastRecommendation : BaseModel
     }
 
     public bool IsPending => Status == RecommendationStatusEnum.Pending;
+
+    /// <summary>Comprar aplicado (T-DF4, RN-DF15): o pedido de compra em Orçamento gerado para o fornecedor.</summary>
+    public void ApplyPurchase(Guid purchaseOrderId, Guid appliedById, DateTime utcNow)
+    {
+        MarkApplied(appliedById, utcNow);
+        AppliedPurchaseOrderId = purchaseOrderId;
+    }
+
+    /// <summary>Promover aplicado (T-DF6): a promoção criada (a primeira, quando o escopo gera uma por variação).</summary>
+    public void ApplyPromotion(Guid promotionId, Guid appliedById, DateTime utcNow)
+    {
+        MarkApplied(appliedById, utcNow);
+        AppliedPromotionId = promotionId;
+    }
+
+    /// <summary>Descartar (T-DF8), com motivo opcional.</summary>
+    public void Dismiss(DismissReasonEnum? reasonCode, string? note, Guid dismissedById, DateTime utcNow)
+    {
+        Status = RecommendationStatusEnum.Dismissed;
+        DismissReasonCode = reasonCode;
+        DismissReason = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        AppliedById = dismissedById;
+        AppliedAt = utcNow;
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>
+    /// O pedido de compra gerado foi cancelado (F3.4): a recomendação volta a Pendente se for da análise vigente; de análise antiga,
+    /// expira (a nova análise já tem a recomendação atual do produto).
+    /// </summary>
+    public void RevertPurchase(bool fromLatestRun, DateTime utcNow)
+    {
+        if (Status != RecommendationStatusEnum.Applied || AppliedPurchaseOrderId is null)
+            return;
+
+        Status = fromLatestRun ? RecommendationStatusEnum.Pending : RecommendationStatusEnum.Expired;
+        AppliedPurchaseOrderId = null;
+        AppliedById = null;
+        AppliedAt = null;
+        UpdatedAt = utcNow;
+    }
+
+    private void MarkApplied(Guid appliedById, DateTime utcNow)
+    {
+        Status = RecommendationStatusEnum.Applied;
+        AppliedById = appliedById;
+        AppliedAt = utcNow;
+        UpdatedAt = utcNow;
+    }
 
     /// <summary>Nova análise expira as pendentes da anterior (RN-DF14); recomendação já aplicada ou descartada não muda.</summary>
     public void Expire(DateTime utcNow)

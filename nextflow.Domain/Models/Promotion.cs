@@ -46,6 +46,14 @@ public class Promotion : BaseModel
         BelowCostConfirmed = belowCostConfirmed;
     }
 
+    /// <summary>Promoção aplicada de uma recomendação "Promover" da previsão (T-DF6, F3.4).</summary>
+    public Promotion(PromotionRequestDto dto, Guid forecastRecommendationId, Guid createdById, bool belowCostConfirmed)
+        : this(dto, createdById, belowCostConfirmed)
+    {
+        Source = PromotionSourceEnum.AiRecommendation;
+        ForecastRecommendationId = forecastRecommendationId;
+    }
+
     public void Cancel()
     {
         IsActive = false;

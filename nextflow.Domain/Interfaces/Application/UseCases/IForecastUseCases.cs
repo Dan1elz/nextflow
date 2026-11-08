@@ -41,6 +41,36 @@ public interface IGetForecastRecommendationsUseCase
         string? sort = null, string? order = null, CancellationToken ct = default);
 }
 
+/// <summary>Detalhe da recomendação (T-DF3).</summary>
+public interface IGetForecastRecommendationUseCase
+{
+    Task<ResultDto<ForecastRecommendationDetailDto>> Execute(Guid recommendationId, CancellationToken ct = default);
+}
+
+/// <summary>Previsão do produto para a aba "Previsão" (T-DF5), sem recomendação obrigatória.</summary>
+public interface IGetProductForecastUseCase
+{
+    Task<ResultDto<ProductForecastDto>> Execute(Guid productId, int months, CancellationToken ct = default);
+}
+
+/// <summary>Aplicar "Comprar" (T-DF4): um pedido de compra em Orçamento por fornecedor (RN-DF15).</summary>
+public interface IApplyPurchaseRecommendationsUseCase
+{
+    Task<ResultDto<ApplyPurchaseResultDto>> Execute(ApplyPurchaseDto? dto, Guid? userId, CancellationToken ct = default);
+}
+
+/// <summary>Aplicar "Promover" (T-DF6): cria a promoção ligada à recomendação.</summary>
+public interface IApplyPromotionRecommendationUseCase
+{
+    Task<ResultDto<ApplyPromotionResultDto>> Execute(Guid recommendationId, ApplyPromotionDto? dto, Guid? userId, CancellationToken ct = default);
+}
+
+/// <summary>Descartar a recomendação (T-DF8).</summary>
+public interface IDismissRecommendationUseCase
+{
+    Task<ResultDto<ForecastRecommendationListItemDto>> Execute(Guid recommendationId, DismissRecommendationDto? dto, Guid? userId, CancellationToken ct = default);
+}
+
 /// <summary>Agendamento da análise (T-DF11).</summary>
 public interface IGetForecastSettingsUseCase
 {

@@ -54,6 +54,7 @@ public class ForecastRecommendationConfiguration : IEntityTypeConfiguration<Fore
         builder.Property(r => r.Reason).HasMaxLength(1000);
         builder.Property(r => r.ReasonCalculated).HasMaxLength(1000);
         builder.Property(r => r.DismissReason).HasMaxLength(255);
+        builder.Property(r => r.DismissReasonCode).HasConversion<byte?>();
         builder.Property(r => r.AppliedById).HasColumnName("applied_by");
         builder.Property(r => r.SuggestedQuantity).HasPrecision(14, 3);
         builder.Property(r => r.CalculatedQuantity).HasPrecision(14, 3);

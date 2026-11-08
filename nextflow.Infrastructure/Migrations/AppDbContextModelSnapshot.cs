@@ -641,6 +641,10 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("dismiss_reason");
 
+                    b.Property<byte?>("DismissReasonCode")
+                        .HasColumnType("smallint")
+                        .HasColumnName("dismiss_reason_code");
+
                     b.Property<Guid>("ForecastRunId")
                         .HasColumnType("uuid")
                         .HasColumnName("forecast_run_id");
@@ -1797,6 +1801,9 @@ namespace Nextflow.Infrastructure.Migrations
 
                     b.HasIndex("CreatedById")
                         .HasDatabaseName("ix_promotions_created_by_id");
+
+                    b.HasIndex("ForecastRecommendationId")
+                        .HasDatabaseName("ix_promotions_forecast_recommendation_id");
 
                     b.HasIndex("StartDate")
                         .HasDatabaseName("ix_promotions_start_date");
@@ -2976,6 +2983,12 @@ namespace Nextflow.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_promotions_user_created_by_id");
+
+                    b.HasOne("Nextflow.Domain.Models.ForecastRecommendation", null)
+                        .WithMany()
+                        .HasForeignKey("ForecastRecommendationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_promotions_forecast_recommendations_forecast_recommendation");
 
                     b.HasOne("Nextflow.Domain.Models.Product", "Product")
                         .WithMany("Promotions")

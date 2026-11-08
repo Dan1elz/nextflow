@@ -289,7 +289,7 @@ Herdam `BaseRepository<T>`. Repositório `UserRepository` tem lógica extra (bus
 
 ### 6.4 Seeders
 
-Implementam `ISeeder` (`Order` + `SeedAsync`), recebem dependências por DI e são idempotentes. Sempre: `UsersSeeder` (10), `LocationsSeeder` (20, `Seeders/Data/locations.json` embutido). Só com `Seed:Demo:Enabled`: `DemoStoreSeeder` (70) e `ProductImagesSeeder` (80), em `Seeders/Demo/`. Novo seeder = nova classe `ISeeder` com `Order`; não precisa mexer no `Program.cs`.
+Implementam `ISeeder` (`Order` + `SeedAsync`), recebem dependências por DI e são idempotentes. Sempre: `UsersSeeder` (10), `LocationsSeeder` (20, `Seeders/Data/locations.json` embutido). Só com `Seed:Demo:Enabled`: `DemoStoreSeeder` (70) e `DemoPhotosSeeder` (80), em `Seeders/Demo/`. Novo seeder = nova classe `ISeeder` com `Order`; não precisa mexer no `Program.cs`.
 
 **Dados de demonstração** (loja de doces e presentes, 48 SKUs, 36 meses, ~23 mil pedidos, estoque = soma das movimentações): ver `docs/AI_FORECAST_SPEC.md`, seção 8. Flags `Seed:Demo:Enabled` (padrão `false`; `true` no Development e nos compose) e `Seed:Demo:AnchorDate` (vazio = hoje).
 

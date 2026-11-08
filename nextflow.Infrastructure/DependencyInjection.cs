@@ -9,6 +9,7 @@ using Nextflow.Infrastructure.Services.Notifications;
 using Nextflow.Infrastructure.Database;
 using Nextflow.Infrastructure.Repositories;
 using Nextflow.Infrastructure.Seeders;
+using Nextflow.Infrastructure.Seeders.Demo;
 using Nextflow.Infrastructure.Storage;
 
 namespace Nextflow.Infrastructure;
@@ -48,6 +49,8 @@ public static class DependencyInjection
             .As<ISeeder>()
             .WithScopedLifetime());
         services.AddScoped<SeederRunner>();
+        // Fotos do seed demo (Unsplash): prazo curto, foto que não baixa fica de fora e o startup segue.
+        services.AddHttpClient<IDemoPhotoSource, UnsplashDemoPhotoSource>(client => client.Timeout = UnsplashDemoPhotoSource.Timeout);
 
         return services;
     }

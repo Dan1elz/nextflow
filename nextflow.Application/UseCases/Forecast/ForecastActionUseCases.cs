@@ -47,11 +47,12 @@ public class GetForecastRecommendationUseCase(
     IForecastRecommendationRepository recommendationRepository,
     IStockPolicyRepository policyRepository,
     IStockBalanceRepository balanceRepository,
+    IPurchaseItemRepository itemRepository,
     ProductForecastReader productForecastReader,
     IFileStorage fileStorage,
     IResultFactory<ForecastRecommendationDetailDto> resultFactory) : IGetForecastRecommendationUseCase
 {
-    public async Task<ResultDto<ForecastRecommendationDetailDto>> Execute(Guid recommendationId, CancellationToken ct = default)
+    public async Task<ResultDto<ForecastRecommendationDetailDto>> Execute(Guid recommendationId, Guid? storeId = null, CancellationToken ct = default)
     {
         var recommendation = await recommendationRepository.GetById(recommendationId, q => ForecastRecommendationReading.ListInclude(q)
             .Include(r => r.Product).ThenInclude(p => p.Events)
@@ -86,8 +87,10 @@ public class GetForecastRecommendationUseCase(
         var split = await SplitAsync(recommendation, ct);
         var forecast = await productForecastReader.LoadAsync(product, ProductForecastReader.DefaultMonths, ct);
 
-        return resultFactory.Success(new ForecastRecommendationDetailDto(
-            recommendation, fileStorage.GetPublicUrl(product.ImageKey), calculation, split, forecast));
+        var detail = new ForecastRecommendationDetailDto(
+            recommendation, fileStorage.GetPublicUrl(product.ImageKey), calculation, split, forecast);
+        await ForecastStoreStock.FillAsync([detail], storeId, balanceRepository, itemRepository, ct);
+        return resultFactory.Success(detail);
     }
 
     private async Task<List<VariantSplitDto>> SplitAsync(ForecastRecommendation recommendation, CancellationToken ct)

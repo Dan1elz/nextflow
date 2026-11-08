@@ -37,7 +37,7 @@ public interface IGetSalesChartUseCase
 /// <summary>Card "Recomendações" do painel (T-DF1).</summary>
 public interface IGetForecastTopUseCase
 {
-    Task<ResultDto<ForecastTopDto>> Execute(int limit, CancellationToken ct = default);
+    Task<ResultDto<ForecastTopDto>> Execute(int limit, Guid? storeId = null, CancellationToken ct = default);
 }
 
 /// <summary>Sino (T-DF12): não lidas e as últimas do usuário.</summary>

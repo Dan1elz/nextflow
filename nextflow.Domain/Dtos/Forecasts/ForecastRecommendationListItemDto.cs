@@ -24,6 +24,10 @@ public class ForecastRecommendationListItemDto
     public string Status { get; set; } = string.Empty;
     public decimal CurrentStock { get; set; }
     public decimal IncomingStock { get; set; }
+    /// <summary>Saldo da loja pedida em <c>storeId</c>, lido na consulta; nulo sem loja (a análise é da empresa inteira).</summary>
+    public decimal? StoreCurrentStock { get; set; }
+    /// <summary>"A caminho" para a loja pedida em <c>storeId</c> (RN-CP05); nulo sem loja.</summary>
+    public decimal? StoreIncomingStock { get; set; }
     public decimal? CoverageDays { get; set; }
     public decimal ProjectedDemand { get; set; }
     public string SaleUnit { get; set; } = string.Empty;

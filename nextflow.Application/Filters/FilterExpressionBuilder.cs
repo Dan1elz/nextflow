@@ -309,7 +309,8 @@ public sealed class FilterExpressionBuilder<TEntity>
     }
 
     /// <summary>
-    /// Filtro de Igualdade para Enums (baseado no valor inteiro).
+    /// Filtro de Igualdade para Enums. Aceita um valor ou vários separados por vírgula ("Budget,Pending"), que viram
+    /// "está entre". Cada valor é lido sozinho: o <c>Enum.TryParse</c> da lista inteira somaria os valores num terceiro.
     /// </summary>
     public FilterExpressionBuilder<TEntity> WhereEnumEquals<TEnum>(
         FilterSet filters,
@@ -317,11 +318,22 @@ public sealed class FilterExpressionBuilder<TEntity>
         Expression<Func<TEntity, TEnum>> selector) where TEnum : struct, Enum
     {
         if (!filters.TryGetString(key, out var raw)) return this;
-        if (!FilterValueParsers.TryParseEnum<TEnum>(raw, out var enumVal)) return this;
-        // Enum.TryParse aceita qualquer número (inclusive fora do enum) — sem essa checagem
+
+        // Enum.TryParse aceita qualquer número (inclusive fora do enum) — sem a checagem do IsDefined
         // um valor inválido viraria filtro por um status inexistente e zeraria a listagem.
-        if (!Enum.IsDefined(enumVal)) return this;
-        return AndEquals(selector, enumVal);
+        var values = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part => FilterValueParsers.TryParseEnum<TEnum>(part, out var value) && Enum.IsDefined(value) ? value : (TEnum?)null)
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .Distinct()
+            .ToList();
+
+        return values.Count switch
+        {
+            0 => this,
+            1 => AndEquals(selector, values[0]),
+            _ => AndIn(selector, values),
+        };
     }
 
     /// <summary>
@@ -373,6 +385,17 @@ public sealed class FilterExpressionBuilder<TEntity>
         var right = Expression.Constant(value, typeof(TValue));
         var equals = Expression.Equal(left, right);
         return And(Expression.Lambda<Func<TEntity, bool>>(equals, p));
+    }
+
+    private FilterExpressionBuilder<TEntity> AndIn<TValue>(
+        Expression<Func<TEntity, TValue>> selector,
+        List<TValue> values)
+    {
+        var p = Expression.Parameter(typeof(TEntity), "e");
+        var left = new ReplaceParameterVisitor(selector.Parameters[0], p).Visit(selector.Body)!;
+        var contains = Expression.Call(typeof(Enumerable), nameof(Enumerable.Contains), [typeof(TValue)],
+            Expression.Constant(values), left);
+        return And(Expression.Lambda<Func<TEntity, bool>>(contains, p));
     }
 
     private FilterExpressionBuilder<TEntity> AndCompare<TValue>(

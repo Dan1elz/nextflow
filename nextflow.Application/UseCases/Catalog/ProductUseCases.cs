@@ -474,6 +474,10 @@ public class GetAllProductsUseCase(
                     || (v.Barcode != null && v.Barcode.ToLower().Contains(term)))));
         }
 
+        // Produtos ligados a um evento do calendário (visualizar evento, T-CE).
+        if (set.TryGetString("eventId", out var rawEvent) && Guid.TryParse(rawEvent, out var eventId))
+            builder.And(p => p.Events.Any(e => e.EventId == eventId));
+
         if (set.TryGetString("categoryId", out var raw) && Guid.TryParse(raw, out var categoryId))
             builder.And(p => p.Categories.Any(c => c.CategoryId == categoryId || c.Category.ParentId == categoryId));
 

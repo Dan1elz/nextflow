@@ -9,9 +9,27 @@ public sealed record DemoAddress(string ZipCode, string Street, string Number, s
 /// </summary>
 public sealed record DemoClient(string Name, string LastName, string Cpf, DateOnly BirthDate, string Phone, DemoAddress Address, int Weight);
 
-/// <summary>Clientes e endereços dos fornecedores do seed demo: nomes, CPFs e endereços inventados.</summary>
+/// <summary>
+/// Vendedor fictício: um usuário a mais para o histórico ter vendas de pessoas diferentes (filtro de vendedor). Só existe o
+/// perfil Admin (ADR 0004), então ele é Admin, com senha aleatória: serve para atribuir vendas, não para logar.
+/// <see cref="Stores"/> são os índices de <see cref="DemoCatalog.StoreNames"/> onde ele vende; <see cref="Weight"/> é a
+/// frequência relativa de vendas dele na loja (o Admin tem peso <see cref="DemoRegistry.AdminSellerWeight"/>).
+/// </summary>
+public sealed record DemoSeller(string Name, string LastName, string Cpf, DateOnly BirthDate, string Email, int[] Stores, int Weight);
+
+/// <summary>Clientes, vendedores e endereços dos fornecedores do seed demo: nomes, CPFs e endereços inventados.</summary>
 public static class DemoRegistry
 {
+    /// <summary>Peso do Admin no sorteio do vendedor de cada venda do histórico.</summary>
+    public const int AdminSellerWeight = 1;
+
+    public static readonly DemoSeller[] Sellers =
+    [
+        new("Ana Clara", "Souza", Cpf("613524871"), new(1997, 5, 12), "ana.souza@demo.nextflow.com", [0], 4),
+        new("Bruno", "Martins", Cpf("724635982"), new(1991, 9, 3), "bruno.martins@demo.nextflow.com", [0], 3),
+        new("Carla", "Mendes", Cpf("835746093"), new(1985, 1, 22), "carla.mendes@demo.nextflow.com", [1], 4),
+    ];
+
     /// <summary>Fração das vendas do histórico com cliente identificado (o resto é balcão anônimo).</summary>
     public const double IdentifiedSaleShare = 0.2;
 

@@ -21,9 +21,14 @@ namespace Nextflow.Infrastructure.Seeders.Demo;
 /// livro-razão, em ordem de data, o plano da <see cref="DemoHistorySimulation"/> (abertura no dia 0, vendas pagas de balcão e
 /// pedidos de compra recebidos) com as datas no passado. Parte das vendas leva um cliente do <see cref="DemoRegistry"/>. Saldo = soma dos movimentos por construção (RN-CE01, RN-CE14).
 /// <para>
-/// Roda só se nenhum local das lojas demo tem movimento (a abertura da F1.11 não roda com histórico ligado). Commit por dia,
-/// com o rastreador limpo depois, para a memória não crescer com 36 meses de registros. O <c>CreatedAt</c> dos registros
-/// novos é ajustado no <see cref="AppDbContext"/> para a data simulada: só o seed faz isso.
+/// Roda se nenhum local das lojas demo tem movimento (a abertura da F1.11 não roda com histórico ligado). Cada dia é gravado
+/// numa transação (tudo ou nada), com o rastreador limpo depois, para a memória não crescer com 36 meses de registros. O
+/// <c>CreatedAt</c> dos registros novos é ajustado no <see cref="AppDbContext"/> para a data simulada: só o seed faz isso.
+/// </para>
+/// <para>
+/// Retomada: se o startup cai no meio (restart do container, erro), o próximo startup refaz a simulação com a mesma âncora,
+/// gravada na nota da abertura, e continua do dia seguinte ao último gravado. Como a simulação é determinística, o resultado
+/// é o mesmo de um seed sem interrupção. Abertura sem âncora na nota (histórico anterior a 08/11/2026) não é retomada.
 /// </para>
 /// </summary>
 public class DemoHistorySeeder(
@@ -45,7 +50,8 @@ public class DemoHistorySeeder(
 {
     public const string HistoryMonthsKey = "Seed:Demo:HistoryMonths";
     public const string AnchorDateKey = "Seed:Demo:AnchorDate";
-    public const string OpeningNote = "Saldo de abertura do histórico (demonstração)";
+    /// <summary>Começo da nota da abertura; o resto é a âncora (<see cref="OpeningNote"/>), lida na retomada.</summary>
+    public const string OpeningNotePrefix = "Saldo de abertura do histórico (demonstração";
     public const string PurchaseNote = "Reposição programada (dados de demonstração)";
     public const int RandomSeed = 42;
 
@@ -54,6 +60,9 @@ public class DemoHistorySeeder(
 
     /// <summary>Sorteio do cliente da venda, separado do da simulação para não mudar o plano de vendas e compras.</summary>
     private readonly Random _clientRandom = new(RandomSeed + 1);
+
+    /// <summary>Sorteio do vendedor da venda, também separado da simulação.</summary>
+    private readonly Random _sellerRandom = new(RandomSeed + 2);
 
     public int Order => 60;
 
@@ -79,23 +88,82 @@ public class DemoHistorySeeder(
             return;
 
         var locationIds = stores.SelectMany(s => s.Locations).Select(l => l.Id).ToList();
+        var anchor = Anchor();
+        var startDay = 0;
         if (await movementRepository.Exists(m => locationIds.Contains(m.LocationId), ct))
-            return;
+        {
+            if (await ResumePoint(stores, locationIds, months, ct) is not { } resume)
+                return;
+            (anchor, startDay) = resume;
+        }
 
         var stopwatch = Stopwatch.StartNew();
-        var simulation = new DemoHistorySimulation(Anchor(), months, stores.Count, new Random(RandomSeed));
+        var simulation = new DemoHistorySimulation(anchor, months, stores.Count, new Random(RandomSeed));
         simulation.Run();
 
-        await Persist(new Plan(simulation, stores, user.Id, await SupplierIds(ct), await WeightedClientIds(ct)), ct);
+        var plan = new Plan(simulation, stores, user.Id, await SupplierIds(ct), await WeightedClientIds(ct),
+            await WeightedSellerIds(user.Id, stores, ct));
+        await Persist(plan, startDay, ct);
 
         logger.LogInformation(
             "Histórico demo: {Sales} vendas e {Purchases} compras de {First} a {Last} ({Lost} un. de venda perdida) em {Seconds} s.",
-            simulation.Sales.Count, simulation.Purchases.Count, simulation.FirstDay, simulation.Anchor.AddDays(-1),
+            simulation.Sales.Count, simulation.Purchases.Count, simulation.DateOf(startDay), simulation.Anchor.AddDays(-1),
             simulation.LostUnits, stopwatch.Elapsed.TotalSeconds.ToString("0", CultureInfo.InvariantCulture));
     }
 
     private DateOnly Anchor()
         => DateOnly.TryParse(configuration[AnchorDateKey], CultureInfo.InvariantCulture, out var anchor) ? anchor : clock.Today;
+
+    /// <summary>Nota da abertura com a âncora da simulação, para a retomada refazer o mesmo plano.</summary>
+    public static string OpeningNote(DateOnly anchor)
+        => $"{OpeningNotePrefix}, âncora {anchor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)})";
+
+    /// <summary>
+    /// Histórico já começado: a âncora (da nota da abertura) e o primeiro dia ainda não gravado. Nulo quando não há o que
+    /// retomar: histórico completo, abertura da F1.11 ou anterior à retomada (sem âncora), ou janela de meses diferente.
+    /// Só conta o que foi gravado antes da âncora, então venda feita à mão depois do seed não esconde um histórico pela metade.
+    /// </summary>
+    private async Task<(DateOnly Anchor, int StartDay)?> ResumePoint(List<Store> stores, List<Guid> locationIds, int months,
+        CancellationToken ct)
+    {
+        var opening = await context.Set<StockMovement>()
+            .Where(m => locationIds.Contains(m.LocationId) && m.Reason == MovementReasonEnum.Opening
+                && m.Note != null && m.Note.StartsWith(OpeningNotePrefix))
+            .Select(m => new { m.Note, m.CreatedAt })
+            .FirstOrDefaultAsync(ct);
+        if (opening is null)
+            return null;
+
+        var match = System.Text.RegularExpressions.Regex.Match(opening.Note!, @"âncora (\d{4}-\d{2}-\d{2})");
+        if (!match.Success || !DateOnly.TryParseExact(match.Groups[1].Value, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var anchor))
+            return null;
+
+        var firstDay = new DateOnly(anchor.Year, anchor.Month, 1).AddMonths(-months);
+        if (clock.ToBusinessDate(opening.CreatedAt) != firstDay)
+        {
+            logger.LogWarning("Histórico demo começado com outra janela de meses: não é retomado. Para refazer, apague o banco.");
+            return null;
+        }
+
+        var end = clock.StartOfDayUtc(anchor);
+        var storeIds = stores.Select(s => s.Id).ToList();
+        var lastMovement = await context.Set<StockMovement>()
+            .Where(m => locationIds.Contains(m.LocationId) && m.CreatedAt < end).MaxAsync(m => (DateTime?)m.CreatedAt, ct);
+        var lastOrder = await context.Set<SaleOrder>()
+            .Where(o => storeIds.Contains(o.StoreId) && o.CreatedAt < end).MaxAsync(o => (DateTime?)o.CreatedAt, ct);
+        var lastPurchase = await context.Set<PurchaseOrder>()
+            .Where(p => storeIds.Contains(p.StoreId) && p.CreatedAt < end).MaxAsync(p => (DateTime?)p.CreatedAt, ct);
+        var last = new[] { lastMovement, lastOrder, lastPurchase }.Max()!.Value;
+
+        var startDay = clock.ToBusinessDate(last).DayNumber - firstDay.DayNumber + 1;
+        if (startDay >= anchor.DayNumber - firstDay.DayNumber)
+            return null;
+
+        logger.LogWarning("Histórico demo interrompido em {Last}: retomando do dia seguinte até {Anchor}.",
+            clock.ToBusinessDate(last), anchor.AddDays(-1));
+        return (anchor, startDay);
+    }
 
     private async Task<List<Guid>> SupplierIds(CancellationToken ct)
     {
@@ -116,7 +184,23 @@ public class DemoHistorySeeder(
             .ToList();
     }
 
-    private async Task Persist(Plan plan, CancellationToken ct)
+    /// <summary>Vendedores por loja, cada um repetido pelo peso; o Admin vende em todas.</summary>
+    private async Task<List<List<Guid>>> WeightedSellerIds(Guid adminId, List<Store> stores, CancellationToken ct)
+    {
+        var emails = DemoRegistry.Sellers.Select(s => s.Email).ToList();
+        var byEmail = (await userRepository.GetAll(u => emails.Contains(u.Email), 0, int.MaxValue, ct: ct))
+            .ToDictionary(u => u.Email, u => u.Id);
+
+        return stores.Select((_, store) => Enumerable.Repeat(adminId, DemoRegistry.AdminSellerWeight)
+                .Concat(DemoRegistry.Sellers
+                    .Where(s => s.Stores.Contains(store) && byEmail.ContainsKey(s.Email))
+                    .SelectMany(s => Enumerable.Repeat(byEmail[s.Email], s.Weight)))
+                .ToList())
+            .ToList();
+    }
+
+    /// <param name="startDay">Primeiro dia a gravar; os anteriores (já gravados) só repetem os sorteios, para a retomada dar o mesmo resultado.</param>
+    private async Task Persist(Plan plan, int startDay, CancellationToken ct)
     {
         var simulation = plan.Simulation;
         var salesByDay = simulation.Sales.ToLookup(s => s.Day);
@@ -127,25 +211,38 @@ public class DemoHistorySeeder(
         for (var day = 0; day < simulation.Days; day++)
         {
             var startOfDay = clock.StartOfDayUtc(simulation.DateOf(day));
-            var variants = await LoadVariants(plan, ct);
-
-            if (day == 0)
-                await PostOpening(plan, variants, startOfDay.AddHours(7), ct);
-
             foreach (var purchase in receiptsByDay[day])
             {
-                await Receive(plan, purchase, variants, ct);
                 foreach (var line in purchase.Lines)
                     lastCosts[(purchase.Supplier, simulation.Items[line.Item].Product.Name)] = (line.UnitCost, startOfDay.AddHours(10));
             }
 
-            foreach (var purchase in openByDay[day])
-                await AddPurchaseOrder(plan, purchase, variants, ct);
+            if (day < startDay)
+            {
+                foreach (var sale in salesByDay[day])
+                    PickParties(plan, sale);
+                continue;
+            }
 
-            foreach (var sale in salesByDay[day])
-                await AddSale(plan, sale, variants, startOfDay.AddMinutes(sale.Minute), ct);
+            var current = day;
+            await unitOfWork.ExecuteInTransactionAsync(async dayCt =>
+            {
+                var variants = await LoadVariants(plan, dayCt);
 
-            await CommitAndClear(ct);
+                if (current == 0)
+                    await PostOpening(plan, variants, startOfDay.AddHours(7), dayCt);
+
+                foreach (var purchase in receiptsByDay[current])
+                    await Receive(plan, purchase, variants, dayCt);
+
+                foreach (var purchase in openByDay[current])
+                    await AddPurchaseOrder(plan, purchase, variants, dayCt);
+
+                foreach (var sale in salesByDay[current])
+                    await AddSale(plan, sale, variants, startOfDay.AddMinutes(sale.Minute), dayCt);
+
+                await CommitAndClear(dayCt);
+            }, ct);
         }
 
         await RecordLastCosts(plan, lastCosts, ct);
@@ -177,7 +274,7 @@ public class DemoHistorySeeder(
         if (lines.Count == 0)
             return;
 
-        await Post(new StockDocumentDto { SourceType = SourceTypeEnum.Manual, UserId = plan.UserId, Note = OpeningNote }, lines, ct);
+        await Post(new StockDocumentDto { SourceType = SourceTypeEnum.Manual, UserId = plan.UserId, Note = OpeningNote(simulation.Anchor) }, lines, ct);
         Stamp(at);
         // Sem limpar o rastreador: as variações do dia seguem sendo as instâncias que o livro-razão atualiza.
         await unitOfWork.CommitAsync(ct);
@@ -289,9 +386,10 @@ public class DemoHistorySeeder(
         CancellationToken ct)
     {
         var saleLocationId = plan.SaleLocation(sale.Store);
+        var (clientId, sellerId) = PickParties(plan, sale);
         var order = new SaleOrder(
-            new QuickSaleDto { StoreId = plan.Stores[sale.Store].Id, SaleLocationId = saleLocationId, ClientId = PickClient(plan) },
-            saleLocationId, plan.UserId, paidAt);
+            new QuickSaleDto { StoreId = plan.Stores[sale.Store].Id, SaleLocationId = saleLocationId, ClientId = clientId },
+            saleLocationId, sellerId, paidAt);
 
         foreach (var line in sale.Lines)
         {
@@ -309,9 +407,17 @@ public class DemoHistorySeeder(
             Quantity = i.Quantity,
         }).ToList();
 
-        await Post(new StockDocumentDto { SourceType = SourceTypeEnum.Order, SourceId = order.Id, UserId = plan.UserId }, lines, ct);
+        await Post(new StockDocumentDto { SourceType = SourceTypeEnum.Order, SourceId = order.Id, UserId = sellerId }, lines, ct);
         await orderRepository.AddAsync(order, ct);
         Stamp(paidAt);
+    }
+
+    /// <summary>Cliente e vendedor da venda, sempre nesta ordem de sorteio (a retomada repete os sorteios dos dias já gravados).</summary>
+    private (Guid? ClientId, Guid SellerId) PickParties(Plan plan, DemoHistorySimulation.Sale sale)
+    {
+        var clientId = PickClient(plan);
+        var sellers = plan.SellerIds[sale.Store];
+        return (clientId, sellers[_sellerRandom.Next(sellers.Count)]);
     }
 
     /// <summary>Cliente identificado em parte das vendas (<see cref="DemoRegistry.IdentifiedSaleShare"/>); o resto é balcão anônimo.</summary>
@@ -367,8 +473,12 @@ public class DemoHistorySeeder(
     }
 
     /// <summary>Ids resolvidos uma vez: lojas, locais, fornecedores e SKUs do catálogo demo.</summary>
-    private sealed class Plan(DemoHistorySimulation simulation, List<Store> stores, Guid userId, List<Guid> supplierIds, List<Guid> clientIds)
+    private sealed class Plan(DemoHistorySimulation simulation, List<Store> stores, Guid userId, List<Guid> supplierIds, List<Guid> clientIds,
+        List<List<Guid>> sellerIds)
     {
+        /// <summary>Vendedores sorteáveis por loja, repetidos pelo peso.</summary>
+        public List<List<Guid>> SellerIds { get; } = sellerIds;
+
         public DemoHistorySimulation Simulation { get; } = simulation;
         public List<Store> Stores { get; } = stores;
         public Guid UserId { get; } = userId;

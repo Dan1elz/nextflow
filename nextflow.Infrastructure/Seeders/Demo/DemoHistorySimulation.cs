@@ -85,8 +85,11 @@ public sealed class DemoHistorySimulation
                 var lead = SupplierOf(i).LeadTimeDays;
                 SaleOpening[s, i] = (int)Math.Ceiling(ExpectedDemand(s, i, 0, lead + ReviewIntervalDays + CoverDays) + MinSale(s, i));
                 stock[s, i] = SaleOpening[s, i];
-                // Depósito como na F1.11: o dobro do mínimo; fica parado (o seed não transfere).
-                DepositOpening[s, i] = Items[i].Product.MinStock > 0 ? (int)Math.Ceiling((double)Items[i].Product.MinStock * StoreFactor(s) * 2) : 0;
+                // Depósito como na F1.11: o dobro do mínimo, parado (o seed não transfere). Só o que não vence: alimento parado
+                // no depósito venceria todo, então ele abre só no salão (DemoCatalog.KeepsInDeposit).
+                DepositOpening[s, i] = Items[i].Product.MinStock > 0 && DemoCatalog.KeepsInDeposit(Items[i].Product)
+                    ? (int)Math.Ceiling((double)Items[i].Product.MinStock * StoreFactor(s) * 2)
+                    : 0;
             }
         }
 

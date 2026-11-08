@@ -12,7 +12,7 @@ public class VariantAllocatorTests
 
     [Fact]
     [Trait("Rule", "RN-DF21")]
-    public void Should_SplitByHistoricalShare()
+    public void Should_SplitByHistoricalShare_When_VariantsHaveSales()
     {
         // Vendas históricas 50, 30 e 20: 50% / 30% / 20% de 100 un.
         var parts = VariantAllocator.Split(100m, [(A, 50m), (B, 30m), (C, 20m)], 0);
@@ -74,7 +74,7 @@ public class VariantAllocatorTests
 
     [Fact]
     [Trait("Rule", "RN-CE29")]
-    public void Should_ClassifyByRevenueShare()
+    public void Should_ClassifyAbc_When_RankedByRevenueShare()
     {
         var p1 = Guid.NewGuid();
         var p2 = Guid.NewGuid();

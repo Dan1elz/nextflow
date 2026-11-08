@@ -107,7 +107,7 @@ public class ForecastAiOrchestratorTests
 
     [Fact]
     [Trait("Rule", "RN-DF10")]
-    public async Task Should_IgnoreProductsOutsideTheBatch()
+    public async Task Should_IgnoreProduct_When_AiAnswersOutsideTheBatch()
     {
         var products = Products(60);
         var batches = Batches(products);
@@ -148,7 +148,7 @@ public class ForecastAiOrchestratorTests
 
     [Fact]
     [Trait("Rule", "RN-DF20")]
-    public async Task Should_SummarizeInFinalCall()
+    public async Task Should_SummarizeInFinalCall_When_BatchesAreDone()
     {
         var products = Products(5);
         await Orchestrator().AnalyzeAsync(Context(), Batches(products), NoEvents, null, CancellationToken.None);
@@ -185,12 +185,12 @@ public class ForecastAiOrchestratorTests
     }
 
     [Fact]
-    public void Should_RejectBatchSizeBelowOne()
+    public void Should_Reject_When_BatchSizeIsBelowOne()
         => Should.Throw<ArgumentOutOfRangeException>(() => ForecastAiOrchestrator.Split(Products(3), 0));
 
     [Fact]
     [Trait("Rule", "RN-DF09")]
-    public void Should_LeaveProductsWithoutSalesOutOfTheAi()
+    public void Should_LeaveProductOutOfTheAi_When_ItHasNoSales()
     {
         var noSales = ForecastCalculator.Calculate(Input(Series((_, _) => 0m), monthsOfHistory: 0, name: "Sem venda"), Context());
 
@@ -199,7 +199,7 @@ public class ForecastAiOrchestratorTests
 
     [Fact]
     [Trait("Rule", "RN-DF20")]
-    public void Should_SendBuyAndPromoteCandidatesFirst()
+    public void Should_SendBuyAndPromoteFirst_When_OrderingForTheAi()
     {
         var hold = ForecastCalculator.Calculate(Input(stock: 1000, name: "Mantém", configure: b => b.Revenue = 9999), Context());
         var buy = ForecastCalculator.Calculate(Input(name: "Compra", configure: b => b.Revenue = 1), Context());

@@ -215,7 +215,9 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
             // Aplicar de novo: já não está pendente.
             (await Use<IApplyPromotionRecommendationUseCase>(scope).Execute(recommendationId, new ApplyPromotionDto
             {
-                DiscountPercent = 10, StartDate = Anchor, EndDate = Anchor.AddDays(20),
+                DiscountPercent = 10,
+                StartDate = Anchor,
+                EndDate = Anchor.AddDays(20),
             }, seeded.AdminId)).ErrorCode.ShouldBe(400);
         }
 

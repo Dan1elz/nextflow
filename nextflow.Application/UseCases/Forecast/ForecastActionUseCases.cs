@@ -291,17 +291,16 @@ public class ApplyPromotionRecommendationUseCase(
             }
         }
 
+        // Uma consulta para todos os escopos: as promoções ativas do produto no período, cruzadas em memória.
         var (productId, start, end) = (product.Id, dto.StartDate, dto.EndDate);
-        foreach (var variantId in scopes)
-        {
-            var overlap = (await promotionRepository.GetAll(
-                p => p.ProductId == productId && p.IsActive && p.StartDate <= end && start <= p.EndDate
-                    && (p.VariantId == null || variantId == null || p.VariantId == variantId),
-                0, 1, ct: ct)).FirstOrDefault();
-            if (overlap is not null)
-                return resultFactory.FieldFailure("startDate",
-                    $"Já existe promoção ativa deste produto de {overlap.StartDate:dd/MM/yyyy} a {overlap.EndDate:dd/MM/yyyy} no mesmo escopo.");
-        }
+        var active = await promotionRepository.GetAll(
+            p => p.ProductId == productId && p.IsActive && p.StartDate <= end && start <= p.EndDate, 0, int.MaxValue, ct: ct);
+        var overlap = scopes
+            .Select(variantId => active.FirstOrDefault(p => p.VariantId == null || variantId == null || p.VariantId == variantId))
+            .FirstOrDefault(p => p is not null);
+        if (overlap is not null)
+            return resultFactory.FieldFailure("startDate",
+                $"Já existe promoção ativa deste produto de {overlap.StartDate:dd/MM/yyyy} a {overlap.EndDate:dd/MM/yyyy} no mesmo escopo.");
 
         var belowCost = scopes
             .SelectMany(variantId => PromotionScope.Variants(product, variantId))

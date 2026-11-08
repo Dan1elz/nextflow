@@ -79,7 +79,7 @@ public class ForecastGuardrailsTests
     [InlineData(10, 79)]     // 0,5 × 157 = 78,5 → 79
     [InlineData(200, 200)]   // dentro dos limites
     [Trait("Rule", "RN-DF12")]
-    public void Should_ClampQuantityToHalfAndOneAndHalf(int requested, int expected)
+    public void Should_ClampQuantity_When_AiSuggestsOutsideHalfToOneAndHalf(int requested, int expected)
     {
         var decision = ForecastGuardrails.Apply(NeedsBuy(), Ai("Comprar", quantity: requested));
 
@@ -94,7 +94,7 @@ public class ForecastGuardrailsTests
     [InlineData(1, 2, 5, 7)]         // abaixo dos mínimos
     [InlineData(0.15, 20, 15, 20)]   // fração vinda do modelo vale como percentual
     [Trait("Rule", "RN-DF12")]
-    public void Should_ClampDiscountAndPromotionDays(double discount, int days, double expectedDiscount, int expectedDays)
+    public void Should_ClampDiscountAndDays_When_AiSuggestsPromotion(double discount, int days, double expectedDiscount, int expectedDays)
     {
         var decision = ForecastGuardrails.Apply(Promotion(), Ai("Promover", discount: (decimal)discount, days: days));
 

@@ -107,7 +107,7 @@ public class ForecastCalculatorTests
     [InlineData(18, ForecastConfidenceEnum.High)]
     [InlineData(24, ForecastConfidenceEnum.High)]
     [Trait("Rule", "RN-DF05")]
-    public void Should_RateConfidenceByMonthsOfHistory(int months, ForecastConfidenceEnum expected)
+    public void Should_RateConfidence_When_GivenMonthsOfHistory(int months, ForecastConfidenceEnum expected)
     {
         var series = Series((_, _) => 0m);
         for (var i = series.Length - months; i < series.Length; i++)
@@ -322,7 +322,7 @@ public class ForecastCalculatorTests
     [InlineData(90)]
     [InlineData(180)]
     [Trait("Rule", "RN-DF17")]
-    public void Should_CapHorizonAtSixMonths(int leadTimeDays)
+    public void Should_CapHorizonAtSixMonths_When_LeadTimeIsLong(int leadTimeDays)
         => ForecastHorizon.Automatic(leadTimeDays).ShouldBe(6);
 
     [Fact]

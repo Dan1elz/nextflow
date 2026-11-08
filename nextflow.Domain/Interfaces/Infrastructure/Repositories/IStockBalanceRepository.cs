@@ -31,4 +31,7 @@ public interface IStockBalanceRepository : IBaseRepository<StockBalance>
 
     /// <summary>Saldos positivos de lote com validade de hoje até <paramref name="until"/>, por local ativo (T-DF1, L-DF4).</summary>
     Task<List<ExpiringLotRowDto>> GetExpiringLots(DateOnly from, DateOnly until, Guid? storeId, CancellationToken ct = default);
+
+    /// <summary>Toda variação ativa × local ativo, com disponível e mínimo efetivo (mesma regra do estoque baixo). "Transferir" (RN-DF16). Só leitura.</summary>
+    Task<List<Nextflow.Domain.Dtos.Stock.LocationPositionRowDto>> GetLocationPositions(CancellationToken ct = default);
 }

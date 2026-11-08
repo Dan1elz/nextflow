@@ -74,7 +74,11 @@ public class GetForecastRecommendationsUseCase(
     protected override Func<IQueryable<ForecastRecommendation>, IQueryable<ForecastRecommendation>> GetInclude()
         => q => q.Include(r => r.Product).ThenInclude(p => p.Categories).ThenInclude(link => link.Category).ThenInclude(c => c.Parent)
             .Include(r => r.Product).ThenInclude(p => p.Suppliers).ThenInclude(link => link.Supplier)
-            .Include(r => r.AppliedPurchaseOrder);
+            .Include(r => r.AppliedPurchaseOrder)
+            .Include(r => r.Items)
+            .Include(r => r.TransferFromLocation!).ThenInclude(l => l.Store)
+            .Include(r => r.TransferToLocation!).ThenInclude(l => l.Store)
+            .Include(r => r.Stores).ThenInclude(s => s.Store);
 
     protected override Func<IQueryable<ForecastRecommendation>, IOrderedQueryable<ForecastRecommendation>> GetOrderBy()
         => q => q.OrderBy(r => r.Action == RecommendationActionEnum.Hold ? 1 : 0)

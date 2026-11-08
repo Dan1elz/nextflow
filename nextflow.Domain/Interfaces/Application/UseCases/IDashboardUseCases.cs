@@ -13,13 +13,14 @@ public interface IGetSalesKpisUseCase
 /// <summary>Bloco "Estoque baixo" (T-DF1).</summary>
 public interface IGetLowStockSummaryUseCase
 {
-    Task<ResultDto<LowStockSummaryDto>> Execute(Guid? storeId, CancellationToken ct = default);
+    /// <param name="limit">Itens da lista: 5 no painel, até 200 no "ver mais".</param>
+    Task<ResultDto<LowStockSummaryDto>> Execute(Guid? storeId, int limit = 5, CancellationToken ct = default);
 }
 
 /// <summary>Bloco "Lotes vencendo" (T-DF1).</summary>
 public interface IGetExpiringLotsSummaryUseCase
 {
-    Task<ResultDto<ExpiringLotsSummaryDto>> Execute(Guid? storeId, int days, CancellationToken ct = default);
+    Task<ResultDto<ExpiringLotsSummaryDto>> Execute(Guid? storeId, int days, int limit = 5, CancellationToken ct = default);
 }
 
 /// <summary>Bloco "Próximos eventos" (T-DF1).</summary>

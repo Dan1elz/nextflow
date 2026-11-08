@@ -9,6 +9,27 @@ namespace Nextflow.Infrastructure.Repositories;
 
 public class ForecastRecommendationRepository(AppDbContext context) : BaseRepository<ForecastRecommendation>(context), IForecastRecommendationRepository
 {
+    public async Task<List<(ForecastRecommendation Recommendation, Guid? StillOpenOrderId)>> GetAppliedToPurchaseOrderForUpdate(
+        Guid purchaseOrderId, CancellationToken ct = default)
+    {
+        var recommendations = await _context.Set<ForecastRecommendation>()
+            .Include(r => r.PurchaseOrders)
+            .Where(r => r.AppliedPurchaseOrderId == purchaseOrderId || r.PurchaseOrders.Any(link => link.PurchaseOrderId == purchaseOrderId))
+            .ToListAsync(ct);
+        if (recommendations.Count == 0)
+            return [];
+
+        var ids = recommendations.Select(r => r.Id).ToList();
+        var open = await _context.Set<ForecastRecommendationPurchaseOrder>().AsNoTracking()
+            .Where(link => ids.Contains(link.RecommendationId) && link.PurchaseOrderId != purchaseOrderId
+                && link.PurchaseOrder.Status != PurchaseStatusEnum.Canceled)
+            .Select(link => new { link.RecommendationId, link.PurchaseOrderId })
+            .ToListAsync(ct);
+        var openByRecommendation = open.GroupBy(o => o.RecommendationId).ToDictionary(g => g.Key, g => g.First().PurchaseOrderId);
+
+        return [.. recommendations.Select(r => (r, openByRecommendation.TryGetValue(r.Id, out var other) ? (Guid?)other : null))];
+    }
+
     public async Task<Dictionary<Guid, ForecastRecommendationCountsDto>> GetCountsByRun(IReadOnlyCollection<Guid> runIds, CancellationToken ct = default)
     {
         if (runIds.Count == 0)

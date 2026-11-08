@@ -42,3 +42,14 @@ public interface IGetLotOptionsUseCase
 {
     Task<ResultDto<List<LotOptionDto>>> Execute(Guid variantId, Guid locationId, CancellationToken ct = default);
 }
+
+/// <summary>Transferência de estoque entre locais (RN-CE62).</summary>
+public interface ICreateStockTransferUseCase
+{
+    Task<ResultDto<StockTransferDto>> Execute(StockTransferRequestDto? dto, Guid userId, CancellationToken ct = default);
+}
+
+public interface IGetStockTransferUseCase
+{
+    Task<ResultDto<StockTransferDto>> Execute(Guid id, CancellationToken ct = default);
+}

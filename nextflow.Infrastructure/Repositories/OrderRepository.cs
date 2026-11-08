@@ -37,6 +37,24 @@ public class OrderRepository(AppDbContext context) : BaseRepository<Order>(conte
             .Select(g => new { VariantId = g.Key, Quantity = g.Sum(i => i.Quantity) })
             .ToDictionaryAsync(row => row.VariantId, row => row.Quantity, ct);
 
+    public async Task<Dictionary<Guid, decimal>> GetPaidQuantityByStore(Guid productId, DateTime sinceUtc, CancellationToken ct = default)
+        => await _context.Set<OrderItem>().AsNoTracking()
+            .Where(i => i.Variant.ProductId == productId && i.Order.Status == OrderStatusEnum.Paid && i.Order.PaidAt != null
+                && i.Order.PaidAt >= sinceUtc)
+            .GroupBy(i => i.Order.StoreId)
+            .Select(g => new { StoreId = g.Key, Quantity = g.Sum(i => i.Quantity) })
+            .ToDictionaryAsync(row => row.StoreId, row => row.Quantity, ct);
+
+    public async Task<Dictionary<(Guid ProductId, Guid StoreId), decimal>> GetPaidQuantityByProductAndStore(DateTime sinceUtc, CancellationToken ct = default)
+    {
+        var rows = await _context.Set<OrderItem>().AsNoTracking()
+            .Where(i => i.Order.Status == OrderStatusEnum.Paid && i.Order.PaidAt != null && i.Order.PaidAt >= sinceUtc)
+            .GroupBy(i => new { i.Variant.ProductId, i.Order.StoreId })
+            .Select(g => new { g.Key.ProductId, g.Key.StoreId, Quantity = g.Sum(i => i.Quantity) })
+            .ToListAsync(ct);
+        return rows.ToDictionary(r => (r.ProductId, r.StoreId), r => r.Quantity);
+    }
+
     public async Task<List<PaidOrderTotalDto>> GetPaidOrderTotals(Guid? storeId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
     {
         var rows = await _context.Set<Order>().AsNoTracking()

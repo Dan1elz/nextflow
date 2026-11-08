@@ -5,7 +5,7 @@ namespace Nextflow.Domain.Dtos.Forecasts;
 
 /// <summary>
 /// Linha da tabela da previsão (T-DF2), uma por produto. Todo número vem do que o motor gravou (ADR 0005); o motivo curto corta o
-/// motivo final em 160 caracteres (o completo fica no detalhe, T-DF3). Transferir (F3.4b) ainda não existe: <c>Transfer</c> é sempre nulo.
+/// motivo final em 160 caracteres (o completo fica no detalhe, T-DF3). <c>Transfer</c> só na ação "Transferir" (F3.4b, RN-DF16).
 /// </summary>
 public class ForecastRecommendationListItemDto
 {
@@ -35,7 +35,9 @@ public class ForecastRecommendationListItemDto
     public decimal? SuggestedQuantity { get; set; }
     public decimal? SuggestedDiscountPercent { get; set; }
     public int? SuggestedPromotionDays { get; set; }
-    public object? Transfer { get; set; }
+    public ForecastTransferDto? Transfer { get; set; }
+    /// <summary>"Comprar": quanto vai para cada loja, pela análise (RN-DF27); vazio com uma loja só.</summary>
+    public List<ForecastStoreQuantityDto> StoreSplit { get; set; } = [];
     public DateOnly? Deadline { get; set; }
     public Guid? PreferredSupplierId { get; set; }
     public string? PreferredSupplierName { get; set; }
@@ -87,7 +89,33 @@ public class ForecastRecommendationListItemDto
             AppliedLink = new ForecastAppliedLinkDto(ForecastAppliedLinkDto.PurchaseOrderType, purchaseOrderId, entity.AppliedPurchaseOrder != null ? entity.AppliedPurchaseOrder.Number : null);
         else if (entity.AppliedPromotionId is { } promotionId)
             AppliedLink = new ForecastAppliedLinkDto(ForecastAppliedLinkDto.PromotionType, promotionId, null);
+        else if (entity.AppliedTransferId is { } transferId)
+            AppliedLink = new ForecastAppliedLinkDto(ForecastAppliedLinkDto.TransferType, transferId, null);
+
+        StoreSplit = [.. entity.Stores
+            .OrderBy(s => s.Store != null ? s.Store.Name : string.Empty)
+            .Select(s => new ForecastStoreQuantityDto
+            {
+                StoreId = s.StoreId,
+                StoreName = s.Store != null ? s.Store.Name : string.Empty,
+                SharePercent = s.SharePercent,
+                Shortfall = s.Shortfall,
+                Quantity = s.Quantity,
+            })];
+
+        if (entity.TransferFromLocationId is { } from && entity.TransferToLocationId is { } to)
+            Transfer = new ForecastTransferDto
+            {
+                FromLocationId = from,
+                FromLocationName = LocationName(entity.TransferFromLocation),
+                ToLocationId = to,
+                ToLocationName = LocationName(entity.TransferToLocation),
+                Quantity = entity.Items.Sum(i => i.Quantity),
+            };
     }
+
+    private static string LocationName(StockLocation? location)
+        => location == null ? string.Empty : location.Store != null ? $"{location.Store.Name} › {location.Name}" : location.Name;
 
     /// <summary>"Pai > Categoria" da categoria ativa mais específica (subcategoria primeiro, depois ordem alfabética).</summary>
     private static string? CategoryPathOf(Product product)

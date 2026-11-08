@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IStoreMembership, StoreMembership>();
         services.AddScoped<IProductPricingService, ProductPricingService>();
         services.AddScoped<IStockLedger, StockLedger>();
+        services.AddScoped<IStockTransferService, StockTransferService>();
         services.AddScoped<IDerivedDataService, DerivedDataService>();
         services.AddScoped<ForecastInputBuilder>();
         services.AddScoped<ForecastAiOrchestrator>();

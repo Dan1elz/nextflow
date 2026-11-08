@@ -12,12 +12,19 @@ public class PurchaseVariantOptionDto
     public string VariantLabel { get; set; } = string.Empty;
     public string Sku { get; set; } = string.Empty;
     public bool IsLinked { get; set; }
+    public string? Barcode { get; set; }
+    public string? ImageUrl { get; set; }
+    /// <summary>Custo médio da variação (nulo sem entrada com custo): referência ao escolher o item.</summary>
+    public decimal? AverageCost { get; set; }
 
     public PurchaseVariantOptionDto() { }
 
     /// <param name="variant">Com produto, vínculos de fornecedor e valores da grade carregados.</param>
-    public PurchaseVariantOptionDto(ProductVariant variant, Guid supplierId)
+    public PurchaseVariantOptionDto(ProductVariant variant, Guid supplierId, string? imageUrl = null)
     {
+        Barcode = variant.Barcode;
+        ImageUrl = imageUrl;
+        AverageCost = variant.AverageCost;
         VariantId = variant.Id;
         ProductId = variant.ProductId;
         ProductName = variant.Product != null ? variant.Product.Name : string.Empty;

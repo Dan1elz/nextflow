@@ -1,3 +1,4 @@
+using Nextflow.Domain.Dtos.Stock;
 using Microsoft.EntityFrameworkCore;
 using Nextflow.Application.Forecast;
 using Nextflow.Application.Services.DerivedData;
@@ -24,8 +25,12 @@ public class ForecastInputBuilder(
     IStockPolicyRepository policyRepository,
     IProductSalesMonthlyRepository salesMonthlyRepository,
     IProductSeasonalityRepository seasonalityRepository,
+    IPurchaseItemRepository purchaseItemRepository,
     IBusinessClock clock)
 {
+    /// <summary>Janela da participação de cada loja nas vendas ("Transferir", RN-DF16).</summary>
+    public const int StoreShareWindowDays = 90;
+
     /// <summary>Pedidos recebidos usados para medir o prazo real de cada fornecedor.</summary>
     public const int LeadTimeSamplesPerSupplier = 5;
 
@@ -175,13 +180,33 @@ public class ForecastInputBuilder(
             });
         }
 
+        // "Transferir" (RN-DF16): posição de cada variação por local e a participação de cada loja nas vendas recentes.
+        var positions = (await balanceRepository.GetLocationPositions(ct))
+            .GroupBy(p => p.ProductId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<LocationPositionRowDto>)[.. g]);
+        var soldByStore = await orderRepository.GetPaidQuantityByProductAndStore(clock.StartOfDayUtc(today.AddDays(-StoreShareWindowDays)), ct);
+        var soldByProduct = soldByStore.GroupBy(x => x.Key.ProductId).ToDictionary(g => g.Key, g => g.Sum(x => x.Value));
+        var shares = soldByStore.ToDictionary(
+            x => x.Key,
+            x => soldByProduct[x.Key.ProductId] > 0 ? x.Value / soldByProduct[x.Key.ProductId] : 0m);
+
+        // "A caminho" por loja (RN-CP05): a divisão da compra entre as lojas desconta o que já vem para cada uma (RN-DF27).
+        var allProductIds = inputs.Select(i => i.ProductId).ToList();
+        var incomingByStore = new Dictionary<(Guid ProductId, Guid StoreId), decimal>();
+        foreach (var storeId in positions.Values.SelectMany(rows => rows).Select(r => r.StoreId).Distinct())
+            foreach (var (productId, quantity) in await purchaseItemRepository.SumIncomingByProduct(allProductIds, storeId, ct))
+                incomingByStore[(productId, storeId)] = quantity;
+
         return new ForecastSourceData
         {
+            IncomingByStore = incomingByStore,
             Inputs = inputs,
             VariantHistory = variantHistory,
             DecimalPlaces = decimalPlaces,
             AbcClasses = abcClasses,
-            CalendarEvents = calendarEvents
+            CalendarEvents = calendarEvents,
+            LocationPositions = positions,
+            StoreShares = shares,
         };
     }
 

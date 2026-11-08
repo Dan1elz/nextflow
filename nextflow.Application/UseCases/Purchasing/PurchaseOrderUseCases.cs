@@ -8,6 +8,7 @@ using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Dtos.PurchaseOrders;
 using Nextflow.Domain.Dtos.Stock;
+using Nextflow.Domain.Interfaces.Infrastructure.Services;
 using Nextflow.Domain.Dtos.Stores;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Application.Services;
@@ -150,14 +151,15 @@ public class CancelPurchaseOrderUseCase(
         var utcNow = DateTime.UtcNow;
         order.Cancel(dto.Reason, utcNow);
 
-        var applied = await recommendationRepository.GetAllForUpdate(r => r.AppliedPurchaseOrderId == id, ct);
+        // RN-DF28: a recomendação só volta (ou expira) quando nenhum outro pedido dela segue aberto.
+        var applied = await recommendationRepository.GetAppliedToPurchaseOrderForUpdate(id, ct);
         if (applied.Count > 0)
         {
             var latestRun = (await runRepository.GetAll(
                 r => r.Status == ForecastRunStatusEnum.Completed || r.Status == ForecastRunStatusEnum.CompletedWithoutAi,
                 0, 1, orderBy: q => q.OrderByDescending(r => r.StartedAt), ct: ct)).FirstOrDefault();
-            foreach (var recommendation in applied)
-                recommendation.RevertPurchase(recommendation.ForecastRunId == latestRun?.Id, utcNow);
+            foreach (var (recommendation, stillOpen) in applied)
+                recommendation.RevertPurchase(id, stillOpen, recommendation.ForecastRunId == latestRun?.Id, utcNow);
         }
 
         await unitOfWork.CommitAsync(ct);
@@ -407,6 +409,7 @@ public class GetPurchaseItemSuggestionUseCase(
 /// </summary>
 public class GetPurchaseVariantOptionsUseCase(
     IProductVariantRepository variantRepository,
+    IFileStorage fileStorage,
     IResultFactory<List<PurchaseVariantOptionDto>> resultFactory) : IGetPurchaseVariantOptionsUseCase
 {
     private const int MaxLimit = 50;
@@ -430,7 +433,8 @@ public class GetPurchaseVariantOptionsUseCase(
                 .ThenBy(v => v.Product.Name).ThenBy(v => v.SortOrder).ThenBy(v => v.Id),
             ct);
 
-        return resultFactory.Success([.. variants.Select(v => new PurchaseVariantOptionDto(v, supplierId))]);
+        return resultFactory.Success([.. variants.Select(v =>
+            new PurchaseVariantOptionDto(v, supplierId, fileStorage.GetPublicUrl(v.Product.ImageKey)))]);
     }
 }
 

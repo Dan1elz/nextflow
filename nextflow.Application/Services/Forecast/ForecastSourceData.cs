@@ -23,4 +23,16 @@ public sealed class ForecastSourceData
     public required IReadOnlyDictionary<Guid, AbcClassEnum> AbcClasses { get; init; }
 
     public required IReadOnlyList<CalendarEvent> CalendarEvents { get; init; }
+
+    /// <summary>Por produto: cada variação × local com disponível e mínimo ("Transferir", RN-DF16).</summary>
+    public IReadOnlyDictionary<Guid, IReadOnlyList<Nextflow.Domain.Dtos.Stock.LocationPositionRowDto>> LocationPositions { get; init; }
+        = new Dictionary<Guid, IReadOnlyList<Nextflow.Domain.Dtos.Stock.LocationPositionRowDto>>();
+
+    /// <summary>"A caminho" (pedidos em Orçamento ou Pendente) por produto × loja.</summary>
+    public IReadOnlyDictionary<(Guid ProductId, Guid StoreId), decimal> IncomingByStore { get; init; }
+        = new Dictionary<(Guid ProductId, Guid StoreId), decimal>();
+
+    /// <summary>Participação (0 a 1) de cada loja nas vendas do produto nos últimos 90 dias.</summary>
+    public IReadOnlyDictionary<(Guid ProductId, Guid StoreId), decimal> StoreShares { get; init; }
+        = new Dictionary<(Guid ProductId, Guid StoreId), decimal>();
 }

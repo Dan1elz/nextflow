@@ -11,6 +11,7 @@ using Nextflow.Domain.Dtos.Forecasts;
 using Nextflow.Domain.Dtos.Products;
 using Nextflow.Domain.Dtos.Promotions;
 using Nextflow.Domain.Dtos.PurchaseOrders;
+using Nextflow.Domain.Dtos.Stock;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Domain.Interfaces.Application.UseCases;
@@ -29,7 +30,11 @@ internal static class ForecastRecommendationReading
     public static IQueryable<ForecastRecommendation> ListInclude(IQueryable<ForecastRecommendation> query)
         => query.Include(r => r.Product).ThenInclude(p => p.Categories).ThenInclude(link => link.Category).ThenInclude(c => c.Parent)
             .Include(r => r.Product).ThenInclude(p => p.Suppliers).ThenInclude(link => link.Supplier)
-            .Include(r => r.AppliedPurchaseOrder);
+            .Include(r => r.AppliedPurchaseOrder)
+            .Include(r => r.Items)
+            .Include(r => r.TransferFromLocation!).ThenInclude(l => l.Store)
+            .Include(r => r.TransferToLocation!).ThenInclude(l => l.Store)
+            .Include(r => r.Stores).ThenInclude(s => s.Store);
 
     public static async Task<List<ForecastRecommendationListItemDto>> ListItemsAsync(
         IForecastRecommendationRepository repository, IFileStorage fileStorage, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -140,7 +145,7 @@ public class GetProductForecastUseCase(
 /// Aplicar "Comprar" (T-DF4, RN-DF15): cada grupo vira um pedido de compra em <b>Orçamento</b> para o fornecedor (nada é enviado),
 /// com as regras do pedido de compra (fornecedor e local ativos, variação ativa, casas decimais, prazo pelo maior prazo efetivo); as
 /// recomendações ficam Aplicadas com o link do pedido. Recomendação só pendente e "Comprar"; a variação tem de ser do produto dela;
-/// uma recomendação não pode estar em dois fornecedores. Avisos de mínimo, múltiplo e validade são do dialog (não bloqueiam). Um commit.
+/// uma recomendação não pode estar em dois fornecedores, mas pode ir em vários grupos do mesmo fornecedor, um por loja (RN-DF27/28). Avisos de mínimo, múltiplo e validade são do dialog (não bloqueiam). Um commit.
 /// </summary>
 public partial class ApplyPurchaseRecommendationsUseCase(
     IForecastRecommendationRepository recommendationRepository,
@@ -171,7 +176,9 @@ public partial class ApplyPurchaseRecommendationsUseCase(
         var variants = (await variantRepository.GetAll(v => variantIds.Contains(v.Id), 0, int.MaxValue, ct: ct)).ToDictionary(v => v.Id);
 
         var failures = new List<ValidationFailure>();
-        var groupOf = new Dictionary<Guid, int>();
+        // Fornecedor de cada recomendação: a mesma recomendação pode ir em vários grupos do mesmo fornecedor (um por loja, RN-DF27),
+        // nunca em fornecedores diferentes.
+        var supplierOf = new Dictionary<Guid, Guid>();
         var orders = new List<(PurchaseOrder Order, HashSet<Guid> RecommendationIds)>();
 
         for (var g = 0; g < dto.Groups.Count; g++)
@@ -189,10 +196,10 @@ public partial class ApplyPurchaseRecommendationsUseCase(
                     failures.Add(new(field + "recommendationId", recommendation.IsPending ? "Só recomendações \"Comprar\" geram pedido de compra." : ForecastRecommendationReading.NotPending));
                 else if (!variants.TryGetValue(item.VariantId, out var variant) || variant.ProductId != recommendation.ProductId)
                     failures.Add(new(field + "variantId", "A variação não é do produto da recomendação."));
-                else if (groupOf.TryGetValue(item.RecommendationId, out var other) && other != g)
+                else if (supplierOf.TryGetValue(item.RecommendationId, out var otherSupplier) && otherSupplier != group.SupplierId)
                     failures.Add(new(field + "recommendationId", "A recomendação já está em outro fornecedor."));
                 else
-                    groupOf[item.RecommendationId] = g;
+                    supplierOf[item.RecommendationId] = group.SupplierId;
             }
 
             // Mesmas regras do pedido de compra (T-CP2), sobre os itens somados por variação; cada erro de item volta para as linhas
@@ -383,3 +390,54 @@ public class DismissRecommendationUseCase(
         return resultFactory.Success((await ForecastRecommendationReading.ListItemsAsync(recommendationRepository, fileStorage, [recommendation.Id], ct))[0]);
     }
 }
+
+/// <summary>
+/// Aplicar "Transferir" (F3.4b): só recomendação pendente "Transferir". Gera a transferência de estoque (RN-CE62) da origem para
+/// o destino sugeridos, com as quantidades da recomendação (ou as ajustadas), e a recomendação fica Aplicada ligada a ela. Um commit.
+/// </summary>
+public class ApplyTransferRecommendationUseCase(
+    IForecastRecommendationRepository recommendationRepository,
+    IStockTransferService transferService,
+    IFileStorage fileStorage,
+    IBusinessClock clock,
+    IUnitOfWork unitOfWork,
+    IResultFactory<ForecastRecommendationListItemDto> resultFactory) : IApplyTransferRecommendationUseCase
+{
+    public async Task<ResultDto<ForecastRecommendationListItemDto>> Execute(Guid recommendationId, ApplyTransferDto? dto, Guid? userId,
+        CancellationToken ct = default)
+    {
+        if (userId is null)
+            return resultFactory.Failure("Usuário não identificado.", 401);
+
+        var recommendation = await recommendationRepository.GetByIdForUpdate(recommendationId, q => q.Include(r => r.Items), ct);
+        if (recommendation is null)
+            return resultFactory.Failure(ForecastRecommendationReading.NotFound, 404);
+        if (!recommendation.IsPending)
+            return resultFactory.Failure(ForecastRecommendationReading.NotPending, 400);
+        if (recommendation.Action != RecommendationActionEnum.Transfer
+            || recommendation.TransferFromLocationId is not { } from || recommendation.TransferToLocationId is not { } to)
+            return resultFactory.Failure("Só recomendações \"Transferir\" geram transferência.", 400);
+
+        var items = dto?.Items is { Count: > 0 } chosen
+            ? chosen
+            : [.. recommendation.Items.Where(i => i.Quantity > 0).Select(i => new StockTransferItemRequestDto { VariantId = i.VariantId, Quantity = i.Quantity })];
+        if (items.Any(i => recommendation.Items.All(r => r.VariantId != i.VariantId)))
+            return resultFactory.FieldFailure("items", "A variação não é da recomendação.");
+
+        var (transfer, failures) = await transferService.Transfer(new StockTransferRequestDto
+        {
+            FromLocationId = from,
+            ToLocationId = to,
+            Note = string.IsNullOrWhiteSpace(dto?.Note) ? "Recomendação da previsão" : dto.Note,
+            Items = items,
+        }, userId.Value, recommendation.Id, ct);
+        if (transfer is null)
+            return resultFactory.Failure(new ValidationResult(failures), 422);
+
+        recommendation.ApplyTransfer(transfer.Id, userId.Value, clock.UtcNow);
+        await unitOfWork.CommitAsync(ct);
+
+        return resultFactory.Success((await ForecastRecommendationReading.ListItemsAsync(recommendationRepository, fileStorage, [recommendation.Id], ct))[0]);
+    }
+}
+

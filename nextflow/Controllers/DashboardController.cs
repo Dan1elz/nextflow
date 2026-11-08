@@ -19,12 +19,13 @@ public class DashboardController(
         => Handle(await salesKpisUseCase.Execute(storeId, ct));
 
     [HttpGet("low-stock")]
-    public async Task<IActionResult> LowStock([FromQuery] Guid? storeId, CancellationToken ct)
-        => Handle(await lowStockUseCase.Execute(storeId, ct));
+    public async Task<IActionResult> LowStock([FromQuery] Guid? storeId, [FromQuery] int limit = 5, CancellationToken ct = default)
+        => Handle(await lowStockUseCase.Execute(storeId, limit, ct));
 
     [HttpGet("expiring-lots")]
-    public async Task<IActionResult> ExpiringLots([FromQuery] Guid? storeId, [FromQuery] int days = 30, CancellationToken ct = default)
-        => Handle(await expiringLotsUseCase.Execute(storeId, days, ct));
+    public async Task<IActionResult> ExpiringLots([FromQuery] Guid? storeId, [FromQuery] int days = 30, [FromQuery] int limit = 5,
+        CancellationToken ct = default)
+        => Handle(await expiringLotsUseCase.Execute(storeId, days, limit, ct));
 
     [HttpGet("upcoming-events")]
     public async Task<IActionResult> UpcomingEvents([FromQuery] int days = 90, CancellationToken ct = default)

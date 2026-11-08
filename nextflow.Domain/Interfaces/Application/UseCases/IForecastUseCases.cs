@@ -41,6 +41,12 @@ public interface IGetForecastRecommendationsUseCase
         string? sort = null, string? order = null, Guid? storeId = null, CancellationToken ct = default);
 }
 
+/// <summary>Sugestão de divisão de uma recomendação "Comprar" entre as lojas (RN-DF27, F3.9).</summary>
+public interface IGetRecommendationStoreSplitUseCase
+{
+    Task<ResultDto<StoreSplitDto>> Execute(Guid recommendationId, CancellationToken ct = default);
+}
+
 /// <summary>Detalhe da recomendação (T-DF3).</summary>
 public interface IGetForecastRecommendationUseCase
 {
@@ -63,6 +69,12 @@ public interface IApplyPurchaseRecommendationsUseCase
 public interface IApplyPromotionRecommendationUseCase
 {
     Task<ResultDto<ApplyPromotionResultDto>> Execute(Guid recommendationId, ApplyPromotionDto? dto, Guid? userId, CancellationToken ct = default);
+}
+
+/// <summary>Aplicar "Transferir" (F3.4b): gera a transferência de estoque (RN-CE62) e deixa a recomendação Aplicada.</summary>
+public interface IApplyTransferRecommendationUseCase
+{
+    Task<ResultDto<ForecastRecommendationListItemDto>> Execute(Guid recommendationId, ApplyTransferDto? dto, Guid? userId, CancellationToken ct = default);
 }
 
 /// <summary>Descartar a recomendação (T-DF8).</summary>

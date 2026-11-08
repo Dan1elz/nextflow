@@ -295,6 +295,40 @@ public class RegistryApiTests(AccessApiFixture api)
         var fields = (await Json(invalid)).GetProperty("fieldErrors");
         fields.TryGetProperty("name", out _).ShouldBeTrue();
         fields.TryGetProperty("phone", out _).ShouldBeTrue();
+        fields.TryGetProperty("email", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Should_AddEmailContact_When_QuickCreatingWithEmail()
+    {
+        var client = await api.AdminAsync();
+
+        var response = await client.PostAsJsonAsync("/api/clients/quick",
+            new { name = "Email Cliente", phone = "(11) 97712-0001", email = " Cliente.Email@Exemplo.COM " });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var id = (await Json(response)).GetProperty("id").GetString();
+
+        var contacts = await Json(await client.GetAsync($"/api/contacts?filters={Filters(new { ownerType = "Client", ownerId = id })}"));
+        var items = contacts.GetProperty("items").EnumerateArray().ToList();
+        items.Count.ShouldBe(2);
+        var email = items.Single(c => c.GetProperty("type").GetString() == "Email");
+        email.GetProperty("value").GetString().ShouldBe("cliente.email@exemplo.com");
+        email.GetProperty("isMain").GetBoolean().ShouldBeFalse();
+        items.Single(c => c.GetProperty("type").GetString() == "Phone").GetProperty("isMain").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Should_RejectQuickCreate_When_EmailIsInvalid()
+    {
+        var client = await api.AdminAsync();
+
+        var response = await client.PostAsJsonAsync("/api/clients/quick",
+            new { name = "Email Invalido", phone = "(11) 97712-0002", email = "nao-e-email" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await Json(response)).GetProperty("fieldErrors").TryGetProperty("email", out _).ShouldBeTrue();
+        var options = await Json(await client.GetAsync("/api/clients/options?search=Email Invalido"));
+        options.GetArrayLength().ShouldBe(0);
     }
 
     [Fact]

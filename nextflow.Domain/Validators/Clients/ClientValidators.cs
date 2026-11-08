@@ -25,5 +25,6 @@ public class QuickCreateClientRequestDtoValidator : AbstractValidator<QuickCreat
         RuleFor(x => x.Name).PersonName("nome");
         RuleFor(x => x.Phone).NotEmpty().WithMessage("Informe o telefone.");
         RuleFor(x => x.Phone).ValidPhone().When(x => !string.IsNullOrEmpty(x.Phone));
+        RuleFor(x => x.Email!).ValidEmail().When(x => !string.IsNullOrWhiteSpace(x.Email));
     }
 }

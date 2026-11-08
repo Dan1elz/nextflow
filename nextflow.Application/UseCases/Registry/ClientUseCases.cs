@@ -66,6 +66,19 @@ public class QuickCreateClientUseCase(
         });
         _phone = contact.Value;
         await contactRepository.AddAsync(contact, ct);
+
+        if (string.IsNullOrWhiteSpace(dto.Email))
+            return;
+
+        // O telefone segue como contato principal; o e-mail entra ao lado, no mesmo commit.
+        await contactRepository.AddAsync(new Contact(new ContactRequestDto
+        {
+            OwnerType = OwnerTypeEnum.Client,
+            OwnerId = entity.Id,
+            Type = ContactTypeEnum.Email,
+            Value = dto.Email,
+            IsMain = false,
+        }), ct);
     }
 
     protected override ClientOptionDto MapToResponseDto(Client entity) => new(entity, _phone);

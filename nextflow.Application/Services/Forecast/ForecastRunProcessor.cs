@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Logging;
+using Nextflow.Domain.Dtos.Forecasts;
+using Nextflow.Domain.Dtos.Notifications;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Domain.Interfaces.Infrastructure.Repositories;
@@ -13,6 +15,7 @@ public class ForecastRunProcessor(
     IDerivedDataService derivedDataService,
     IForecastEngine engine,
     IForecastRunRepository runRepository,
+    INotificationPublisher publisher,
     IUnitOfWork unitOfWork,
     IBusinessClock clock,
     ILogger<ForecastRunProcessor> logger) : IForecastRunProcessor
@@ -45,7 +48,37 @@ public class ForecastRunProcessor(
             return;
         }
 
-        await engine.RunAsync(runId, ct);
+        var outcome = await engine.RunAsync(runId, ct);
+        await NotifyAsync(outcome, ct);
+    }
+
+    /// <summary>
+    /// RN-DF18 e RN-DF23: análise concluída avisa no sino de todos os usuários ativos (L-DF8). A análise já está fechada: falha aqui só
+    /// vira log.
+    /// </summary>
+    private async Task NotifyAsync(ForecastRunOutcomeDto outcome, CancellationToken ct)
+    {
+        if (outcome.Status is not (ForecastRunStatusEnum.Completed or ForecastRunStatusEnum.CompletedWithoutAi))
+            return;
+
+        try
+        {
+            var actions = outcome.Buy + outcome.Promote;
+            var message = actions == 0
+                ? $"Nenhuma compra ou promoção sugerida para os {outcome.ProductsAnalyzed} produtos analisados."
+                : $"{outcome.Buy} produto(s) para comprar e {outcome.Promote} para promover, de {outcome.ProductsAnalyzed} analisados.";
+            if (outcome.Status == ForecastRunStatusEnum.CompletedWithoutAi)
+                message += " Análise feita só com o cálculo (sem IA).";
+
+            await publisher.PublishToAllAsync(new NewNotificationDto(
+                NotificationTypeEnum.NewRecommendations, "Análise de previsão concluída", message, "/forecast"), ct);
+            await unitOfWork.CommitAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            unitOfWork.Rollback();
+            logger.LogError(ex, "Previsão {RunId}: análise concluída, mas a notificação falhou.", outcome.RunId);
+        }
     }
 
     public async Task FailInterruptedAsync(CancellationToken ct)

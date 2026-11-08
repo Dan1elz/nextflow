@@ -23,8 +23,14 @@ public class ForecastsController(
     IGetProductForecastUseCase productForecastUseCase,
     IApplyPurchaseRecommendationsUseCase applyPurchaseUseCase,
     IApplyPromotionRecommendationUseCase applyPromotionUseCase,
-    IDismissRecommendationUseCase dismissUseCase) : ApiController
+    IDismissRecommendationUseCase dismissUseCase,
+    IGetForecastTopUseCase topUseCase) : ApiController
 {
+    /// <summary>Card "Recomendações" do painel (T-DF1, F3.5).</summary>
+    [HttpGet("latest/top")]
+    public async Task<IActionResult> LatestTop([FromQuery] int limit = 5, CancellationToken ct = default)
+        => Handle(await topUseCase.Execute(limit, ct));
+
     // ---------------------------------------------------------------- F3.4: detalhe e ações (T-DF3 a T-DF8)
 
     [HttpGet("recommendations/{id:guid}")]

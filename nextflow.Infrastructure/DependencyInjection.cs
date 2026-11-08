@@ -5,6 +5,7 @@ using Nextflow.Domain.Interfaces.Infrastructure.Services;
 using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Infrastructure.Services;
 using Nextflow.Infrastructure.Services.Forecast;
+using Nextflow.Infrastructure.Services.Notifications;
 using Nextflow.Infrastructure.Database;
 using Nextflow.Infrastructure.Repositories;
 using Nextflow.Infrastructure.Seeders;
@@ -38,6 +39,8 @@ public static class DependencyInjection
         services.AddSingleton<IForecastQueue, ForecastQueue>();
         services.AddHostedService<ForecastRunWorker>();
         services.AddHostedService<ForecastScheduler>();
+        // Resumo diário de estoque baixo e lote vencendo (L-DF4).
+        services.AddHostedService<NotificationDigestScheduler>();
 
         services.Scan(scan => scan
             .FromAssemblyOf<UnitOfWork>()

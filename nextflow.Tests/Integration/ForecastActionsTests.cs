@@ -278,4 +278,78 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
         (await Use<IGetForecastRecommendationUseCase>(scope).Execute(Guid.NewGuid())).ErrorCode.ShouldBe(404);
         (await Use<IGetProductForecastUseCase>(scope).Execute(buy.ProductId, 12)).Data!.History.Count.ShouldBe(12);
     }
+
+    // ---------------------------------------------------------------- F3.5: painel (T-DF1) e resumo diário (L-DF4)
+
+    [Fact]
+    [Trait("Rule", "T-DF1")]
+    public async Task Should_FillDashboardBlocks_When_SeedHasHistory()
+    {
+        var seeded = await Seed();
+        using var scope = seeded.Services.CreateScope();
+
+        // KPIs: o mês corrente até 26/10 bate com as vendas pagas do banco.
+        var kpis = (await Use<IGetSalesKpisUseCase>(scope).Execute(null)).Data!;
+        await using (var context = fixture.CreateContext(seeded.Connection))
+        {
+            var clock = Use<IBusinessClock>(scope);
+            var from = clock.StartOfDayUtc(new DateOnly(2026, 10, 1));
+            var to = clock.StartOfDayUtc(Anchor.AddDays(1));
+            var paid = await context.Set<Order>().Where(o => o.Status == OrderStatusEnum.Paid && o.PaidAt >= from && o.PaidAt < to).ToListAsync();
+            kpis.Month.ShouldBe("2026-10");
+            kpis.OrderCount.ShouldBe(paid.Count);
+            kpis.Revenue.ShouldBe(paid.Sum(o => o.Total));
+        }
+        kpis.Revenue.ShouldBeGreaterThan(0);
+        kpis.GrossMargin.ShouldBeLessThan(kpis.Revenue);
+        kpis.RevenueVsLastMonthPercent.ShouldNotBeNull();
+
+        var chart = (await Use<IGetSalesChartUseCase>(scope).Execute(null)).Data!;
+        chart.Months.Count.ShouldBe(12);
+        chart.Months[^1].Month.ShouldBe("2026-10");
+        chart.Months.ShouldContain(m => m.RevenueLastYear != null); // 14 meses de seed: os 2 primeiros meses têm o ano anterior
+
+        var lowStock = (await Use<IGetLowStockSummaryUseCase>(scope).Execute(null)).Data!;
+        lowStock.Items.Count.ShouldBe(Math.Min(5, lowStock.Count));
+        lowStock.Items.ShouldAllBe(i => i.Available < i.MinQuantity);
+
+        var lots = (await Use<IGetExpiringLotsSummaryUseCase>(scope).Execute(null, 365)).Data!;
+        lots.Items.Count.ShouldBe(Math.Min(5, lots.Count));
+        lots.Items.ShouldAllBe(l => l.DaysToExpire >= 0 && l.DaysToExpire <= 365);
+
+        var events = (await Use<IGetUpcomingEventsUseCase>(scope).Execute(90)).Data!;
+        events.ShouldNotBeEmpty(); // Black Friday e Natal caem nos 90 dias depois de 26/10
+        events.ShouldAllBe(e => e.NextDate >= Anchor && e.NextDate <= Anchor.AddDays(90) && e.DemandStartsOn <= e.NextDate);
+
+        var top = (await Use<IGetForecastTopUseCase>(scope).Execute(5)).Data!;
+        top.Run.ShouldNotBeNull();
+        top.Recommendations.Count.ShouldBeLessThanOrEqualTo(5);
+        top.Recommendations.ShouldAllBe(r => r.Status == "Pending" && r.Action != "Hold");
+    }
+
+    [Fact]
+    [Trait("Rule", "L-DF4")]
+    public async Task Should_PublishDailyDigestOnce_When_StockIsLow()
+    {
+        var seeded = await Seed();
+        int lowStock;
+        using (var scope = seeded.Services.CreateScope())
+        {
+            lowStock = (await Use<IGetLowStockSummaryUseCase>(scope).Execute(null)).Data!.Count;
+            await Use<INotificationDigestService>(scope).RunAsync(CancellationToken.None);
+        }
+        using (var scope = seeded.Services.CreateScope())
+            await Use<INotificationDigestService>(scope).RunAsync(CancellationToken.None); // de novo no mesmo dia: nada novo
+
+        await using var context = fixture.CreateContext(seeded.Connection);
+        var digest = await context.Set<Notification>().Where(n => n.Type == NotificationTypeEnum.LowStock && n.UserId == seeded.AdminId).ToListAsync();
+        if (lowStock == 0)
+            digest.ShouldBeEmpty();
+        else
+        {
+            digest.Count.ShouldBe(1);
+            digest[0].DigestDate.ShouldBe(Anchor);
+            digest[0].Message.ShouldContain(lowStock.ToString());
+        }
+    }
 }

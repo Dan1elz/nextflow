@@ -5,6 +5,7 @@ using Nextflow.Application.Services;
 using Nextflow.Application.Forecast;
 using Nextflow.Application.Services.DerivedData;
 using Nextflow.Application.Services.Forecast;
+using Nextflow.Application.Services.Notifications;
 using Nextflow.Application.UseCases.Health;
 using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Domain.Models;
@@ -29,6 +30,8 @@ public static class DependencyInjection
         services.AddScoped<IForecastRunProcessor, ForecastRunProcessor>();
         services.AddScoped<IForecastScheduleService, ForecastScheduleService>();
         services.AddScoped<ProductForecastReader>();
+        services.AddScoped<INotificationPublisher, NotificationPublisher>();
+        services.AddScoped<INotificationDigestService, NotificationDigestService>();
         services.AddScoped<IForecastEngine, ForecastEngine>();
 
         services.Scan(scan => scan

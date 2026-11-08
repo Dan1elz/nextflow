@@ -90,6 +90,11 @@ public class ForecastApiTests(AccessApiFixture api)
 
         (await Json(await client.GetAsync($"{Route}/{runId}/batches"))).GetArrayLength().ShouldBe(0); // sem IA, sem lote
 
+        // RN-DF18/RN-DF23: ao terminar, o sino do usuário avisa.
+        var bell = await Json(await client.GetAsync("/api/notifications?limit=50"));
+        bell.GetProperty("items").EnumerateArray()
+            .ShouldContain(n => n.GetProperty("type").GetString() == "NewRecommendations" && n.GetProperty("link").GetString() == "/forecast");
+
         var page = await Json(await client.GetAsync($"{Route}/{runId}/recommendations?limit=5"));
         page.GetProperty("total").GetInt32().ShouldBe(analyzed);
         if (analyzed > 0)

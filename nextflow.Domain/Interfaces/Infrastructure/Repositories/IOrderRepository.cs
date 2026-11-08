@@ -1,4 +1,5 @@
 using Nextflow.Domain.Dtos;
+using Nextflow.Domain.Dtos.Dashboard;
 using Nextflow.Domain.Dtos.DerivedData;
 using Nextflow.Domain.Models;
 
@@ -17,4 +18,7 @@ public interface IOrderRepository : IBaseRepository<Order>
 
     /// <summary>Quantidade vendida (pedidos Pagos) por variação desde o instante: base do rateio da grade (RN-DF21). Só leitura.</summary>
     Task<Dictionary<Guid, decimal>> GetPaidQuantityByVariant(DateTime sinceUtc, CancellationToken ct = default);
+
+    /// <summary>Vendas pagas no intervalo [início, fim), da loja ou da empresa, com o custo congelado dos itens (painel, T-DF1).</summary>
+    Task<List<PaidOrderTotalDto>> GetPaidOrderTotals(Guid? storeId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
 }

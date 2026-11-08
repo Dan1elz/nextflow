@@ -995,6 +995,67 @@ namespace Nextflow.Infrastructure.Migrations
                     b.ToTable("lots", (string)null);
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly?>("DigestDate")
+                        .HasColumnType("date")
+                        .HasColumnName("digest_date");
+
+                    b.Property<string>("Link")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("link");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("message");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("title");
+
+                    b.Property<byte>("Type")
+                        .HasColumnType("smallint")
+                        .HasColumnName("type");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notifications");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_notifications_unread")
+                        .HasFilter("read_at is null");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_notifications_user_id_created_at");
+
+                    b.HasIndex("UserId", "Type", "DigestDate")
+                        .IsUnique()
+                        .HasDatabaseName("ix_notifications_user_id_type_digest_date")
+                        .HasFilter("digest_date is not null");
+
+                    b.ToTable("notifications", (string)null);
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2739,6 +2800,18 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasConstraintName("fk_lots_product_variant_variant_id");
 
                     b.Navigation("Variant");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.Notification", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notifications_user_user_id");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Order", b =>

@@ -1,3 +1,4 @@
+using Nextflow.Domain.Dtos.Dashboard;
 using Nextflow.Domain.Dtos.Forecasts;
 using Nextflow.Domain.Models;
 
@@ -21,4 +22,13 @@ public interface IStockBalanceRepository : IBaseRepository<StockBalance>
 
     /// <summary>Saldo positivo por variação e lote com validade, somando os locais (previsão, RN-DF07). Só leitura.</summary>
     Task<List<ExpiringLotBalanceDto>> GetLotBalances(CancellationToken ct = default);
+
+    /// <summary>
+    /// Variações × locais abaixo do mínimo (RN-CE33, mesma regra de <see cref="GetLowStockProductIds"/>): o total e as
+    /// <paramref name="top"/> mais críticas (menor disponível em relação ao mínimo). Painel e resumo diário (T-DF1, L-DF4).
+    /// </summary>
+    Task<(int Count, List<LowStockRowDto> Top)> GetLowStock(Guid? storeId, int top, CancellationToken ct = default);
+
+    /// <summary>Saldos positivos de lote com validade de hoje até <paramref name="until"/>, por local ativo (T-DF1, L-DF4).</summary>
+    Task<List<ExpiringLotRowDto>> GetExpiringLots(DateOnly from, DateOnly until, Guid? storeId, CancellationToken ct = default);
 }

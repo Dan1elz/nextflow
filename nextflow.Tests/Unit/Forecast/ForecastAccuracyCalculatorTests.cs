@@ -109,10 +109,10 @@ public class ForecastAccuracyCalculatorTests
     }
 
     [Theory]
-    [InlineData(120, true)]       // 20%
-    [InlineData(120.01, false)]   // 20,01%
+    [InlineData(115, true)]       // 15%
+    [InlineData(115.01, false)]   // 15,01%
     [Trait("Rule", "RN-DF19")]
-    public void Should_MarkWithinTolerance_When_MapeIsAtMostTwentyPercent(decimal projected, bool within)
+    public void Should_MarkWithinTolerance_When_MapeIsAtMostFifteenPercent(decimal projected, bool within)
     {
         ForecastAccuracyCalculator.MeasureProduct([Obs(Jan, projected, 100m)]).WithinTolerance.ShouldBe(within);
     }

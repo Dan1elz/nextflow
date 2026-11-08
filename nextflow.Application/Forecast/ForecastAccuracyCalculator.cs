@@ -28,8 +28,8 @@ public sealed record ProductAccuracy(IReadOnlyList<AccuracyMonth> Months, int Mo
 /// </summary>
 public static class ForecastAccuracyCalculator
 {
-    /// <summary>Erro médio até este valor conta como "dentro de ±20%" (T-DF10).</summary>
-    public const decimal TolerancePercent = 20m;
+    /// <summary>Erro médio até este valor conta como "dentro de ±15%" (T-DF10).</summary>
+    public const decimal TolerancePercent = 15m;
 
     /// <summary>Erro médio com sinal acima de +5% superestima; abaixo de −5% subestima.</summary>
     public const decimal BiasThresholdPercent = 5m;

@@ -13,7 +13,7 @@ namespace Nextflow.Application.UseCases.Forecast;
 /// <summary>
 /// Visão geral da precisão (T-DF10, F3.6c) nos últimos N meses completos (padrão 12, até 36): um item por mês da janela (erro médio
 /// dos produtos medidos no mês; nulo sem medição), erro médio dos produtos por classe ABC e por categoria principal e a parcela de
-/// produtos dentro de ±20%. "Erro médio" de um grupo = média simples do erro médio (MAPE) de cada produto medido.
+/// produtos dentro de ±15%. "Erro médio" de um grupo = média simples do erro médio (MAPE) de cada produto medido.
 /// </summary>
 public class GetForecastAccuracySummaryUseCase(
     ForecastAccuracyReader reader,

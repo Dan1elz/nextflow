@@ -18,7 +18,7 @@ namespace Nextflow.Tests.Integration;
 /// Rotas de precisão (F3.6c, T-DF10 e <c>accuracy</c> do T-DF5) pela API, num Postgres só deste cenário (o banco da
 /// <see cref="AccessApiCollection"/> recebe análises de outros testes). Catálogo demo sem histórico, relógio em 26/10/2026 e dois
 /// produtos com vendas e análises montadas à mão:
-/// P1 (classe A): ago 110 × 100 (10%), set 88 × 80 (10%) → erro médio 10%, superestima, dentro de ±20%.
+/// P1 (classe A): ago 110 × 100 (10%), set 88 × 80 (10%) → erro médio 10%, superestima, dentro de ±15%.
 /// P2 (classe B): ago 70 × 100 (30%), set 40 × 50 (20%) → erro médio 25%, subestima, fora.
 /// Os dois na mesma subcategoria; julho fica fora (nenhuma análise antes de 01/07) e a análise com falha é ignorada.
 /// </summary>

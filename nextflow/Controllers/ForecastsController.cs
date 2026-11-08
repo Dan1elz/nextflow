@@ -30,8 +30,8 @@ public class ForecastsController(
 {
     /// <summary>Card "Recomendações" do painel (T-DF1, F3.5).</summary>
     [HttpGet("latest/top")]
-    public async Task<IActionResult> LatestTop([FromQuery] int limit = 5, CancellationToken ct = default)
-        => Handle(await topUseCase.Execute(limit, ct));
+    public async Task<IActionResult> LatestTop([FromQuery] int limit = 5, [FromQuery] Guid? storeId = null, CancellationToken ct = default)
+        => Handle(await topUseCase.Execute(limit, storeId, ct));
 
     // ---------------------------------------------------------------- F3.6c: precisão (T-DF10), só Admin
 
@@ -49,8 +49,8 @@ public class ForecastsController(
     // ---------------------------------------------------------------- F3.4: detalhe e ações (T-DF3 a T-DF8)
 
     [HttpGet("recommendations/{id:guid}")]
-    public async Task<IActionResult> Recommendation(Guid id, CancellationToken ct)
-        => Handle(await recommendationUseCase.Execute(id, ct));
+    public async Task<IActionResult> Recommendation(Guid id, [FromQuery] Guid? storeId, CancellationToken ct)
+        => Handle(await recommendationUseCase.Execute(id, storeId, ct));
 
     [HttpGet("products/{productId:guid}")]
     public async Task<IActionResult> ProductForecast(Guid productId, [FromQuery] int months = 24, CancellationToken ct = default)
@@ -98,6 +98,6 @@ public class ForecastsController(
     [HttpGet("{runId:guid}/recommendations")]
     public async Task<IActionResult> Recommendations(
         Guid runId, [FromQuery] int offset = 0, [FromQuery] int limit = 20, [FromQuery] string? filters = null,
-        [FromQuery] string? sort = null, [FromQuery] string? order = null, CancellationToken ct = default)
-        => Handle(await recommendationsUseCase.Execute(runId, offset, limit, FilterHelper.Parse(filters), sort, order, ct));
+        [FromQuery] string? sort = null, [FromQuery] string? order = null, [FromQuery] Guid? storeId = null, CancellationToken ct = default)
+        => Handle(await recommendationsUseCase.Execute(runId, offset, limit, FilterHelper.Parse(filters), sort, order, storeId, ct));
 }

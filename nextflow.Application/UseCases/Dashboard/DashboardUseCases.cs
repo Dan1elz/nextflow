@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Nextflow.Application.Services.Forecast;
 using Nextflow.Application.UseCases.Forecast;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Dtos.Dashboard;
@@ -217,11 +218,13 @@ public class GetForecastTopUseCase(
     IForecastSettingsRepository settingsRepository,
     IFileStorage fileStorage,
     IBusinessClock clock,
+    IStockBalanceRepository balanceRepository,
+    IPurchaseItemRepository itemRepository,
     IResultFactory<ForecastTopDto> resultFactory) : IGetForecastTopUseCase
 {
     public const int DefaultLimit = 5;
 
-    public async Task<ResultDto<ForecastTopDto>> Execute(int limit, CancellationToken ct = default)
+    public async Task<ResultDto<ForecastTopDto>> Execute(int limit, Guid? storeId = null, CancellationToken ct = default)
     {
         limit = limit is < 1 or > 20 ? DefaultLimit : limit;
         var latest = (await runRepository.GetAll(_ => true, 0, 1, ForecastRunReading.Include(),
@@ -234,10 +237,14 @@ public class GetForecastTopUseCase(
             ForecastRecommendationReading.ListInclude,
             q => q.OrderByDescending(r => r.Priority).ThenBy(r => r.Deadline).ThenBy(r => r.Product.Name), ct);
 
+        List<Nextflow.Domain.Dtos.Forecasts.ForecastRecommendationListItemDto> rows =
+            [.. top.Select(r => new Nextflow.Domain.Dtos.Forecasts.ForecastRecommendationListItemDto(r, fileStorage.GetPublicUrl(r.Product?.ImageKey)))];
+        await ForecastStoreStock.FillAsync(rows, storeId, balanceRepository, itemRepository, ct);
+
         return resultFactory.Success(new ForecastTopDto
         {
             Run = await ForecastRunReading.SummaryAsync(latest, recommendationRepository, settingsRepository, clock, ct),
-            Recommendations = [.. top.Select(r => new Nextflow.Domain.Dtos.Forecasts.ForecastRecommendationListItemDto(r, fileStorage.GetPublicUrl(r.Product?.ImageKey)))],
+            Recommendations = rows,
         });
     }
 }

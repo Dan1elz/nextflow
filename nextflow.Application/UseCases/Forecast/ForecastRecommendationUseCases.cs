@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Nextflow.Application.Filters;
+using Nextflow.Application.Services.Forecast;
 using Nextflow.Application.UseCases.Base;
 using Nextflow.Domain.Dtos;
 using Nextflow.Domain.Dtos.Forecasts;
@@ -23,6 +24,8 @@ public class GetForecastRecommendationsUseCase(
     IForecastRecommendationRepository recommendationRepository,
     IForecastRunRepository runRepository,
     IFileStorage fileStorage,
+    IStockBalanceRepository balanceRepository,
+    IPurchaseItemRepository itemRepository,
     IResultFactory<PaginationDto<ForecastRecommendationListItemDto>> resultFactory)
     : GetAllUseCaseBase<ForecastRecommendation, IForecastRecommendationRepository, ForecastRecommendationListItemDto>(recommendationRepository, resultFactory),
         IGetForecastRecommendationsUseCase
@@ -31,13 +34,16 @@ public class GetForecastRecommendationsUseCase(
 
     public async Task<ResultDto<PaginationDto<ForecastRecommendationListItemDto>>> Execute(
         Guid runId, int offset, int limit, IReadOnlyDictionary<string, string>? filters,
-        string? sort = null, string? order = null, CancellationToken ct = default)
+        string? sort = null, string? order = null, Guid? storeId = null, CancellationToken ct = default)
     {
         if (!await runRepository.Exists(r => r.Id == runId, ct))
             return _resultFactory.Failure(ForecastRunReading.NotFound, 404);
 
         _runId = runId;
-        return await Execute(offset, limit, filters, sort, order, ct);
+        var result = await Execute(offset, limit, filters, sort, order, ct);
+        if (result.IsSuccess && result.Data is { } page)
+            await ForecastStoreStock.FillAsync(page.Items, storeId, balanceRepository, itemRepository, ct);
+        return result;
     }
 
     protected override Expression<Func<ForecastRecommendation, bool>> BuildFilterExpression(IReadOnlyDictionary<string, string>? filters)

@@ -16,4 +16,13 @@ public class PurchaseItemRepository(AppDbContext context) : BaseRepository<Purch
             .GroupBy(i => i.VariantId)
             .Select(g => new { VariantId = g.Key, Quantity = g.Sum(i => i.Quantity) })
             .ToDictionaryAsync(row => row.VariantId, row => row.Quantity, ct);
+
+    public async Task<Dictionary<Guid, decimal>> SumIncomingByProduct(IReadOnlyCollection<Guid> productIds, Guid storeId, CancellationToken ct = default)
+        => await _context.Set<PurchaseItem>().AsNoTracking()
+            .Where(i => productIds.Contains(i.Variant.ProductId)
+                && i.PurchaseOrder.StoreId == storeId
+                && (i.PurchaseOrder.Status == PurchaseStatusEnum.Budget || i.PurchaseOrder.Status == PurchaseStatusEnum.Pending))
+            .GroupBy(i => i.Variant.ProductId)
+            .Select(g => new { ProductId = g.Key, Quantity = g.Sum(i => i.Quantity) })
+            .ToDictionaryAsync(row => row.ProductId, row => row.Quantity, ct);
 }

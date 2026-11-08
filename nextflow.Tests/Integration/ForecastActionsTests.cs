@@ -281,6 +281,54 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
         (await Use<IGetProductForecastUseCase>(scope).Execute(buy.ProductId, 12)).Data!.History.Count.ShouldBe(12);
     }
 
+    [Fact]
+    [Trait("Rule", "T-DF2")]
+    public async Task Should_AddSelectedStoreStock_When_StoreIdIsGiven()
+    {
+        var seeded = await Seed();
+        Guid storeId;
+        Dictionary<Guid, decimal> stockAtStore;
+        Dictionary<Guid, decimal> incomingAtStore;
+        await using (var context = fixture.CreateContext(seeded.Connection))
+        {
+            storeId = await context.Set<Store>().Where(s => s.IsActive).OrderBy(s => s.Name).Select(s => s.Id).FirstAsync();
+            stockAtStore = await context.Set<StockBalance>()
+                .Where(b => b.Location.StoreId == storeId && b.Location.IsActive)
+                .GroupBy(b => b.Variant.ProductId)
+                .ToDictionaryAsync(g => g.Key, g => g.Sum(b => b.Quantity));
+            incomingAtStore = await context.Set<PurchaseItem>()
+                .Where(i => i.PurchaseOrder.StoreId == storeId
+                    && (i.PurchaseOrder.Status == PurchaseStatusEnum.Budget || i.PurchaseOrder.Status == PurchaseStatusEnum.Pending))
+                .GroupBy(i => i.Variant.ProductId)
+                .ToDictionaryAsync(g => g.Key, g => g.Sum(i => i.Quantity));
+        }
+
+        using var scope = seeded.Services.CreateScope();
+        var list = Use<IGetForecastRecommendationsUseCase>(scope);
+
+        // Sem loja: só os números da análise (empresa inteira).
+        var general = (await list.Execute(seeded.RunId, 0, 20, null)).Data!.Items;
+        general.ShouldNotBeEmpty();
+        general.ShouldAllBe(r => r.StoreCurrentStock == null && r.StoreIncomingStock == null);
+
+        // Com loja: saldo e "a caminho" daquela loja; a sugestão continua a da análise.
+        var byStore = (await list.Execute(seeded.RunId, 0, 20, null, storeId: storeId)).Data!.Items;
+        byStore.Select(r => r.Id).ShouldBe(general.Select(r => r.Id));
+        foreach (var row in byStore)
+        {
+            row.StoreCurrentStock.ShouldBe(stockAtStore.GetValueOrDefault(row.ProductId));
+            row.StoreIncomingStock.ShouldBe(incomingAtStore.GetValueOrDefault(row.ProductId));
+            row.SuggestedQuantity.ShouldBe(general.Single(g => g.Id == row.Id).SuggestedQuantity);
+        }
+
+        var top = (await Use<IGetForecastTopUseCase>(scope).Execute(5, storeId)).Data!;
+        foreach (var row in top.Recommendations)
+            row.StoreCurrentStock.ShouldBe(stockAtStore.GetValueOrDefault(row.ProductId));
+
+        var detail = (await Use<IGetForecastRecommendationUseCase>(scope).Execute(byStore[0].Id, storeId)).Data!;
+        detail.StoreCurrentStock.ShouldBe(stockAtStore.GetValueOrDefault(detail.ProductId));
+    }
+
     // ---------------------------------------------------------------- F3.5: painel (T-DF1) e resumo diário (L-DF4)
 
     [Fact]

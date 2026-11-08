@@ -38,13 +38,13 @@ public interface IGetForecastRecommendationsUseCase
 {
     Task<ResultDto<PaginationDto<ForecastRecommendationListItemDto>>> Execute(
         Guid runId, int offset, int limit, IReadOnlyDictionary<string, string>? filters,
-        string? sort = null, string? order = null, CancellationToken ct = default);
+        string? sort = null, string? order = null, Guid? storeId = null, CancellationToken ct = default);
 }
 
 /// <summary>Detalhe da recomendação (T-DF3).</summary>
 public interface IGetForecastRecommendationUseCase
 {
-    Task<ResultDto<ForecastRecommendationDetailDto>> Execute(Guid recommendationId, CancellationToken ct = default);
+    Task<ResultDto<ForecastRecommendationDetailDto>> Execute(Guid recommendationId, Guid? storeId = null, CancellationToken ct = default);
 }
 
 /// <summary>Previsão do produto para a aba "Previsão" (T-DF5), sem recomendação obrigatória.</summary>

@@ -14,7 +14,8 @@ namespace Nextflow.Application.UseCases.Sales;
 
 /// <summary>
 /// Listagem de pedidos (T-VD3) da loja selecionada, mais recente primeiro. Filtros: <c>status</c>, <c>channel</c>,
-/// <c>paymentMethod</c>, período <c>from</c>/<c>to</c> em dias de negócio e <c>search</c> (número ou nome do cliente).
+/// <c>paymentMethod</c>, período <c>from</c>/<c>to</c> em dias de negócio, <c>search</c> (número ou nome do cliente),
+/// <c>clientId</c>, <c>userId</c> (vendedor), <c>productId</c> (algum item do produto) e total entre <c>minTotal</c> e <c>maxTotal</c>.
 /// </summary>
 public class GetAllOrdersUseCase(
     IOrderRepository repository,
@@ -38,7 +39,13 @@ public class GetAllOrdersUseCase(
         var builder = new FilterExpressionBuilder<Order>()
             .WhereEnumEquals(set, "status", o => o.Status)
             .WhereEnumEquals(set, "channel", o => o.Channel)
-            .WhereGuidEquals(set, "clientId", o => o.ClientId);
+            .WhereGuidEquals(set, "clientId", o => o.ClientId)
+            .WhereGuidEquals(set, "userId", o => o.UserId)
+            .WhereDecimalGte(set, "minTotal", o => o.Total)
+            .WhereDecimalLte(set, "maxTotal", o => o.Total);
+
+        if (set.TryGetString("productId", out var rawProduct) && FilterValueParsers.TryParseGuid(rawProduct, out var productId))
+            builder.And(o => o.Items.Any(i => i.Variant.ProductId == productId));
 
         if (_storeId is { } storeId)
             builder.And(o => o.StoreId == storeId);

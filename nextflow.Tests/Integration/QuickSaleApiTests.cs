@@ -312,4 +312,38 @@ public class QuickSaleApiTests(AccessApiFixture api)
         short_.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         FieldErrors(await Json(short_)).ShouldContain("cashReceived");
     }
+
+    [Fact]
+    public async Task Should_FilterSalesHistory_When_FilteringBySellerProductAndTotal()
+    {
+        var client = await api.AdminAsync();
+        var (storeId, shopId) = await CreateStore(client);
+        var candy = await CreateProduct(client, price: 10m);
+        var gum = await CreateProduct(client, price: 2m);
+        await Opening(client, candy.VariantId, shopId, 10m);
+        await Opening(client, gum.VariantId, shopId, 10m);
+
+        var big = await Sold(await Sell(client, storeId, [Item(candy.VariantId, 3m, 10m)], [Pay("Pix", 30m)]));
+        var small = await Sold(await Sell(client, storeId, [Item(gum.VariantId, 2m, 2m)], [Pay("Cash", 4m)]));
+        var mixed = await Sold(await Sell(client, storeId,
+            [Item(candy.VariantId, 1m, 10m), Item(gum.VariantId, 1m, 2m)], [Pay("Pix", 12m)]));
+        var sellerId = big.GetProperty("user").GetProperty("id").GetGuid();
+
+        async Task<Guid[]> List(object filters)
+        {
+            var page = await Json(await client.GetAsync($"/api/orders?storeId={storeId}&limit=50&filters={Filters(filters)}"));
+            return [.. page.GetProperty("items").EnumerateArray().Select(o => o.GetProperty("id").GetGuid())];
+        }
+
+        Guid Id(JsonElement order) => order.GetProperty("id").GetGuid();
+
+        (await List(new { productId = candy.Id.ToString() })).ShouldBe([Id(mixed), Id(big)], ignoreOrder: true);
+        (await List(new { productId = gum.Id.ToString() })).ShouldBe([Id(mixed), Id(small)], ignoreOrder: true);
+        (await List(new { minTotal = "10" })).ShouldBe([Id(mixed), Id(big)], ignoreOrder: true);
+        (await List(new { maxTotal = "12" })).ShouldBe([Id(mixed), Id(small)], ignoreOrder: true);
+        (await List(new { minTotal = "5", maxTotal = "20" })).ShouldBe([Id(mixed)]);
+        (await List(new { userId = sellerId.ToString() })).Length.ShouldBe(3);
+        (await List(new { userId = Guid.NewGuid().ToString() })).ShouldBeEmpty();
+        (await List(new { productId = candy.Id.ToString(), paymentMethod = "Pix", maxTotal = "15" })).ShouldBe([Id(mixed)]);
+    }
 }

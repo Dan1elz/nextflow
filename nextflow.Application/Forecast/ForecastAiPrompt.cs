@@ -49,10 +49,10 @@ public static partial class ForecastAiPrompt
            (ex.: evento comercial no horizonte, validade próxima, cobertura muito abaixo do prazo de entrega, baixa temporada).
            A quantidade de compra deve ficar entre 50% e 150% da quantidade calculada; o desconto não pode passar de
            "descontoMaximoPct" nem ficar abaixo de 5; a promoção deve durar de 7 a 45 dias.
-        4. "Comprar" exige necessidade de compra calculada (quantidade calculada > 0). Se não houver, use "Manter" ou "Promover".
+        4. "Comprar" exige necessidade de compra calculada (quantidade calculada > 0). Se não houver, use "Manter".
            Produto "foraDeLinha" ou "foraDaEpoca" nunca é "Comprar".
-        5. Não sugira "Promover" para produto com "promocaoVigente" preenchida, com "descontoMaximoPct" menor que 5
-           ou que precise de compra.
+        5. "Promover" só quando a "sugestaoCalculada" for "Promover" (excesso em baixa temporada ou validade próxima); nunca para
+           produto com "promocaoVigente" preenchida, com "descontoMaximoPct" menor que 5 ou que precise de compra.
         6. Considere os "eventosComerciais" do horizonte (ex.: Black Friday, Natal, Páscoa, Dia das Mães) e a validade dos produtos.
         7. Prioridade: "Alta" quando há risco de ruptura antes do próximo pico/entrega ou de perda por validade;
            "Media" para ações importantes sem urgência; "Baixa" para o restante. Produtos "Manter" normalmente são "Baixa".

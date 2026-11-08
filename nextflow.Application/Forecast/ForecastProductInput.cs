@@ -13,6 +13,9 @@ public sealed class ForecastProductInput
     public string? Brand { get; init; }
     public SaleUnitEnum SaleUnit { get; init; } = SaleUnitEnum.Unit;
 
+    /// <summary>Casas decimais da unidade de venda: decide quando a demanda prevista arredonda para zero (F3.7, "Sem ação").</summary>
+    public int DecimalPlaces { get; init; }
+
     /// <summary>Categoria de referência (a primeira ativa em ordem alfabética), para o índice sazonal da categoria.</summary>
     public string? ReferenceCategory { get; init; }
 

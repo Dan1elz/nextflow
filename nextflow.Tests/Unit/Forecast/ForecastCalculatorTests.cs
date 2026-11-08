@@ -433,4 +433,53 @@ public class ForecastCalculatorTests
         result.OffSeasonGuardActive.ShouldBeFalse();
         result.Action.ShouldBe(RecommendationActionEnum.Buy);
     }
+
+    [Fact]
+    [Trait("Rule", "F3.7")]
+    public void Should_KeepBuying_When_NewItemSoldSteadilyThenRanOut()
+    {
+        // Contraexemplo da trava por concentração: lançamento com venda constante (4 meses de 100) e 2 meses zerados por ruptura.
+        // Os 2 maiores meses são só 50% das vendas: não é rajada de temporada, e a compra continua.
+        var series = Series((_, _) => 0m);
+        series[^6] = series[^5] = series[^4] = series[^3] = 100;
+
+        var result = Calculate(Input(series, monthsOfHistory: 6));
+
+        result.OffSeasonByBurst.ShouldBeFalse();
+        result.Action.ShouldBe(RecommendationActionEnum.Buy);
+    }
+
+    // ------------------------------------------------------------------ F3.7: previsão zerada vira "Sem ação"
+
+    [Fact]
+    [Trait("Rule", "F3.7")]
+    public void Should_HoldWithoutAction_When_NoDemandIsForecastInPurchaseWindow()
+    {
+        // Vendeu 50/mês há mais de um ano e parou: a projeção da janela de compra é zero. O mínimo de 10 sozinho não justifica
+        // comprar (o motor antigo marcava "Comprar"); a recomendação fica sem ação, explicando o porquê.
+        var series = Series((_, _) => 0m);
+        for (var i = 0; i < 12; i++)
+            series[i] = 50;
+
+        var result = Calculate(Input(series, minStock: 10));
+
+        result.DemandDuringLeadTimeWindow.ShouldBe(0m);
+        result.Action.ShouldBe(RecommendationActionEnum.Hold);
+        result.Priority.ShouldBe(RecommendationPriorityEnum.Low);
+        result.PurchaseNeed.ShouldBe(0m);
+        result.BlockedByNoDemand.ShouldBeTrue();
+        result.SuppressedPurchaseNeed.ShouldBe(10m);
+        result.Reason.ShouldContain("Sem ação");
+    }
+
+    [Fact]
+    [Trait("Rule", "F3.7")]
+    public void Should_NotBlockPurchase_When_WindowHasSomeDemand()
+    {
+        // 0,4 kg por mês num produto vendido a quilo (3 casas) ainda é demanda: a regra "sem demanda" não pode esconder a compra.
+        var result = Calculate(Input(Flat(0.4m), configure: b => b.DecimalPlaces = 3));
+
+        result.BlockedByNoDemand.ShouldBeFalse();
+        result.Action.ShouldBe(RecommendationActionEnum.Buy);
+    }
 }

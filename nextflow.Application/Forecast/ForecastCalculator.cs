@@ -178,13 +178,22 @@ public static class ForecastCalculator
         var byIndex = seasonal.Max() >= SeasonalPeakIndex && windowIndex < OffSeasonIndex;
         var byBurst = IsBurstWithoutRecentSales(series, months);
         var offSeason = options.OffSeasonGuard && (byIndex || byBurst);
+        // F3.7, "Sem ação" (proposta de 08/11/2026): sem demanda prevista na janela de compra (arredondada às casas da unidade), o mínimo
+        // e o estoque de segurança sozinhos não geram compra. Era o caminho do item zerado que aparecia como "Comprar".
+        var noDemand = Round(windowDemand, Math.Clamp(input.DecimalPlaces, 0, 6)) <= 0;
         var need = fullNeed;
         var blockedByDiscontinued = false;
         var blockedByOffSeason = false;
+        var blockedByNoDemand = false;
         if (fullNeed > 0 && input.IsDiscontinued)
         {
             need = 0;
             blockedByDiscontinued = true;
+        }
+        else if (fullNeed > 0 && noDemand)
+        {
+            need = 0;
+            blockedByNoDemand = true;
         }
         else if (fullNeed > 0 && offSeason)
         {
@@ -274,9 +283,10 @@ public static class ForecastCalculator
             OffSeasonGuardActive = offSeason,
             OffSeasonByBurst = options.OffSeasonGuard && byBurst && !byIndex,
             WindowAverageIndex = Round(windowIndex, 3),
-            SuppressedPurchaseNeed = blockedByDiscontinued || blockedByOffSeason ? fullNeed : 0,
+            SuppressedPurchaseNeed = blockedByDiscontinued || blockedByOffSeason || blockedByNoDemand ? fullNeed : 0,
             BlockedByDiscontinued = blockedByDiscontinued,
             BlockedByOffSeason = blockedByOffSeason,
+            BlockedByNoDemand = blockedByNoDemand,
             DaysUntilValidity = daysUntilValidity,
             DemandUntilValidity = demandUntilValidity,
             MaxDiscountPercent = Round(maxDiscount * 100m, 2),

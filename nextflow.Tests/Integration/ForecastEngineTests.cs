@@ -287,4 +287,63 @@ public class ForecastEngineTests(DemoSeedFixture fixture)
         await Should.ThrowAsync<InvalidOperationException>(() => engine.RunAsync(outcome.RunId, CancellationToken.None));
         await Should.ThrowAsync<InvalidOperationException>(() => engine.RunAsync(Guid.NewGuid(), CancellationToken.None));
     }
+
+    [Fact]
+    [Trait("Rule", "RN-DF23")]
+    public async Task Should_CloseAsFailed_When_AnalysisIsCanceled()
+    {
+        var seeded = await Seed();
+        using var cts = new CancellationTokenSource();
+        // O host para no meio do lote 1: o cancelamento chega com a análise em andamento.
+        seeded.Ai.BatchResponse = (_, _) =>
+        {
+            cts.Cancel();
+            return null;
+        };
+
+        Guid runId;
+        using (var scope = seeded.Services.CreateScope())
+        {
+            var clock = scope.ServiceProvider.GetRequiredService<IBusinessClock>();
+            var run = new ForecastRun(new StartForecastRunDto(ForecastTriggerEnum.Scheduled, null), clock.Today, clock.UtcNow);
+            await scope.ServiceProvider.GetRequiredService<IForecastRunRepository>().AddAsync(run);
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync();
+            runId = run.Id;
+
+            await Should.ThrowAsync<OperationCanceledException>(() => scope.ServiceProvider.GetRequiredService<IForecastEngine>().RunAsync(runId, cts.Token));
+        }
+
+        await using var context = fixture.CreateContext(seeded.Connection);
+        var canceled = await context.Set<ForecastRun>().SingleAsync(r => r.Id == runId);
+        canceled.Status.ShouldBe(ForecastRunStatusEnum.Failed);
+        canceled.ErrorMessage!.ShouldContain("cancelada");
+        canceled.FinishedAt.ShouldNotBeNull();
+        (await context.Set<ForecastRecommendation>().CountAsync(r => r.ForecastRunId == runId)).ShouldBe(0);
+
+        // O índice único de análise em andamento não fica preso: a próxima abre e conclui.
+        seeded.Ai.Reset();
+        (await Run(seeded)).Status.ShouldBe(ForecastRunStatusEnum.Completed);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-DF23")]
+    public async Task Should_RejectSecondRunningAnalysis_When_OneIsInProgress()
+    {
+        var seeded = await Seed();
+        using var scope = seeded.Services.CreateScope();
+        var clock = scope.ServiceProvider.GetRequiredService<IBusinessClock>();
+        var runs = scope.ServiceProvider.GetRequiredService<IForecastRunRepository>();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var first = new ForecastRun(new StartForecastRunDto(ForecastTriggerEnum.Manual, null), clock.Today, clock.UtcNow);
+        await runs.AddAsync(first);
+        await unitOfWork.CommitAsync();
+
+        await runs.AddAsync(new ForecastRun(new StartForecastRunDto(ForecastTriggerEnum.Scheduled, null), clock.Today, clock.UtcNow));
+        await Should.ThrowAsync<DbUpdateException>(() => unitOfWork.CommitAsync());
+
+        // Limpa para os outros testes da classe: a primeira roda e fecha.
+        unitOfWork.Rollback();
+        (await scope.ServiceProvider.GetRequiredService<IForecastEngine>().RunAsync(first.Id, CancellationToken.None)).Status.ShouldBe(ForecastRunStatusEnum.Completed);
+    }
 }

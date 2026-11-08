@@ -116,6 +116,54 @@ public class ForecastGuardrailsTests
     }
 
     [Fact]
+    [Trait("Rule", "RN-DF07")]
+    public void Should_KeepHold_When_AiPromotesWithoutCalculatedTrigger()
+    {
+        // ADR 0005: a IA não cria ação. Sem excesso em baixa temporada nem validade próxima (RN-DF07), "Promover" da IA não vale.
+        var calc = NoNeed();
+        calc.CanPromote.ShouldBeTrue();
+        calc.PromotionTrigger.ShouldBe(PromotionTrigger.None);
+
+        var decision = ForecastGuardrails.Apply(calc, Ai("Promover", discount: 20, days: 15));
+
+        decision.Action.ShouldBe(RecommendationActionEnum.Hold);
+        decision.SuggestedDiscountPercent.ShouldBeNull();
+        decision.Reason.ShouldContain("Ajuste automático");
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE27")]
+    public void Should_ReapplyMultipleAndMinimum_When_AiAdjustsQuantity()
+    {
+        // Múltiplo 12: o cálculo pede 168; a IA pede 0,8× (134) e o guardrail sobe ao múltiplo (144).
+        var multiple = Calc(Input(configure: b => b.OrderMultiple = 12));
+        multiple.PurchaseNeed.ShouldBe(168m);
+        ForecastGuardrails.Apply(multiple, Ai("Comprar", quantity: 134)).SuggestedQuantity.ShouldBe(144m);
+
+        // Pedido mínimo de 200: a IA pede a metade (100) e a quantidade final volta ao mínimo.
+        var minimum = Calc(Input(configure: b => b.MinOrderQty = 200));
+        minimum.PurchaseNeed.ShouldBe(200m);
+        var decision = ForecastGuardrails.Apply(minimum, Ai("Comprar", quantity: 100));
+        decision.SuggestedQuantity.ShouldBe(200m);
+        decision.Reason.ShouldContain("pedido mínimo");
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-VD10")]
+    public void Should_CapDiscountAtNinety_When_MarginAllowsMore()
+    {
+        // Custo quase zero: a margem permitiria 98,9%, mas a promoção aceita no máximo 90% (CHECK do banco).
+        var index = Enumerable.Repeat(1.5m, 12).ToArray();
+        index[10] = index[11] = index[0] = 0.5m;
+        var calc = Calc(Input(Flat(100), stock: 400, productIndex: index, price: 100m, cost: 1m));
+        calc.MaxDiscountPercent.ShouldBe(90m);
+
+        var decision = ForecastGuardrails.Apply(calc, Ai("Promover", discount: 95, days: 20));
+
+        decision.SuggestedDiscountPercent.ShouldBe(90m);
+    }
+
+    [Fact]
     [Trait("Rule", "RN-DF22")]
     public void Should_KeepCalculatedBuy_When_AiSaysHoldWithHighPriority()
     {

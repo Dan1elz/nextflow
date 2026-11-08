@@ -56,6 +56,9 @@ public sealed class ProductForecastResult
     public bool BlockedByDiscontinued { get; init; }
     public bool BlockedByOffSeason { get; init; }
 
+    /// <summary>F3.7, "Sem ação": nenhuma demanda prevista na janela de compra; o mínimo sozinho não gera compra.</summary>
+    public bool BlockedByNoDemand { get; init; }
+
     public int? DaysUntilValidity { get; init; }
     public decimal? DemandUntilValidity { get; init; }
 

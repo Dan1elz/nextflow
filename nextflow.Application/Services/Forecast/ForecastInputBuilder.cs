@@ -146,6 +146,7 @@ public class ForecastInputBuilder(
                 Name = product.Name,
                 Brand = product.Brand,
                 SaleUnit = product.SaleUnit,
+                DecimalPlaces = product.DecimalPlaces,
                 ReferenceCategory = category?.Name,
                 IsDiscontinued = product.Lifecycle == LifecycleEnum.Discontinued,
                 CurrentStock = variants.Sum(v => stockByVariant.GetValueOrDefault(v.Id)),

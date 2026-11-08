@@ -81,13 +81,16 @@ public static class ForecastGuardrails
 
             case RecommendationActionEnum.Promote:
                 {
-                    if (!calc.CanPromote)
+                    // ADR 0005 e RN-DF07: a IA não cria a ação; promover exige o gatilho do cálculo (excesso em baixa temporada ou validade).
+                    if (!calc.CanPromote || calc.PromotionTrigger == PromotionTrigger.None)
                     {
                         var why = calc.PurchaseNeed > 0
                             ? "o cálculo indica necessidade de compra"
                             : calc.Input.ActivePromotionDiscountPercent.HasValue
                                 ? "o produto já possui promoção vigente"
-                                : "a margem não permite o desconto mínimo de 5%";
+                                : !calc.CanPromote
+                                    ? "a margem não permite o desconto mínimo de 5%"
+                                    : "o cálculo não indica excesso em baixa temporada nem validade próxima";
                         return FromCalculation(calc, $"Ajuste automático: a IA sugeriu promover, mas {why}; mantida a sugestão do cálculo.");
                     }
 

@@ -76,6 +76,9 @@ public static class ForecastReasonTemplates
 
                 if (r.BlockedByDiscontinued)
                     sb.Append($" Produto fora de linha: compra de {PtBr.Compact(r.SuppressedPurchaseNeed)} {unit} não recomendada.");
+                else if (r.BlockedByNoDemand)
+                    sb.Append($" Sem ação: nenhuma demanda prevista nos próximos {r.PurchaseWindowDays} dias; o estoque mínimo sozinho " +
+                              $"não justifica comprar {PtBr.Compact(r.SuppressedPurchaseNeed)} {unit}.");
                 else if (r.BlockedByOffSeason)
                     sb.Append(OffSeasonSentence(r));
                 else if (r.PromotionTrigger != PromotionTrigger.None)

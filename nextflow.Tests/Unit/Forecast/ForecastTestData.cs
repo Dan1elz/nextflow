@@ -90,7 +90,8 @@ internal static class ForecastTestData
             NextExpiry = builder.NextExpiry,
             NextExpiryQuantity = builder.NextExpiryQuantity,
             ActivePromotionDiscountPercent = builder.ActivePromotionDiscount,
-            RevenueLast12Months = builder.Revenue
+            RevenueLast12Months = builder.Revenue,
+            DecimalPlaces = builder.DecimalPlaces
         };
     }
 }
@@ -117,4 +118,5 @@ internal sealed class ForecastProductInputBuilder
     public decimal NextExpiryQuantity { get; set; }
     public decimal? ActivePromotionDiscount { get; set; }
     public decimal Revenue { get; set; }
+    public int DecimalPlaces { get; set; }
 }

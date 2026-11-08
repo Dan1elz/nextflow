@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.EntityFrameworkCore;
@@ -137,7 +139,7 @@ public class GetProductForecastUseCase(
 /// recomendações ficam Aplicadas com o link do pedido. Recomendação só pendente e "Comprar"; a variação tem de ser do produto dela;
 /// uma recomendação não pode estar em dois fornecedores. Avisos de mínimo, múltiplo e validade são do dialog (não bloqueiam). Um commit.
 /// </summary>
-public class ApplyPurchaseRecommendationsUseCase(
+public partial class ApplyPurchaseRecommendationsUseCase(
     IForecastRecommendationRepository recommendationRepository,
     IPurchaseOrderRepository purchaseOrderRepository,
     ISupplierRepository supplierRepository,
@@ -190,19 +192,20 @@ public class ApplyPurchaseRecommendationsUseCase(
                     groupOf[item.RecommendationId] = g;
             }
 
-            // Mesmas regras do pedido de compra (T-CP2), com os campos prefixados pelo grupo.
+            // Mesmas regras do pedido de compra (T-CP2), sobre os itens somados por variação; cada erro de item volta para as linhas
+            // enviadas que formaram aquele item (F3.4c), e o resto ganha só o prefixo do grupo.
+            var summed = group.Items.Select((item, line) => (Item: item, Line: line)).GroupBy(x => x.Item.VariantId).ToList();
             var save = new SavePurchaseOrderDto
             {
                 SupplierId = group.SupplierId,
                 ReceiveLocationId = group.ReceiveLocationId,
                 Note = group.Note,
                 ConfirmWarnings = true,
-                Items = [.. group.Items
-                    .GroupBy(i => i.VariantId)
-                    .Select(v => new SavePurchaseItemDto { VariantId = v.Key, Quantity = v.Sum(i => i.Quantity), UnitCost = v.First().UnitCost })],
+                Items = [.. summed.Select(v => new SavePurchaseItemDto { VariantId = v.Key, Quantity = v.Sum(x => x.Item.Quantity), UnitCost = v.First().Item.UnitCost })],
             };
+            var lines = summed.Select(v => v.Select(x => x.Line).ToList()).ToList();
             var rules = await PurchaseOrderRules.Check(save, supplierRepository, locationRepository, variantRepository, ct);
-            failures.AddRange(rules.Failures.Select(f => new ValidationFailure(prefix + Camel(f.PropertyName), f.ErrorMessage)));
+            failures.AddRange(rules.Failures.SelectMany(f => ToRequestLines(f, prefix, lines)));
 
             if (rules.Failures.Count == 0)
                 orders.Add((new PurchaseOrder(save, rules.StoreId, userId.Value, rules.LeadTimeDays, clock.Today), [.. group.Items.Select(i => i.RecommendationId)]));
@@ -228,6 +231,21 @@ public class ApplyPurchaseRecommendationsUseCase(
             Recommendations = await ForecastRecommendationReading.ListItemsAsync(recommendationRepository, fileStorage, recommendationIds, ct),
         });
     }
+
+    /// <summary>"Items[k].Quantity" da lista somada → "groups[g].items[i].quantity" para cada linha enviada i que formou o item k.</summary>
+    private static IEnumerable<ValidationFailure> ToRequestLines(ValidationFailure failure, string prefix, IReadOnlyList<List<int>> lines)
+    {
+        var match = SummedItem().Match(failure.PropertyName);
+        if (!match.Success)
+            return [new ValidationFailure(prefix + Camel(failure.PropertyName), failure.ErrorMessage)];
+
+        var field = Camel(match.Groups[2].Value);
+        return lines[int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture)]
+            .Select(line => new ValidationFailure($"{prefix}items[{line}].{field}", failure.ErrorMessage));
+    }
+
+    [GeneratedRegex(@"^Items\[(\d+)\]\.(.+)$")]
+    private static partial Regex SummedItem();
 
     /// <summary>"Items[0].VariantId" → "items[0].variantId", como o resto do 422.</summary>
     private static string Camel(string path)

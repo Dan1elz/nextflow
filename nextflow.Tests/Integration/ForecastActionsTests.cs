@@ -354,4 +354,87 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
             digest[0].Message.ShouldContain(lowStock.ToString());
         }
     }
+
+    /// <summary>Todas as recomendações "Comprar" da análise, em qualquer status: os 422 da F3.4c não dependem de sobrar pendentes.</summary>
+    private async Task<List<ForecastRecommendation>> AllBuys(Seeded seeded)
+    {
+        await using var context = fixture.CreateContext(seeded.Connection);
+        return await context.Set<ForecastRecommendation>()
+            .Include(r => r.Items)
+            .Include(r => r.Product).ThenInclude(p => p.Suppliers)
+            .Where(r => r.ForecastRunId == seeded.RunId && r.Action == RecommendationActionEnum.Buy && r.Items.Any(i => i.Quantity > 0))
+            .OrderBy(r => r.Product.Name)
+            .ToListAsync();
+    }
+
+    /// <summary>Quantas compras gravadas com estas variações existem (para provar que um 422 não grava nada).</summary>
+    private async Task<int> OrdersWith(Seeded seeded, IEnumerable<Guid> variantIds)
+    {
+        var ids = variantIds.ToList();
+        await using var context = fixture.CreateContext(seeded.Connection);
+        return await context.Set<PurchaseOrder>().CountAsync(p => p.Items.Any(i => ids.Contains(i.VariantId)));
+    }
+
+    [Fact]
+    [Trait("Rule", "F3.4c")]
+    public async Task Should_PointToSecondGroupSupplier_When_ItIsNotActive()
+    {
+        var seeded = await Seed();
+        var location = await ReceivingLocation(seeded);
+        var buys = (await AllBuys(seeded)).Where(r => r.Product.Suppliers.Any(s => s.IsPreferred)).ToList();
+        var first = buys[0];
+        var second = buys[1];
+        var groups = new List<ApplyPurchaseGroupDto>
+        {
+            Group(first.Product.Suppliers.First(s => s.IsPreferred).SupplierId, location, first),
+            Group(Guid.NewGuid(), location, second), // fornecedor que não existe ativo
+        };
+        var variants = groups.SelectMany(g => g.Items).Select(i => i.VariantId).ToList();
+        var before = await OrdersWith(seeded, variants);
+
+        using var scope = seeded.Services.CreateScope();
+        var result = await Use<IApplyPurchaseRecommendationsUseCase>(scope).Execute(new ApplyPurchaseDto { Groups = groups }, seeded.AdminId);
+
+        result.ErrorCode.ShouldBe(422);
+        result.FieldErrors!.Keys.Where(k => k.EndsWith("supplierId", StringComparison.Ordinal)).ShouldBe(["groups[1].supplierId"]);
+        (await OrdersWith(seeded, variants)).ShouldBe(before);
+    }
+
+    [Fact]
+    [Trait("Rule", "F3.4c")]
+    public async Task Should_PointToEveryRequestLine_When_SummedVariantIsInvalid()
+    {
+        var seeded = await Seed();
+        var location = await ReceivingLocation(seeded);
+        var whole = (await AllBuys(seeded))
+            .Where(r => r.Product.DecimalPlaces == 0)
+            .Take(2)
+            .ToList();
+        whole.Count.ShouldBe(2);
+        await using var context = fixture.CreateContext(seeded.Connection);
+        var supplierId = await context.Set<Supplier>().Where(s => s.IsActive).OrderBy(s => s.Name).Select(s => s.Id).FirstAsync();
+        var valid = whole[0].Items.First(i => i.Quantity > 0).VariantId;
+        var repeated = whole[1].Items.First(i => i.Quantity > 0).VariantId;
+
+        // Linha 0 válida; linhas 1 e 2 com a mesma variação: na lista somada ela é o item 1 (0,5 + 0,7 = 1,2, quebrado num produto inteiro).
+        var group = new ApplyPurchaseGroupDto
+        {
+            SupplierId = supplierId,
+            ReceiveLocationId = location,
+            Items =
+            [
+                new() { RecommendationId = whole[0].Id, VariantId = valid, Quantity = 1, UnitCost = 5 },
+                new() { RecommendationId = whole[1].Id, VariantId = repeated, Quantity = 0.5m, UnitCost = 5 },
+                new() { RecommendationId = whole[1].Id, VariantId = repeated, Quantity = 0.7m, UnitCost = 5 },
+            ],
+        };
+        var before = await OrdersWith(seeded, [valid, repeated]);
+
+        using var scope = seeded.Services.CreateScope();
+        var result = await Use<IApplyPurchaseRecommendationsUseCase>(scope).Execute(new ApplyPurchaseDto { Groups = [group] }, seeded.AdminId);
+
+        result.ErrorCode.ShouldBe(422);
+        result.FieldErrors!.Keys.Where(k => k.EndsWith("quantity", StringComparison.Ordinal)).Order().ShouldBe(["groups[0].items[1].quantity", "groups[0].items[2].quantity"]);
+        (await OrdersWith(seeded, [valid, repeated])).ShouldBe(before);
+    }
 }

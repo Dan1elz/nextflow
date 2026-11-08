@@ -8,7 +8,7 @@ using Nextflow.Utils;
 
 namespace Nextflow.Controllers;
 
-/// <summary>Previsão de demanda (T-DF2, T-DF9; F3.3): disparo em segundo plano, andamento, histórico e recomendações.</summary>
+/// <summary>Previsão de demanda (T-DF2, T-DF9, T-DF10; F3.3): disparo em segundo plano, andamento, histórico, recomendações e precisão.</summary>
 [Authorize]
 [Route("api/forecasts")]
 public class ForecastsController(
@@ -24,12 +24,27 @@ public class ForecastsController(
     IApplyPurchaseRecommendationsUseCase applyPurchaseUseCase,
     IApplyPromotionRecommendationUseCase applyPromotionUseCase,
     IDismissRecommendationUseCase dismissUseCase,
-    IGetForecastTopUseCase topUseCase) : ApiController
+    IGetForecastTopUseCase topUseCase,
+    IGetForecastAccuracySummaryUseCase accuracySummaryUseCase,
+    IGetForecastAccuracyProductsUseCase accuracyProductsUseCase) : ApiController
 {
     /// <summary>Card "Recomendações" do painel (T-DF1, F3.5).</summary>
     [HttpGet("latest/top")]
     public async Task<IActionResult> LatestTop([FromQuery] int limit = 5, CancellationToken ct = default)
         => Handle(await topUseCase.Execute(limit, ct));
+
+    // ---------------------------------------------------------------- F3.6c: precisão (T-DF10), só Admin
+
+    [HttpGet("accuracy/summary")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AccuracySummary([FromQuery] int months = 12, CancellationToken ct = default)
+        => Handle(await accuracySummaryUseCase.Execute(months, ct));
+
+    [HttpGet("accuracy/products")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AccuracyProducts(
+        [FromQuery] int offset = 0, [FromQuery] int limit = 20, [FromQuery] string? filters = null, CancellationToken ct = default)
+        => Handle(await accuracyProductsUseCase.Execute(offset, limit, FilterHelper.Parse(filters), ct));
 
     // ---------------------------------------------------------------- F3.4: detalhe e ações (T-DF3 a T-DF8)
 

@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<IForecastRunLauncher, ForecastRunLauncher>();
         services.AddScoped<IForecastRunProcessor, ForecastRunProcessor>();
         services.AddScoped<IForecastScheduleService, ForecastScheduleService>();
+        services.AddScoped<ForecastAccuracyReader>();
         services.AddScoped<ProductForecastReader>();
         services.AddScoped<INotificationPublisher, NotificationPublisher>();
         services.AddScoped<INotificationDigestService, NotificationDigestService>();

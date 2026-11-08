@@ -9,7 +9,7 @@ namespace Nextflow.Infrastructure.Repositories;
 
 public class ForecastProjectionRepository(AppDbContext context) : BaseRepository<ForecastProjection>(context), IForecastProjectionRepository
 {
-    public async Task<IReadOnlyList<ForecastAccuracyRowDto>> GetAccuracyRows(DateOnly today, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ForecastAccuracyRowDto>> GetAccuracyRows(DateOnly today, Guid? productId = null, CancellationToken ct = default)
     {
         var currentKey = (today.Year * 12) + today.Month;
 
@@ -17,6 +17,7 @@ public class ForecastProjectionRepository(AppDbContext context) : BaseRepository
         var candidates = await _context.Set<ForecastProjection>().AsNoTracking()
             .Where(p => p.ForecastRun.Status == ForecastRunStatusEnum.Completed
                 || p.ForecastRun.Status == ForecastRunStatusEnum.CompletedWithoutAi)
+            .Where(p => productId == null || p.ProductId == productId)
             .Where(p => (p.Year * 12) + p.Month < currentKey)
             .Where(p => p.ForecastRun.ReferenceDate < new DateOnly(p.Year, p.Month, 1))
             .Join(

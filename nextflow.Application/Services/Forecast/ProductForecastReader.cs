@@ -9,7 +9,7 @@ namespace Nextflow.Application.Services.Forecast;
 
 /// <summary>
 /// Monta a previsão de um produto (T-DF3, T-DF5) só com o que já está gravado: dados derivados da F3.1, projeções da última análise
-/// concluída que projetou o produto, sazonalidade, eventos e saldo. Só leitura; nada é recalculado aqui (ADR 0005).
+/// concluída que projetou o produto, sazonalidade, eventos, saldo e precisão. Só leitura; nada é recalculado aqui (ADR 0005).
 /// </summary>
 public class ProductForecastReader(
     IProductSalesMonthlyRepository salesMonthlyRepository,
@@ -18,6 +18,7 @@ public class ProductForecastReader(
     IForecastRecommendationRepository recommendationRepository,
     ICalendarEventRepository eventRepository,
     IStockBalanceRepository balanceRepository,
+    ForecastAccuracyReader accuracyReader,
     IBusinessClock clock)
 {
     public const int DefaultMonths = 24;
@@ -100,6 +101,9 @@ public class ProductForecastReader(
 
         var stock = await balanceRepository.SumByProduct([productId], null, ct);
 
+        // Precisão (RN-DF19, F3.6c): projeção de referência × vendido nos meses completos da mesma janela do histórico.
+        var accuracy = await accuracyReader.LoadProductAsync(productId, accuracyReader.Window(months), ct);
+
         return new ProductForecastDto
         {
             ProductId = product.Id,
@@ -116,6 +120,13 @@ public class ProductForecastReader(
             MonthsOfHistory = latestRecommendation?.MonthsOfHistory ?? seasonality.Values.FirstOrDefault()?.MonthsOfHistory ?? 0,
             Events = [.. events.OrderBy(e => e.Date).ThenBy(e => e.Name, StringComparer.Ordinal)],
             CurrentStock = stock.GetValueOrDefault(productId),
+            Accuracy = [.. accuracy.Select(m => new ForecastAccuracyItemDto
+            {
+                Month = $"{m.Month.Year:0000}-{m.Month.Month:00}",
+                Projected = m.Projected,
+                Actual = m.Actual,
+                ErrorPercent = m.ErrorPercent,
+            })],
             LatestRecommendationId = latestRecommendation?.Id,
         };
     }

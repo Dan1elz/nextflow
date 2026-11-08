@@ -46,6 +46,15 @@ public sealed class DemoSeedFixture : IAsyncLifetime
         int historyMonths = 0,
         Action<IServiceCollection>? configureServices = null,
         IReadOnlyDictionary<string, string>? settings = null)
+        => StartHost(connectionString, demoEnabled, historyMonths, configureServices, settings).Services;
+
+    /// <summary>Como <see cref="StartApi"/>, mas devolve o host para o teste chamar a API por HTTP.</summary>
+    public WebApplicationFactory<Program> StartHost(
+        string connectionString,
+        bool demoEnabled,
+        int historyMonths = 0,
+        Action<IServiceCollection>? configureServices = null,
+        IReadOnlyDictionary<string, string>? settings = null)
     {
         var host = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -65,7 +74,7 @@ public sealed class DemoSeedFixture : IAsyncLifetime
         });
         _ = host.Services; // constrói o host: roda Program.cs até o startup
         _hosts.Add(host);
-        return host.Services;
+        return host;
     }
 
     public AppDbContext CreateContext(string connectionString)

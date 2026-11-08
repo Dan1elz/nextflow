@@ -82,3 +82,16 @@ public interface IUpdateForecastSettingsUseCase
 {
     Task<ResultDto<ForecastSettingsDto>> Execute(ForecastSettingsRequestDto dto, Guid? userId, CancellationToken ct = default);
 }
+
+/// <summary>Visão geral da precisão da previsão (T-DF10, F3.6c): por mês, classe ABC e categoria. Só Admin.</summary>
+public interface IGetForecastAccuracySummaryUseCase
+{
+    Task<ResultDto<ForecastAccuracySummaryDto>> Execute(int months, CancellationToken ct = default);
+}
+
+/// <summary>Tabela de precisão por produto (T-DF10, F3.6c), pior erro médio primeiro. Só Admin.</summary>
+public interface IGetForecastAccuracyProductsUseCase
+{
+    Task<ResultDto<PaginationDto<ForecastAccuracyProductDto>>> Execute(
+        int offset, int limit, IReadOnlyDictionary<string, string>? filters, CancellationToken ct = default);
+}

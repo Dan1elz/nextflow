@@ -31,9 +31,13 @@ public class StockLedger(
     private sealed record ResolvedLine(int Index, StockLineDto Line);
 
     public async Task<List<ValidationFailure>> Post(StockDocumentDto document, IReadOnlyList<StockLineDto> lines, CancellationToken ct)
+        => (await PostResolved(document, lines, ct)).Failures;
+
+    public async Task<(List<ValidationFailure> Failures, List<StockLineDto> Posted)> PostResolved(
+        StockDocumentDto document, IReadOnlyList<StockLineDto> lines, CancellationToken ct)
     {
         if (lines.Count == 0)
-            return [new("Lines", "Informe ao menos uma linha.")];
+            return ([new("Lines", "Informe ao menos uma linha.")], []);
 
         var variantIds = lines.Select(l => l.VariantId).Distinct().ToList();
         var locationIds = lines.Select(l => l.LocationId).Distinct().ToList();
@@ -52,7 +56,7 @@ public class StockLedger(
         var resolved = ResolveLots(lines, variants, products, lots, balances, failures);
         failures.AddRange(Validate(resolved, variants, products, openLocations, balances));
         if (failures.Count > 0)
-            return [.. failures.DistinctBy(f => (f.PropertyName, f.ErrorMessage))];
+            return ([.. failures.DistinctBy(f => (f.PropertyName, f.ErrorMessage))], []);
 
         var companyQuantities = await balanceRepository.SumByVariant(variantIds, ct);
 
@@ -82,7 +86,7 @@ public class StockLedger(
             await movementRepository.AddAsync(new StockMovement(document, line, unitCost, balance.Quantity), ct);
         }
 
-        return [];
+        return ([], [.. resolved.Select(r => r.Line)]);
     }
 
     /// <summary>

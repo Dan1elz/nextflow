@@ -205,6 +205,69 @@ public class PromotionsApiTests(AccessApiFixture api)
         body.GetProperty("createdByName").GetString().ShouldNotBeNullOrWhiteSpace();
     }
 
+    private static Task<HttpResponseMessage> Update(HttpClient client, Guid id, Guid productId, decimal percent, int start, int end,
+        Guid? variantId = null)
+        => client.PutAsJsonAsync($"{Route}/{id}", new
+        {
+            productId,
+            variantId,
+            discountPercent = percent,
+            startDate = Day(start),
+            endDate = Day(end),
+            reason = "Ajustada",
+        });
+
+    [Fact]
+    [Trait("Rule", "RN-VD10")]
+    public async Task Should_UpdateOnlyScheduledPromotion_When_Editing()
+    {
+        await using var host = api.HostWithClock(Today);
+        var client = await api.AdminAsync(host);
+        var product = await CreateProduct(client);
+        var active = (await Created(client, product.Id, 10m, 0, 3)).GetProperty("id").GetGuid();
+        var scheduled = (await Created(client, product.Id, 10m, 10, 12)).GetProperty("id").GetGuid();
+
+        var updated = await Update(client, scheduled, product.Id, 25m, 8, 15, product.SecondVariantId);
+        updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+        var body = await Json(updated);
+        body.GetProperty("discountPercent").GetDecimal().ShouldBe(25m);
+        body.GetProperty("startDate").GetString().ShouldBe(Day(8));
+        body.GetProperty("variantId").GetGuid().ShouldBe(product.SecondVariantId);
+        body.GetProperty("reason").GetString().ShouldBe("Ajustada");
+        body.GetProperty("status").GetString().ShouldBe("Scheduled");
+
+        // Vigente não se edita; inexistente é 404.
+        (await Update(client, active, product.Id, 20m, 4, 6)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await Update(client, Guid.NewGuid(), product.Id, 20m, 4, 6)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-VD11")]
+    public async Task Should_Return422_When_UpdatedPromotionOverlapsOrChangesProduct()
+    {
+        await using var host = api.HostWithClock(Today);
+        var client = await api.AdminAsync(host);
+        var product = await CreateProduct(client);
+        var other = await CreateProduct(client);
+        await Created(client, product.Id, 10m, 0, 5);
+        var scheduled = (await Created(client, product.Id, 10m, 10, 12)).GetProperty("id").GetGuid();
+
+        var overlapping = await Update(client, scheduled, product.Id, 10m, 4, 12);
+        overlapping.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        FieldErrors(await Json(overlapping)).ShouldContain("startDate");
+
+        // Ela mesma não conta como sobreposição.
+        (await Update(client, scheduled, product.Id, 15m, 11, 13)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var otherProduct = await Update(client, scheduled, other.Id, 10m, 11, 13);
+        otherProduct.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        FieldErrors(await Json(otherProduct)).ShouldContain("productId");
+
+        var past = await Update(client, scheduled, product.Id, 10m, -1, 13);
+        past.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        FieldErrors(await Json(past)).ShouldContain("startDate");
+    }
+
     [Fact]
     [Trait("Rule", "RN-VD12")]
     public async Task Should_CancelOnlyScheduledOrActive_When_CancelingPromotion()

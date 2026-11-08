@@ -34,6 +34,39 @@ public class ForecastRunConfiguration : IEntityTypeConfiguration<ForecastRun>
     }
 }
 
+/// <summary>Parte de cada loja na compra recomendada (RN-DF27).</summary>
+public class ForecastRecommendationStoreConfiguration : IEntityTypeConfiguration<ForecastRecommendationStore>
+{
+    public void Configure(EntityTypeBuilder<ForecastRecommendationStore> builder)
+    {
+        builder.ToTable("forecast_recommendation_stores");
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.Id).ValueGeneratedNever();
+        builder.Property(s => s.SharePercent).HasPrecision(6, 2);
+        builder.Property(s => s.Shortfall).HasPrecision(14, 3);
+        builder.Property(s => s.Quantity).HasPrecision(14, 3);
+        builder.HasOne(s => s.Recommendation).WithMany(r => r.Stores).HasForeignKey(s => s.RecommendationId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(s => s.Store).WithMany().HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(s => new { s.RecommendationId, s.StoreId }).IsUnique();
+    }
+}
+
+/// <summary>Pedidos gerados por uma recomendação "Comprar" (RN-DF28).</summary>
+public class ForecastRecommendationPurchaseOrderConfiguration : IEntityTypeConfiguration<ForecastRecommendationPurchaseOrder>
+{
+    public void Configure(EntityTypeBuilder<ForecastRecommendationPurchaseOrder> builder)
+    {
+        builder.ToTable("forecast_recommendation_purchase_orders");
+        builder.HasKey(link => link.Id);
+        builder.Property(link => link.Id).ValueGeneratedNever();
+        builder.HasOne(link => link.Recommendation).WithMany(r => r.PurchaseOrders).HasForeignKey(link => link.RecommendationId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(link => link.PurchaseOrder).WithMany().HasForeignKey(link => link.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(link => new { link.RecommendationId, link.PurchaseOrderId }).IsUnique();
+        builder.HasIndex(link => link.PurchaseOrderId);
+    }
+}
+
 public class ForecastRecommendationConfiguration : IEntityTypeConfiguration<ForecastRecommendation>
 {
     public void Configure(EntityTypeBuilder<ForecastRecommendation> builder)
@@ -56,6 +89,9 @@ public class ForecastRecommendationConfiguration : IEntityTypeConfiguration<Fore
         builder.Property(r => r.DismissReason).HasMaxLength(255);
         builder.Property(r => r.DismissReasonCode).HasConversion<byte?>();
         builder.Property(r => r.AppliedById).HasColumnName("applied_by");
+        builder.HasOne<StockTransfer>().WithMany().HasForeignKey(r => r.AppliedTransferId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(r => r.TransferFromLocation).WithMany().HasForeignKey(r => r.TransferFromLocationId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(r => r.TransferToLocation).WithMany().HasForeignKey(r => r.TransferToLocationId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(r => r.SuggestedQuantity).HasPrecision(14, 3);
         builder.Property(r => r.CalculatedQuantity).HasPrecision(14, 3);
         builder.Property(r => r.SuggestedDiscountPercent).HasPrecision(5, 2);

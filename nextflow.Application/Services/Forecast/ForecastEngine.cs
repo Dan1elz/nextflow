@@ -144,7 +144,12 @@ public class ForecastEngine(
             : null;
         summary ??= ForecastReasonTemplates.BuildSummary(ctx, results.Count, [.. decisions.Select(d => (d.Decision.Action, d.Decision.Priority))], events);
 
-        var recommendations = decisions.Select(d => ToRecommendation(run.Id, d.Result, d.Decision, source)).ToList();
+        // "Transferir" (RN-DF16, RN-DF29): só onde o cálculo e a IA decidiram "Manter" (a empresa não precisa comprar nem promover)
+        // e um local está abaixo do mínimo com excesso em outro. Sai do cálculo, a IA não cria nem muda.
+        var final = decisions.Select(d => WithTransfer(d.Result, d.Decision, source))
+            .Select(d => WithStoreSplit(d.Result, d.Decision, d.Plan, source))
+            .ToList();
+        var recommendations = final.Select(d => ToRecommendation(run.Id, d.Result, d.Decision, source, d.Plan, d.Stores, d.StoreText)).ToList();
         var projections = results
             .Where(r => r.HasSales)
             .SelectMany(r => r.Projections.Select(p =>
@@ -174,7 +179,7 @@ public class ForecastEngine(
             "Previsão {RunId}: {Status}, horizonte de {Horizon} meses, {Products} produtos, {Batches} lotes ({Failed} com falha).",
             run.Id, status, horizon, results.Count, batches.Count, run.BatchesFailed);
 
-        return Outcome(run, decisions.Select(d => d.Decision.Action).ToList());
+        return Outcome(run, final.Select(d => d.Decision.Action).ToList());
     }
 
     /// <summary>Grava o andamento do lote (enviado, concluído, com falha) e o contador da análise, num commit próprio.</summary>
@@ -199,12 +204,109 @@ public class ForecastEngine(
         await unitOfWork.CommitAsync(ct);
     }
 
-    private static ForecastRecommendation ToRecommendation(Guid runId, ProductForecastResult result, ForecastDecision decision, ForecastSourceData source)
+    /// <summary>Cobertura alvo de quem tem excesso quando o produto não tem política (RN-DF16).</summary>
+    public const int DefaultTransferCoverageDays = 30;
+
+    /// <summary>
+    /// "Manter" que vira "Transferir" (RN-DF16): demanda diária de cada local = a do produto (próximo mês ÷ 30) × participação da loja
+    /// nas vendas ÷ locais vendáveis da loja × participação da variação na grade; local não vendável (depósito) tem demanda zero.
+    /// </summary>
+    private static (ProductForecastResult Result, ForecastDecision Decision, TransferPlan? Plan) WithTransfer(
+        ProductForecastResult result, ForecastDecision decision, ForecastSourceData source)
+    {
+        var productId = result.Input.ProductId;
+        if (decision.Action != RecommendationActionEnum.Hold || !source.LocationPositions.TryGetValue(productId, out var rows))
+            return (result, decision, null);
+
+        var daily = result.NextMonthDemand / 30m;
+        var history = source.VariantHistory.GetValueOrDefault(productId) ?? [];
+        var historyTotal = history.Sum(h => h.HistoricalQuantity);
+        var variantCount = Math.Max(1, rows.Select(r => r.VariantId).Distinct().Count());
+        decimal VariantShare(Guid variantId) => historyTotal > 0
+            ? history.Where(h => h.VariantId == variantId).Sum(h => h.HistoricalQuantity) / historyTotal
+            : 1m / variantCount;
+        var sellableByStore = rows.Where(r => r.IsSellable).GroupBy(r => r.StoreId)
+            .ToDictionary(g => g.Key, g => Math.Max(1, g.Select(r => r.LocationId).Distinct().Count()));
+
+        var positions = rows.Select(r => new LocationPosition(r.VariantId, r.LocationId, r.Available, r.Minimum,
+            r.IsSellable
+                ? daily * source.StoreShares.GetValueOrDefault((productId, r.StoreId)) / sellableByStore[r.StoreId] * VariantShare(r.VariantId)
+                : 0m)).ToList();
+        var plan = TransferTrigger.Evaluate(positions, result.Input.TargetCoverageDays ?? DefaultTransferCoverageDays,
+            source.DecimalPlaces.GetValueOrDefault(productId));
+        if (plan is null)
+            return (result, decision, null);
+
+        string Name(Guid locationId) => rows.Where(r => r.LocationId == locationId).Select(r => $"{r.StoreName} › {r.LocationName}").First();
+        var targetEmpty = plan.Items.Any(i => rows.Any(r => r.VariantId == i.VariantId && r.LocationId == plan.ToLocationId && r.Available <= 0));
+        var reason = $"Transferir {plan.Total:0.###} de {Name(plan.FromLocationId)} para {Name(plan.ToLocationId)}: o destino está abaixo do "
+            + "mínimo e a origem tem mais do que precisa para a cobertura alvo. A empresa não precisa comprar.";
+        return (result, new ForecastDecision
+        {
+            Action = RecommendationActionEnum.Transfer,
+            Priority = targetEmpty ? RecommendationPriorityEnum.High : RecommendationPriorityEnum.Medium,
+            SuggestedQuantity = plan.Total,
+            Reason = Truncate(reason, ForecastGuardrails.MaxReasonLength),
+        }, plan);
+    }
+
+    /// <summary>
+    /// "Comprar" dividido entre as lojas pela própria análise (RN-DF27): por loja, participação nas vendas de 90 dias, saldo (todos os
+    /// locais da loja), a caminho e a falta no horizonte; a quantidade sugerida é rateada pela falta, no múltiplo do fornecedor. O
+    /// motivo ganha a divisão no fim. Com uma loja só, não divide.
+    /// </summary>
+    private static (ProductForecastResult Result, ForecastDecision Decision, TransferPlan? Plan,
+        IReadOnlyList<(Guid StoreId, decimal SharePercent, decimal Shortfall, decimal Quantity)> Stores, string StoreText) WithStoreSplit(
+        ProductForecastResult result, ForecastDecision decision, TransferPlan? plan, ForecastSourceData source)
+    {
+        var productId = result.Input.ProductId;
+        if (decision is not { Action: RecommendationActionEnum.Buy, SuggestedQuantity: > 0 } || !source.LocationPositions.TryGetValue(productId, out var rows))
+            return (result, decision, plan, [], string.Empty);
+
+        var stores = rows.GroupBy(r => (r.StoreId, r.StoreName)).OrderBy(g => g.Key.StoreName, StringComparer.Ordinal).ToList();
+        if (stores.Count < 2)
+            return (result, decision, plan, [], string.Empty);
+
+        var inputs = stores.Select(store =>
+        {
+            var share = Math.Round(source.StoreShares.GetValueOrDefault((productId, store.Key.StoreId)) * 100m, 2, MidpointRounding.AwayFromZero);
+            var stock = store.Sum(r => r.Available);
+            var incoming = source.IncomingByStore.GetValueOrDefault((productId, store.Key.StoreId));
+            return (store.Key.StoreId, store.Key.StoreName, Share: share,
+                Shortfall: StoreSplitCalculator.Shortfall(result.ProjectedDemand, share, stock, incoming));
+        }).ToList();
+        var parts = StoreSplitCalculator.Split(decision.SuggestedQuantity.Value,
+            [.. inputs.Select(i => new StoreSplitInput(i.StoreId, i.Share, i.Shortfall))], result.Input.OrderMultiple);
+
+        var split = inputs.Select((i, index) => (i.StoreId, i.Share, i.Shortfall, parts[index].Quantity)).ToList();
+        var text = " Por loja: " + string.Join(" · ", inputs.Select((i, index) => $"{i.StoreName} {parts[index].Quantity:0.###}")) + ".";
+        var withSplit = new ForecastDecision
+        {
+            Action = decision.Action,
+            Priority = decision.Priority,
+            SuggestedQuantity = decision.SuggestedQuantity,
+            SuggestedDiscountPercent = decision.SuggestedDiscountPercent,
+            SuggestedPromotionDays = decision.SuggestedPromotionDays,
+            Deadline = decision.Deadline,
+            Reason = Truncate(decision.Reason + text, ForecastGuardrails.MaxReasonLength),
+            FromAi = decision.FromAi,
+            AiAdjusted = decision.AiAdjusted,
+        };
+        return (result, withSplit, plan, split, text);
+    }
+
+    private static ForecastRecommendation ToRecommendation(Guid runId, ProductForecastResult result, ForecastDecision decision, ForecastSourceData source,
+        TransferPlan? plan = null, IReadOnlyList<(Guid StoreId, decimal SharePercent, decimal Shortfall, decimal Quantity)>? stores = null,
+        string storeText = "")
     {
         var input = result.Input;
 
         // RN-DF21 e L-DF5: a quantidade de compra é rateada nas variações pela proporção histórica de venda da grade.
-        IReadOnlyList<NewForecastRecommendationItemDto> items = decision is { Action: RecommendationActionEnum.Buy, SuggestedQuantity: > 0 }
+        // "Transferir": as variações e quantidades do gatilho (RN-DF16).
+        IReadOnlyList<NewForecastRecommendationItemDto> items = plan is not null
+            ? [.. plan.Items.Select(i => new NewForecastRecommendationItemDto(i.VariantId, i.Quantity,
+                plan.Total > 0 ? Math.Round(i.Quantity / plan.Total * 100m, 2, MidpointRounding.AwayFromZero) : 0m))]
+            : decision is { Action: RecommendationActionEnum.Buy, SuggestedQuantity: > 0 }
             ? [.. VariantAllocator
                 .Split(decision.SuggestedQuantity.Value, source.VariantHistory.GetValueOrDefault(input.ProductId) ?? [], source.DecimalPlaces.GetValueOrDefault(input.ProductId))
                 .Select(share => new NewForecastRecommendationItemDto(share.VariantId, share.Quantity, share.SharePercent))]
@@ -222,7 +324,8 @@ public class ForecastEngine(
             decision.SuggestedPromotionDays,
             decision.Deadline,
             decision.Reason,
-            Truncate(result.Reason, ForecastGuardrails.MaxReasonLength),
+            // "Transferir" sai do cálculo (RN-DF29): o motivo calculado é o da transferência, não o do "Manter" que ela substituiu.
+            plan is not null ? decision.Reason : Truncate(Truncate(result.Reason, ForecastGuardrails.MaxReasonLength) + storeText, ForecastGuardrails.MaxReasonLength),
             decision.AiAdjusted,
             input.CurrentStock,
             input.IncomingStock,
@@ -235,7 +338,12 @@ public class ForecastEngine(
             input.LeadTimeSource,
             (short)result.MonthsOfHistory,
             result.UsedSamePeriodLastYear,
-            items));
+            items)
+        {
+            TransferFromLocationId = plan?.FromLocationId,
+            TransferToLocationId = plan?.ToLocationId,
+            Stores = stores ?? [],
+        });
     }
 
     /// <summary>Eventos do calendário de hoje até o fim do horizonte; só os ativos, com a data do ano em que caem (RN-DF17).</summary>

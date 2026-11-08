@@ -148,6 +148,165 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
         recommendation.AppliedPurchaseOrderId.ShouldBeNull();
     }
 
+    /// <summary>
+    /// Aplica uma "Comprar" dividida entre as duas lojas (RN-DF27): pega a sugestão da API (que tem de somar a quantidade de cada
+    /// variação) e manda um grupo por loja, cada um no local de recebimento dela, com metade da quantidade de cada variação.
+    /// </summary>
+    private async Task<(ForecastRecommendation Buy, List<Guid> OrderIds)> ApplySplit(Seeded seeded)
+    {
+        var buy = (await Pending(seeded, RecommendationActionEnum.Buy))
+            .First(r => r.Product.Suppliers.Any(s => s.IsPreferred) && r.Items.Any(i => i.Quantity >= 2));
+        var supplierId = buy.Product.Suppliers.First(s => s.IsPreferred).SupplierId;
+
+        using var scope = seeded.Services.CreateScope();
+        var split = await Use<IGetRecommendationStoreSplitUseCase>(scope).Execute(buy.Id);
+        split.IsSuccess.ShouldBeTrue(split.Message);
+        split.Data!.Stores.Count.ShouldBe(2);
+        split.Data.Items.ShouldAllBe(i => i.ByStore.Sum(p => p.Quantity) == i.Quantity);
+        split.Data.Stores.Sum(s => s.Quantity).ShouldBe(buy.Items.Sum(i => i.Quantity));
+
+        var items = buy.Items.Where(i => i.Quantity >= 2).ToList();
+        var groups = split.Data.Stores.Select((store, index) => new ApplyPurchaseGroupDto
+        {
+            SupplierId = supplierId,
+            ReceiveLocationId = store.ReceiveLocationId!.Value,
+            Items = [.. items.Select(i => new ApplyPurchaseItemDto
+            {
+                RecommendationId = buy.Id,
+                VariantId = i.VariantId,
+                Quantity = index == 0 ? Math.Ceiling(i.Quantity / 2) : i.Quantity - Math.Ceiling(i.Quantity / 2),
+                UnitCost = 5m,
+            })],
+        }).ToList();
+
+        var applied = await Use<IApplyPurchaseRecommendationsUseCase>(scope).Execute(new ApplyPurchaseDto { Groups = groups }, seeded.AdminId);
+        applied.IsSuccess.ShouldBeTrue(applied.Message);
+        return (buy, [.. applied.Data!.PurchaseOrders.Select(p => p.Id)]);
+    }
+
+    private async Task Cancel(Seeded seeded, Guid orderId)
+    {
+        uint version;
+        await using (var context = fixture.CreateContext(seeded.Connection))
+            version = (await context.Set<PurchaseOrder>().SingleAsync(p => p.Id == orderId)).Version;
+        using var scope = seeded.Services.CreateScope();
+        var canceled = await Use<ICancelPurchaseOrderUseCase>(scope).Execute(orderId, new CancelPurchaseOrderDto { Version = version, Reason = "Teste." });
+        canceled.IsSuccess.ShouldBeTrue(canceled.Message);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-DF27")]
+    public async Task Should_CreateOneOrderPerStore_When_BuySplitAcrossStores()
+    {
+        var seeded = await Seed();
+        var (buy, orderIds) = await ApplySplit(seeded);
+
+        orderIds.Count.ShouldBe(2);
+        await using var context = fixture.CreateContext(seeded.Connection);
+        var orders = await context.Set<PurchaseOrder>().Where(p => orderIds.Contains(p.Id)).ToListAsync();
+        orders.Select(o => o.StoreId).Distinct().Count().ShouldBe(2);
+        orders.ShouldAllBe(o => o.Status == PurchaseStatusEnum.Budget);
+
+        var recommendation = await context.Set<ForecastRecommendation>().Include(r => r.PurchaseOrders).SingleAsync(r => r.Id == buy.Id);
+        recommendation.Status.ShouldBe(RecommendationStatusEnum.Applied);
+        recommendation.PurchaseOrders.Select(l => l.PurchaseOrderId).ShouldBe(orderIds, ignoreOrder: true);
+        orderIds.ShouldContain(recommendation.AppliedPurchaseOrderId!.Value);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-DF28")]
+    public async Task Should_KeepApplied_When_OnlyOneOfSplitOrdersIsCanceled()
+    {
+        var seeded = await Seed();
+        var (buy, orderIds) = await ApplySplit(seeded);
+        await using (var before = fixture.CreateContext(seeded.Connection))
+        {
+            var first = (await before.Set<ForecastRecommendation>().SingleAsync(r => r.Id == buy.Id)).AppliedPurchaseOrderId!.Value;
+            await Cancel(seeded, first);
+        }
+
+        await using var context = fixture.CreateContext(seeded.Connection);
+        var recommendation = await context.Set<ForecastRecommendation>().SingleAsync(r => r.Id == buy.Id);
+        recommendation.Status.ShouldBe(RecommendationStatusEnum.Applied);
+        var open = await context.Set<PurchaseOrder>().SingleAsync(p => orderIds.Contains(p.Id) && p.Status != PurchaseStatusEnum.Canceled);
+        recommendation.AppliedPurchaseOrderId.ShouldBe(open.Id);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-DF28")]
+    public async Task Should_ReturnToPending_When_AllSplitOrdersAreCanceled()
+    {
+        var seeded = await Seed();
+        var (buy, orderIds) = await ApplySplit(seeded);
+        foreach (var orderId in orderIds)
+            await Cancel(seeded, orderId);
+
+        await using var context = fixture.CreateContext(seeded.Connection);
+        var recommendation = await context.Set<ForecastRecommendation>().SingleAsync(r => r.Id == buy.Id);
+        recommendation.Status.ShouldBe(RecommendationStatusEnum.Pending);
+        recommendation.AppliedPurchaseOrderId.ShouldBeNull();
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-DF27")]
+    public async Task Should_SplitBuyAcrossStores_When_AnalysisRuns()
+    {
+        var seeded = await Seed();
+        await using var context = fixture.CreateContext(seeded.Connection);
+
+        var buys = await context.Set<ForecastRecommendation>().Include(r => r.Stores)
+            .Where(r => r.ForecastRunId == seeded.RunId && r.Action == RecommendationActionEnum.Buy && r.SuggestedQuantity > 0)
+            .ToListAsync();
+
+        buys.ShouldNotBeEmpty();
+        buys.ShouldAllBe(r => r.Stores.Count == 2 && r.Stores.Sum(s => s.Quantity) == r.SuggestedQuantity);
+        buys.ShouldAllBe(r => r.Reason.Contains("Por loja:"));
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-DF16")]
+    public async Task Should_GenerateTransferRecommendation_When_DemoScenarioSeeded()
+    {
+        var seeded = await Seed();
+
+        var transfers = await Pending(seeded, RecommendationActionEnum.Transfer);
+
+        transfers.ShouldNotBeEmpty();
+        transfers.ShouldAllBe(r => r.TransferFromLocationId != null && r.TransferToLocationId != null
+            && r.TransferFromLocationId != r.TransferToLocationId && r.Items.Sum(i => i.Quantity) > 0 && r.SuggestedQuantity > 0);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE62")]
+    public async Task Should_CreateTransfer_When_ApplyingTransferRecommendation()
+    {
+        var seeded = await Seed();
+        var transfer = (await Pending(seeded, RecommendationActionEnum.Transfer)).First();
+        var to = transfer.TransferToLocationId!.Value;
+        var variantIds = transfer.Items.Select(i => i.VariantId).ToList();
+
+        decimal before;
+        await using (var context = fixture.CreateContext(seeded.Connection))
+            before = await context.Set<StockBalance>().Where(b => b.LocationId == to && variantIds.Contains(b.VariantId)).SumAsync(b => b.Quantity);
+
+        using (var scope = seeded.Services.CreateScope())
+        {
+            var applied = await Use<IApplyTransferRecommendationUseCase>(scope).Execute(transfer.Id, null, seeded.AdminId);
+            applied.IsSuccess.ShouldBeTrue(applied.Message);
+            applied.Data!.Status.ShouldBe("Applied");
+            applied.Data.AppliedLink!.Type.ShouldBe("Transfer");
+        }
+
+        await using var check = fixture.CreateContext(seeded.Connection);
+        var recommendation = await check.Set<ForecastRecommendation>().SingleAsync(r => r.Id == transfer.Id);
+        recommendation.Status.ShouldBe(RecommendationStatusEnum.Applied);
+        var created = await check.Set<StockTransfer>().Include(t => t.Items).SingleAsync(t => t.Id == recommendation.AppliedTransferId);
+        created.ForecastRecommendationId.ShouldBe(transfer.Id);
+        created.ToLocationId.ShouldBe(to);
+        var after = await check.Set<StockBalance>().Where(b => b.LocationId == to && variantIds.Contains(b.VariantId)).SumAsync(b => b.Quantity);
+        after.ShouldBe(before + transfer.Items.Sum(i => i.Quantity));
+    }
+
     [Fact]
     [Trait("Rule", "RN-DF15")]
     public async Task Should_RejectPurchase_When_RecommendationIsNotPendingBuy()
@@ -227,6 +386,34 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
         promotion.VariantId.ShouldBeNull();
         promotion.DiscountPercent.ShouldBe(10m);
         (await check.Set<ForecastRecommendation>().SingleAsync(r => r.Id == recommendationId)).AppliedPromotionId.ShouldBe(promotion.Id);
+    }
+
+    [Fact]
+    public async Task Should_ListMoreItemsWithPendingRecommendation_When_DashboardAsksForMore()
+    {
+        var seeded = await Seed();
+        using var scope = seeded.Services.CreateScope();
+        var lots = Use<IGetExpiringLotsSummaryUseCase>(scope);
+
+        // Janela larga: os lotes de compra do histórico vencem em até 180 dias.
+        var all = (await lots.Execute(null, 365, limit: 200)).Data!;
+        all.Count.ShouldBeGreaterThan(5);
+        all.Items.Count.ShouldBe(Math.Min(all.Count, 200));
+        all.Items.ShouldAllBe(i => i.LotId != Guid.Empty && i.LocationId != Guid.Empty && i.StoreId != Guid.Empty && i.StoreName != string.Empty && i.ProductId != Guid.Empty);
+
+        // Padrão do painel continua 5; limite fora da faixa volta ao padrão.
+        (await lots.Execute(null, 365)).Data!.Items.Count.ShouldBe(5);
+        (await lots.Execute(null, 365, limit: 0)).Data!.Items.Count.ShouldBe(5);
+
+        // O item traz a recomendação pendente do produto (menos "Manter"), quando existe.
+        var pending = (await Pending(seeded, RecommendationActionEnum.Promote))
+            .Concat(await Pending(seeded, RecommendationActionEnum.Buy))
+            .Concat(await Pending(seeded, RecommendationActionEnum.Transfer))
+            .ToDictionary(r => r.ProductId, r => r.Id);
+        var withRecommendation = all.Items.Where(i => pending.ContainsKey(i.ProductId)).ToList();
+        withRecommendation.ShouldNotBeEmpty();
+        withRecommendation.ShouldAllBe(i => i.RecommendationId == pending[i.ProductId] && i.RecommendationAction != null);
+        all.Items.Where(i => !pending.ContainsKey(i.ProductId)).ShouldAllBe(i => i.RecommendationId == null);
     }
 
     [Fact]
@@ -361,7 +548,7 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
 
         var lowStock = (await Use<IGetLowStockSummaryUseCase>(scope).Execute(null)).Data!;
         lowStock.Items.Count.ShouldBe(Math.Min(5, lowStock.Count));
-        lowStock.Items.ShouldAllBe(i => i.Available < i.MinQuantity);
+        lowStock.Items.ShouldAllBe(i => i.Available < i.MinQuantity && i.StoreId != Guid.Empty && i.StoreName != string.Empty);
 
         var lots = (await Use<IGetExpiringLotsSummaryUseCase>(scope).Execute(null, 365)).Data!;
         lots.Items.Count.ShouldBe(Math.Min(5, lots.Count));

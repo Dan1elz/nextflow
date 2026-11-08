@@ -605,6 +605,10 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("applied_purchase_order_id");
 
+                    b.Property<Guid?>("AppliedTransferId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("applied_transfer_id");
+
                     b.Property<bool>("BasedOnLastYear")
                         .HasColumnType("boolean")
                         .HasColumnName("based_on_last_year");
@@ -724,6 +728,14 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasColumnType("numeric(14,3)")
                         .HasColumnName("suggested_quantity");
 
+                    b.Property<Guid?>("TransferFromLocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("transfer_from_location_id");
+
+                    b.Property<Guid?>("TransferToLocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("transfer_to_location_id");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -740,12 +752,21 @@ namespace Nextflow.Infrastructure.Migrations
                     b.HasIndex("AppliedPurchaseOrderId")
                         .HasDatabaseName("ix_forecast_recommendations_applied_purchase_order_id");
 
+                    b.HasIndex("AppliedTransferId")
+                        .HasDatabaseName("ix_forecast_recommendations_applied_transfer_id");
+
                     b.HasIndex("ForecastRunId")
                         .HasDatabaseName("ix_forecast_recommendations_forecast_run_id");
 
                     b.HasIndex("Status")
                         .HasDatabaseName("ix_forecast_recommendations_pending")
                         .HasFilter("status = 1");
+
+                    b.HasIndex("TransferFromLocationId")
+                        .HasDatabaseName("ix_forecast_recommendations_transfer_from_location_id");
+
+                    b.HasIndex("TransferToLocationId")
+                        .HasDatabaseName("ix_forecast_recommendations_transfer_to_location_id");
 
                     b.HasIndex("ForecastRunId", "ProductId")
                         .IsUnique()
@@ -806,6 +827,83 @@ namespace Nextflow.Infrastructure.Migrations
 
                             t.HasCheckConstraint("ck_forecast_recommendation_items_share", "share_percent between 0 and 100");
                         });
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastRecommendationPurchaseOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("PurchaseOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("purchase_order_id");
+
+                    b.Property<Guid>("RecommendationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recommendation_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_forecast_recommendation_purchase_orders");
+
+                    b.HasIndex("PurchaseOrderId")
+                        .HasDatabaseName("ix_forecast_recommendation_purchase_orders_purchase_order_id");
+
+                    b.HasIndex("RecommendationId", "PurchaseOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_forecast_recommendation_purchase_orders_recommendation_id_p");
+
+                    b.ToTable("forecast_recommendation_purchase_orders", (string)null);
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastRecommendationStore", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<Guid>("RecommendationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recommendation_id");
+
+                    b.Property<decimal>("SharePercent")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)")
+                        .HasColumnName("share_percent");
+
+                    b.Property<decimal>("Shortfall")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("shortfall");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("store_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_forecast_recommendation_stores");
+
+                    b.HasIndex("StoreId")
+                        .HasDatabaseName("ix_forecast_recommendation_stores_store_id");
+
+                    b.HasIndex("RecommendationId", "StoreId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_forecast_recommendation_stores_recommendation_id_store_id");
+
+                    b.ToTable("forecast_recommendation_stores", (string)null);
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.ForecastRun", b =>
@@ -2414,6 +2512,107 @@ namespace Nextflow.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.StockTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("ForecastRecommendationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("forecast_recommendation_id");
+
+                    b.Property<Guid>("FromLocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("from_location_id");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<int>("Number")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("number");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Number"));
+
+                    b.Property<Guid>("ToLocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("to_location_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_transfers");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_stock_transfers_created_by_id");
+
+                    b.HasIndex("ForecastRecommendationId")
+                        .HasDatabaseName("ix_stock_transfers_forecast_recommendation_id");
+
+                    b.HasIndex("FromLocationId")
+                        .HasDatabaseName("ix_stock_transfers_from_location_id");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_stock_transfers_number");
+
+                    b.HasIndex("ToLocationId")
+                        .HasDatabaseName("ix_stock_transfers_to_location_id");
+
+                    b.ToTable("stock_transfers", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_transfers_locations", "from_location_id <> to_location_id");
+                        });
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.StockTransferItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<Guid>("TransferId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("transfer_id");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_transfer_items");
+
+                    b.HasIndex("TransferId")
+                        .HasDatabaseName("ix_stock_transfer_items_transfer_id");
+
+                    b.HasIndex("VariantId")
+                        .HasDatabaseName("ix_stock_transfer_items_variant_id");
+
+                    b.ToTable("stock_transfer_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_transfer_items_quantity", "quantity > 0");
+                        });
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Store", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2724,6 +2923,12 @@ namespace Nextflow.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_forecast_recommendations_purchase_order_applied_purchase_or");
 
+                    b.HasOne("Nextflow.Domain.Models.StockTransfer", null)
+                        .WithMany()
+                        .HasForeignKey("AppliedTransferId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_forecast_recommendations_stock_transfer_applied_transfer_id");
+
                     b.HasOne("Nextflow.Domain.Models.ForecastRun", "ForecastRun")
                         .WithMany("Recommendations")
                         .HasForeignKey("ForecastRunId")
@@ -2738,6 +2943,18 @@ namespace Nextflow.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_forecast_recommendations_product_product_id");
 
+                    b.HasOne("Nextflow.Domain.Models.StockLocation", "TransferFromLocation")
+                        .WithMany()
+                        .HasForeignKey("TransferFromLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_forecast_recommendations_stock_location_transfer_from_locat");
+
+                    b.HasOne("Nextflow.Domain.Models.StockLocation", "TransferToLocation")
+                        .WithMany()
+                        .HasForeignKey("TransferToLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_forecast_recommendations_stock_location_transfer_to_locatio");
+
                     b.Navigation("AppliedPromotion");
 
                     b.Navigation("AppliedPurchaseOrder");
@@ -2745,6 +2962,10 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("ForecastRun");
 
                     b.Navigation("Product");
+
+                    b.Navigation("TransferFromLocation");
+
+                    b.Navigation("TransferToLocation");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.ForecastRecommendationItem", b =>
@@ -2766,6 +2987,48 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("Recommendation");
 
                     b.Navigation("Variant");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastRecommendationPurchaseOrder", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.PurchaseOrder", "PurchaseOrder")
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_forecast_recommendation_purchase_orders_purchase_order_purc");
+
+                    b.HasOne("Nextflow.Domain.Models.ForecastRecommendation", "Recommendation")
+                        .WithMany("PurchaseOrders")
+                        .HasForeignKey("RecommendationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_forecast_recommendation_purchase_orders_forecast_recommenda");
+
+                    b.Navigation("PurchaseOrder");
+
+                    b.Navigation("Recommendation");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastRecommendationStore", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.ForecastRecommendation", "Recommendation")
+                        .WithMany("Stores")
+                        .HasForeignKey("RecommendationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_forecast_recommendation_stores_forecast_recommendations_rec");
+
+                    b.HasOne("Nextflow.Domain.Models.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_forecast_recommendation_stores_store_store_id");
+
+                    b.Navigation("Recommendation");
+
+                    b.Navigation("Store");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.ForecastRun", b =>
@@ -3284,6 +3547,63 @@ namespace Nextflow.Infrastructure.Migrations
                     b.Navigation("Variant");
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.StockTransfer", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfers_user_created_by_id");
+
+                    b.HasOne("Nextflow.Domain.Models.ForecastRecommendation", null)
+                        .WithMany()
+                        .HasForeignKey("ForecastRecommendationId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_stock_transfers_forecast_recommendations_forecast_recommend");
+
+                    b.HasOne("Nextflow.Domain.Models.StockLocation", "FromLocation")
+                        .WithMany()
+                        .HasForeignKey("FromLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfers_stock_locations_from_location_id");
+
+                    b.HasOne("Nextflow.Domain.Models.StockLocation", "ToLocation")
+                        .WithMany()
+                        .HasForeignKey("ToLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfers_stock_locations_to_location_id");
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("FromLocation");
+
+                    b.Navigation("ToLocation");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.StockTransferItem", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.StockTransfer", "Transfer")
+                        .WithMany("Items")
+                        .HasForeignKey("TransferId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfer_items_stock_transfers_transfer_id");
+
+                    b.HasOne("Nextflow.Domain.Models.ProductVariant", "Variant")
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfer_items_product_variants_variant_id");
+
+                    b.Navigation("Transfer");
+
+                    b.Navigation("Variant");
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.UserStore", b =>
                 {
                     b.HasOne("Nextflow.Domain.Models.Store", "Store")
@@ -3328,6 +3648,10 @@ namespace Nextflow.Infrastructure.Migrations
             modelBuilder.Entity("Nextflow.Domain.Models.ForecastRecommendation", b =>
                 {
                     b.Navigation("Items");
+
+                    b.Navigation("PurchaseOrders");
+
+                    b.Navigation("Stores");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.ForecastRun", b =>
@@ -3390,6 +3714,11 @@ namespace Nextflow.Infrastructure.Migrations
             modelBuilder.Entity("Nextflow.Domain.Models.StockLocation", b =>
                 {
                     b.Navigation("Balances");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.StockTransfer", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Store", b =>

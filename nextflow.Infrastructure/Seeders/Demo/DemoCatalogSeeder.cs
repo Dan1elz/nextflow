@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Nextflow.Domain.Dtos.Categories;
+using Nextflow.Domain.Dtos.Collections;
 using Nextflow.Domain.Dtos.Products;
 using Nextflow.Domain.Dtos.Stock;
 using Nextflow.Domain.Dtos.Stores;
@@ -15,7 +16,7 @@ namespace Nextflow.Infrastructure.Seeders.Demo;
 
 /// <summary>
 /// Catálogo de demonstração (F1.11), só com <c>Seed:Demo:Enabled</c>: duas lojas com "Loja" e "Depósito", fornecedores,
-/// categorias, ~40 produtos de doces e presentes (com e sem grade), vínculos com fornecedor e evento, mínimos por local e
+/// categorias, coleções, ~40 produtos de doces e presentes (com e sem grade), vínculos com fornecedor e evento, mínimos por local e
 /// saldo de abertura com custo.
 /// <para>
 /// Duas etapas, cada uma idempotente e num commit só. O catálogo roda se a categoria raiz não existe. O saldo de abertura
@@ -27,6 +28,7 @@ public class DemoCatalogSeeder(
     IConfiguration configuration,
     IStoreRepository storeRepository,
     ICategoryRepository categoryRepository,
+    ICollectionRepository collectionRepository,
     ISupplierRepository supplierRepository,
     ICalendarEventRepository calendarEventRepository,
     IProductRepository productRepository,
@@ -86,6 +88,15 @@ public class DemoCatalogSeeder(
             .ToList();
         await supplierRepository.AddRangeAsync(suppliers.Where(s => !existing.ContainsKey(s.Cnpj.Value)), ct);
 
+        var collections = new Dictionary<string, Guid>();
+        foreach (var demo in DemoCatalog.Collections)
+        {
+            var collection = new Collection(new CollectionRequestDto { Name = demo.Name });
+            await collectionRepository.AddAsync(collection, ct);
+            foreach (var code in demo.ProductCodes)
+                collections[code] = collection.Id;
+        }
+
         var eventNames = DemoCatalog.Products.SelectMany(p => p.Events).Distinct().ToList();
         var events = (await calendarEventRepository.GetAll(e => eventNames.Contains(e.Name), 0, int.MaxValue, ct: ct))
             .ToDictionary(e => e.Name, e => e.Id);
@@ -95,6 +106,7 @@ public class DemoCatalogSeeder(
         {
             var dto = ToRequest(product, categories[product.Category], suppliers[product.SupplierIndex].Id,
                 DemoCatalog.Suppliers[product.SupplierIndex], events, stores);
+            dto.CollectionId = collections.TryGetValue(product.Code, out var collectionId) ? collectionId : null;
             await productRepository.AddAsync(new Product(dto, userId, today), ct);
         }
 
@@ -165,17 +177,19 @@ public class DemoCatalogSeeder(
             AttributeValueIds = product.Grid is null ? [] : [product.Grid.Options[index].SkuSuffix],
         }).ToList();
 
-        if (product.MinStock >= DemoCatalog.MainItemMinStock)
-            dto.LocationMinimums = LocationMinimums(product.MinStock, variants.Count, stores);
+        // Alimento sempre ganha mínimo por local: zero no depósito, onde ele não fica (senão o mínimo padrão marcaria "abaixo").
+        if (product.MinStock >= DemoCatalog.MainItemMinStock || !DemoCatalog.KeepsInDeposit(product))
+            dto.LocationMinimums = LocationMinimums(product.MinStock, variants.Count, stores, DemoCatalog.KeepsInDeposit(product));
 
         return dto;
     }
 
     /// <summary>
     /// Itens principais: a loja principal fica com o mínimo padrão no salão, a segunda com uma fração dele, e os depósitos
-    /// guardam metade do mínimo do salão da própria loja (RN-CE33).
+    /// guardam metade do mínimo do salão da própria loja (RN-CE33); zero quando o item não fica no depósito.
     /// </summary>
-    private static List<ProductLocationMinimumDto> LocationMinimums(decimal minStock, int variantCount, List<Store> stores)
+    private static List<ProductLocationMinimumDto> LocationMinimums(decimal minStock, int variantCount, List<Store> stores,
+        bool keepsInDeposit)
     {
         var minimums = new List<ProductLocationMinimumDto>();
         for (var storeIndex = 0; storeIndex < stores.Count; storeIndex++)
@@ -183,7 +197,7 @@ public class DemoCatalogSeeder(
             var saleMinimum = storeIndex == 0 ? minStock : Math.Ceiling(minStock * DemoCatalog.SecondStoreFactor);
             foreach (var location in stores[storeIndex].Locations)
             {
-                var quantity = location.IsSellable ? saleMinimum : Math.Ceiling(saleMinimum / 2);
+                var quantity = location.IsSellable ? saleMinimum : keepsInDeposit ? Math.Ceiling(saleMinimum / 2) : 0;
                 for (var variantIndex = 0; variantIndex < variantCount; variantIndex++)
                     minimums.Add(new ProductLocationMinimumDto { VariantIndex = variantIndex, LocationId = location.Id, MinQuantity = quantity });
             }
@@ -228,7 +242,7 @@ public class DemoCatalogSeeder(
             {
                 foreach (var variant in DemoCatalog.VariantsOf(product).Where(v => variantIds.ContainsKey(v.Sku)))
                 {
-                    foreach (var location in stores[storeIndex].Locations)
+                    foreach (var location in stores[storeIndex].Locations.Where(l => l.IsSellable || DemoCatalog.KeepsInDeposit(product)))
                     {
                         // Salão com folga sobre o mínimo; depósito com o dobro do mínimo, de onde a loja repõe.
                         var quantity = Math.Ceiling(product.MinStock * factor * (location.IsSellable ? 1.5m : 2m));

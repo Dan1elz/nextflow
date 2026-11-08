@@ -5,6 +5,7 @@ public class ForecastAppliedLinkDto
 {
     public const string PurchaseOrderType = "PurchaseOrder";
     public const string PromotionType = "Promotion";
+    public const string TransferType = "Transfer";
 
     public string Type { get; set; } = string.Empty;
     public Guid Id { get; set; }

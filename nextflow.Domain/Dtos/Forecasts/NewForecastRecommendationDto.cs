@@ -31,4 +31,12 @@ public record NewForecastRecommendationDto(
     LeadTimeSourceEnum LeadTimeSource,
     short MonthsOfHistory,
     bool BasedOnLastYear,
-    IReadOnlyList<NewForecastRecommendationItemDto> Items);
+    IReadOnlyList<NewForecastRecommendationItemDto> Items)
+{
+    /// <summary>"Transferir" (RN-DF16): local com excesso (origem) e local abaixo do mínimo (destino).</summary>
+    public Guid? TransferFromLocationId { get; init; }
+    public Guid? TransferToLocationId { get; init; }
+
+    /// <summary>"Comprar": a parte de cada loja (RN-DF27), com a participação e a falta usadas na divisão.</summary>
+    public IReadOnlyList<(Guid StoreId, decimal SharePercent, decimal Shortfall, decimal Quantity)> Stores { get; init; } = [];
+}

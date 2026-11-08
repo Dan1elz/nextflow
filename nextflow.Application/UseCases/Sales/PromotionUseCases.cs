@@ -188,6 +188,75 @@ public class GetPromotionPreviewUseCase(
             .ThenInclude(v => v.AttributeValues).ThenInclude(link => link.AttributeValue).ThenInclude(value => value.Attribute);
 }
 
+/// <summary>
+/// Edita a promoção agendada (T-VD7): só antes de começar, porque a vigente já mudou preço de venda e a encerrada ou cancelada
+/// é histórico. O produto não muda; o resto passa pelas mesmas regras da criação: formato (RN-VD10), início a partir de hoje,
+/// variação do produto, sem sobreposição no mesmo escopo além dela mesma (RN-VD11) e confirmação abaixo do custo (RN-VD13).
+/// </summary>
+public class UpdatePromotionUseCase(
+    IPromotionRepository promotionRepository,
+    IProductRepository productRepository,
+    IProductPricingService pricing,
+    IBusinessClock clock,
+    IUnitOfWork unitOfWork,
+    IValidator<PromotionRequestDto> validator,
+    IResultFactory<PromotionListItemDto> resultFactory) : IUpdatePromotionUseCase
+{
+    public async Task<ResultDto<PromotionListItemDto>> Execute(Guid id, PromotionRequestDto dto, CancellationToken ct = default)
+    {
+        if (dto is null)
+            return resultFactory.Failure("O corpo da requisição é obrigatório.", 400);
+
+        var validation = await validator.ValidateAsync(dto, ct);
+        if (!validation.IsValid)
+            return resultFactory.Failure(validation, 422);
+
+        var promotion = await promotionRepository.GetByIdForUpdate(id, ct: ct);
+        if (promotion is null)
+            return resultFactory.Failure("Promoção não encontrada.", 404);
+
+        var today = clock.Today;
+        var status = promotion.StatusOn(today);
+        if (status != PromotionStatusEnum.Scheduled)
+            return resultFactory.Failure($"Só promoção agendada pode ser editada; esta está {status.GetName().ToLowerInvariant()}.", 400);
+
+        if (dto.ProductId != promotion.ProductId)
+            return resultFactory.FieldFailure("productId", "O produto da promoção não muda; cancele e crie outra.");
+
+        if (dto.StartDate < today)
+            return resultFactory.FieldFailure("startDate", "O início deve ser hoje ou depois.");
+
+        var product = await productRepository.GetById(dto.ProductId, q => q.Include(p => p.Variants), ct);
+        if (product is null || !product.IsActive)
+            return resultFactory.FieldFailure("productId", "Produto não encontrado ou inativo.");
+
+        var scope = PromotionScope.Variants(product, dto.VariantId);
+        if (dto.VariantId is not null && scope.Count == 0)
+            return resultFactory.FieldFailure("variantId", "A variação não pertence ao produto ou foi removida.");
+
+        var (productId, variantId, start, end) = (dto.ProductId, dto.VariantId, dto.StartDate, dto.EndDate);
+        var overlap = await promotionRepository.GetAll(
+            p => p.Id != id && p.ProductId == productId && p.IsActive && p.StartDate <= end && start <= p.EndDate
+                && (p.VariantId == null || variantId == null || p.VariantId == variantId),
+            0, 1, ct: ct);
+        if (overlap.FirstOrDefault() is { } existing)
+            return resultFactory.FieldFailure("startDate",
+                $"Já existe promoção ativa deste produto de {existing.StartDate:dd/MM/yyyy} a {existing.EndDate:dd/MM/yyyy} no mesmo escopo.");
+
+        var belowCost = scope.Any(v => PromotionScope.IsBelowCost(v, pricing.GetPromotionalPrice(v.Price, dto.DiscountPercent)));
+        if (belowCost && !dto.ConfirmWarnings)
+            return resultFactory.Confirm("A promoção deixa o preço abaixo do custo médio. Deseja continuar?");
+
+        promotion.Reschedule(dto, belowCost);
+        await unitOfWork.CommitAsync(ct);
+
+        var saved = await promotionRepository.GetById(id, q => q.Include(p => p.Product).ThenInclude(p => p.Variants)
+            .Include(p => p.Variant!).ThenInclude(v => v.AttributeValues).ThenInclude(link => link.AttributeValue).ThenInclude(value => value.Attribute)
+            .Include(p => p.CreatedBy), ct);
+        return resultFactory.Success(new PromotionListItemDto(saved!, pricing, today));
+    }
+}
+
 /// <summary>Cancela (inativa) a promoção agendada ou vigente; encerrada ou já cancelada não muda (RN-VD12).</summary>
 public class CancelPromotionUseCase(
     IPromotionRepository promotionRepository,

@@ -19,6 +19,12 @@ public interface IOrderRepository : IBaseRepository<Order>
     /// <summary>Quantidade vendida (pedidos Pagos) por variação desde o instante: base do rateio da grade (RN-DF21). Só leitura.</summary>
     Task<Dictionary<Guid, decimal>> GetPaidQuantityByVariant(DateTime sinceUtc, CancellationToken ct = default);
 
+    /// <summary>Quantidade vendida do produto (pedidos Pagos) por loja desde o instante: participação na divisão da compra (RN-DF27).</summary>
+    Task<Dictionary<Guid, decimal>> GetPaidQuantityByStore(Guid productId, DateTime sinceUtc, CancellationToken ct = default);
+
+    /// <summary>Quantidade vendida (pedidos Pagos) por produto × loja desde o instante: demanda de cada local no "Transferir" (RN-DF16).</summary>
+    Task<Dictionary<(Guid ProductId, Guid StoreId), decimal>> GetPaidQuantityByProductAndStore(DateTime sinceUtc, CancellationToken ct = default);
+
     /// <summary>Vendas pagas no intervalo [início, fim), da loja ou da empresa, com o custo congelado dos itens (painel, T-DF1).</summary>
     Task<List<PaidOrderTotalDto>> GetPaidOrderTotals(Guid? storeId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
 }

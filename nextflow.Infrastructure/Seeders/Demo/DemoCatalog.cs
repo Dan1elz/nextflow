@@ -30,6 +30,9 @@ public sealed record DemoProduct(
     string[] Events,
     DemoGrid? Grid = null);
 
+/// <summary>Coleção do seed (RN-CE20): agrupa produtos de uma temporada ou linha; cada produto fica em uma só.</summary>
+public sealed record DemoCollection(string Name, string[] ProductCodes);
+
 /// <summary>Variação já expandida da grade, como o seed grava.</summary>
 public sealed record DemoVariant(string Sku, string? Value, decimal Price, decimal Cost);
 
@@ -56,11 +59,25 @@ public static class DemoCatalog
     /// <summary>Código do lote do saldo de abertura (um por variação, nos dois locais das duas lojas).</summary>
     public const string OpeningLotCode = "ABERTURA";
 
+    /// <summary>
+    /// O depósito demo guarda só o que não vence: o seed não transfere do depósito para o salão, e alimento parado lá
+    /// venceria inteiro (lote "ABERTURA" vencido há anos na aba Lotes). Alimento fica só no salão, com mínimo zero no depósito.
+    /// </summary>
+    public static bool KeepsInDeposit(DemoProduct product) => !product.IsFood;
+
     /// <summary>Vida útil do produto: só os alimentos controlam lote.</summary>
     public static int? ShelfLifeDays(DemoProduct product) => product.IsFood ? FoodShelfLifeDays : null;
 
     /// <summary>Código do lote de uma chegada de compra: a data de recebimento ("C261107").</summary>
     public static string PurchaseLotCode(DateOnly receivedOn) => $"C{receivedOn:yyMMdd}";
+
+    /// <summary>Coleções sem datas (a temporada fica nos eventos do calendário); o resto do catálogo fica sem coleção.</summary>
+    public static readonly DemoCollection[] Collections =
+    [
+        new("Páscoa", ["DP-013", "DP-014", "DP-015", "DP-016"]),
+        new("Natal", ["DP-021", "DP-022", "DP-023", "DP-024", "DP-041", "DP-046"]),
+        new("Presentes Românticos", ["DP-044", "DP-045", "DP-049", "DP-047"]),
+    ];
 
     /// <summary>Itens principais: a partir deste mínimo padrão, cada local ganha um mínimo próprio (RN-CE33).</summary>
     public const decimal MainItemMinStock = 20m;

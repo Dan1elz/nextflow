@@ -54,6 +54,17 @@ public class Promotion : BaseModel
         ForecastRecommendationId = forecastRecommendationId;
     }
 
+    /// <summary>Edição da promoção agendada: o produto fica; escopo, desconto, período e motivo mudam (T-VD7).</summary>
+    public void Reschedule(PromotionRequestDto dto, bool belowCostConfirmed)
+    {
+        VariantId = dto.VariantId;
+        DiscountPercent = dto.DiscountPercent;
+        StartDate = dto.StartDate;
+        EndDate = dto.EndDate;
+        Reason = string.IsNullOrWhiteSpace(dto.Reason) ? null : dto.Reason.Trim();
+        BelowCostConfirmed = belowCostConfirmed;
+    }
+
     public void Cancel()
     {
         IsActive = false;

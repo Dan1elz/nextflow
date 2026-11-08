@@ -16,6 +16,22 @@ namespace Nextflow.Application.UseCases.Dashboard;
 internal static class DashboardReading
 {
     public const int TopItems = 5;
+    public const int MaxItems = 200;
+
+    /// <summary>Itens pedidos: 5 no painel, até <see cref="MaxItems"/> no "ver mais".</summary>
+    public static int Limit(int limit) => limit is < 1 or > MaxItems ? TopItems : limit;
+
+    /// <summary>Recomendação pendente de cada produto (a ação, menos "Manter"), para o painel oferecer agir com a sugestão da IA.</summary>
+    public static async Task<Dictionary<Guid, (Guid Id, RecommendationActionEnum Action)>> PendingRecommendations(
+        IForecastRecommendationRepository recommendationRepository, IReadOnlyCollection<Guid> productIds, CancellationToken ct)
+    {
+        if (productIds.Count == 0)
+            return [];
+        var pending = await recommendationRepository.GetAll(
+            r => productIds.Contains(r.ProductId) && r.Status == RecommendationStatusEnum.Pending && r.Action != RecommendationActionEnum.Hold,
+            0, int.MaxValue, ct: ct);
+        return pending.GroupBy(r => r.ProductId).ToDictionary(g => g.Key, g => (g.First().Id, g.First().Action));
+    }
 
     public static DateOnly FirstOfMonth(DateOnly date) => new(date.Year, date.Month, 1);
 
@@ -79,12 +95,14 @@ public class GetSalesKpisUseCase(
 public class GetLowStockSummaryUseCase(
     IStockBalanceRepository balanceRepository,
     IProductVariantRepository variantRepository,
+    IForecastRecommendationRepository recommendationRepository,
     IResultFactory<LowStockSummaryDto> resultFactory) : IGetLowStockSummaryUseCase
 {
-    public async Task<ResultDto<LowStockSummaryDto>> Execute(Guid? storeId, CancellationToken ct = default)
+    public async Task<ResultDto<LowStockSummaryDto>> Execute(Guid? storeId, int limit = DashboardReading.TopItems, CancellationToken ct = default)
     {
-        var (count, top) = await balanceRepository.GetLowStock(storeId, DashboardReading.TopItems, ct);
+        var (count, top) = await balanceRepository.GetLowStock(storeId, DashboardReading.Limit(limit), ct);
         var labels = await DashboardReading.VariantLabels(variantRepository, [.. top.Select(r => r.VariantId)], ct);
+        var pending = await DashboardReading.PendingRecommendations(recommendationRepository, [.. top.Select(r => r.ProductId).Distinct()], ct);
         return resultFactory.Success(new LowStockSummaryDto
         {
             Count = count,
@@ -94,9 +112,14 @@ public class GetLowStockSummaryUseCase(
                 ProductName = r.ProductName,
                 VariantId = r.VariantId,
                 VariantLabel = labels.GetValueOrDefault(r.VariantId),
+                LocationId = r.LocationId,
                 LocationName = r.LocationName,
+                StoreId = r.StoreId,
+                StoreName = r.StoreName,
                 Available = r.Available,
                 MinQuantity = r.MinQuantity,
+                RecommendationId = pending.TryGetValue(r.ProductId, out var rec) ? rec.Id : null,
+                RecommendationAction = pending.TryGetValue(r.ProductId, out var action) ? action.Action.GetApiName() : null,
             })],
         });
     }
@@ -106,18 +129,21 @@ public class GetLowStockSummaryUseCase(
 public class GetExpiringLotsSummaryUseCase(
     IStockBalanceRepository balanceRepository,
     IProductVariantRepository variantRepository,
+    IForecastRecommendationRepository recommendationRepository,
     IBusinessClock clock,
     IResultFactory<ExpiringLotsSummaryDto> resultFactory) : IGetExpiringLotsSummaryUseCase
 {
     public const int DefaultDays = 30;
 
-    public async Task<ResultDto<ExpiringLotsSummaryDto>> Execute(Guid? storeId, int days, CancellationToken ct = default)
+    public async Task<ResultDto<ExpiringLotsSummaryDto>> Execute(Guid? storeId, int days, int limit = DashboardReading.TopItems,
+        CancellationToken ct = default)
     {
         days = days is < 1 or > 365 ? DefaultDays : days;
         var today = clock.Today;
         var rows = await balanceRepository.GetExpiringLots(today, today.AddDays(days), storeId, ct);
-        var top = rows.OrderBy(r => r.ExpiresOn).ThenBy(r => r.ProductName, StringComparer.OrdinalIgnoreCase).Take(DashboardReading.TopItems).ToList();
+        var top = rows.OrderBy(r => r.ExpiresOn).ThenBy(r => r.ProductName, StringComparer.OrdinalIgnoreCase).Take(DashboardReading.Limit(limit)).ToList();
         var labels = await DashboardReading.VariantLabels(variantRepository, [.. top.Select(r => r.VariantId).Distinct()], ct);
+        var pending = await DashboardReading.PendingRecommendations(recommendationRepository, [.. top.Select(r => r.ProductId).Distinct()], ct);
 
         return resultFactory.Success(new ExpiringLotsSummaryDto
         {
@@ -125,10 +151,18 @@ public class GetExpiringLotsSummaryUseCase(
             TotalCostValue = Math.Round(rows.Sum(r => r.Quantity * (r.UnitCost ?? 0m)), 2, MidpointRounding.AwayFromZero),
             Items = [.. top.Select(r => new ExpiringLotItemDto
             {
+                ProductId = r.ProductId,
+                VariantId = r.VariantId,
                 ProductName = r.ProductName,
                 VariantLabel = labels.GetValueOrDefault(r.VariantId),
+                LotId = r.LotId,
                 LotCode = r.LotCode,
+                LocationId = r.LocationId,
                 LocationName = r.LocationName,
+                StoreId = r.StoreId,
+                StoreName = r.StoreName,
+                RecommendationId = pending.TryGetValue(r.ProductId, out var rec) ? rec.Id : null,
+                RecommendationAction = pending.TryGetValue(r.ProductId, out var action) ? action.Action.GetApiName() : null,
                 ExpiresOn = r.ExpiresOn,
                 DaysToExpire = r.ExpiresOn.DayNumber - today.DayNumber,
                 Quantity = r.Quantity,

@@ -82,7 +82,8 @@ public class ForecastApiTests(AccessApiFixture api)
         latest.GetProperty("summary").GetString().ShouldNotBeNullOrEmpty();
         var analyzed = latest.GetProperty("productsAnalyzed").GetInt32();
         var counts = latest.GetProperty("counts");
-        (counts.GetProperty("buy").GetInt32() + counts.GetProperty("promote").GetInt32() + counts.GetProperty("hold").GetInt32()).ShouldBe(analyzed);
+        (counts.GetProperty("buy").GetInt32() + counts.GetProperty("promote").GetInt32() + counts.GetProperty("transfer").GetInt32()
+            + counts.GetProperty("hold").GetInt32()).ShouldBe(analyzed);
         counts.GetProperty("pending").GetInt32().ShouldBe(analyzed);
 
         var history = await Json(await client.GetAsync($"{Route}?limit=50"));

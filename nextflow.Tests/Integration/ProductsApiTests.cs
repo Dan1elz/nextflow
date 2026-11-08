@@ -1301,6 +1301,23 @@ public class ProductsApiTests(AccessApiFixture api)
 
     [Fact]
     [Trait("Rule", "RN-CE21")]
+    public async Task Should_ListOnlyLinkedProducts_When_FilteringByEvent()
+    {
+        using var admin = await api.AdminAsync();
+        var eventId = await CreateEvent(admin);
+        var linked = JsonSerializer.Deserialize<Dictionary<string, object?>>(JsonSerializer.Serialize(SimpleBody(Unique("EV"))))!;
+        linked["eventIds"] = new[] { eventId };
+        var linkedId = await Create(admin, linked);
+        await Create(admin, SimpleBody(Unique("EV")));
+
+        var page = await Json(await admin.GetAsync($"{Route}?limit=50&filters={Filters(new { eventId })}"));
+
+        page.GetProperty("total").GetInt32().ShouldBe(1);
+        page.GetProperty("items")[0].GetProperty("id").GetString().ShouldBe(linkedId);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-CE21")]
     public async Task Should_Return422_When_EventInactive()
     {
         using var admin = await api.AdminAsync();

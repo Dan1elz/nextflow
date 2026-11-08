@@ -20,10 +20,12 @@ public class ForecastsController(
     IGetAllUseCase<ForecastRun, ForecastRunSummaryDto> getAllUseCase,
     IGetForecastRecommendationsUseCase recommendationsUseCase,
     IGetForecastRecommendationUseCase recommendationUseCase,
+    IGetRecommendationStoreSplitUseCase storeSplitUseCase,
     IGetProductForecastUseCase productForecastUseCase,
     IApplyPurchaseRecommendationsUseCase applyPurchaseUseCase,
     IApplyPromotionRecommendationUseCase applyPromotionUseCase,
     IDismissRecommendationUseCase dismissUseCase,
+    IApplyTransferRecommendationUseCase applyTransferUseCase,
     IGetForecastTopUseCase topUseCase,
     IGetForecastAccuracySummaryUseCase accuracySummaryUseCase,
     IGetForecastAccuracyProductsUseCase accuracyProductsUseCase) : ApiController
@@ -52,6 +54,10 @@ public class ForecastsController(
     public async Task<IActionResult> Recommendation(Guid id, [FromQuery] Guid? storeId, CancellationToken ct)
         => Handle(await recommendationUseCase.Execute(id, storeId, ct));
 
+    [HttpGet("recommendations/{id:guid}/store-split")]
+    public async Task<IActionResult> StoreSplit(Guid id, CancellationToken ct)
+        => Handle(await storeSplitUseCase.Execute(id, ct));
+
     [HttpGet("products/{productId:guid}")]
     public async Task<IActionResult> ProductForecast(Guid productId, [FromQuery] int months = 24, CancellationToken ct = default)
         => Handle(await productForecastUseCase.Execute(productId, months, ct));
@@ -63,6 +69,10 @@ public class ForecastsController(
     [HttpPost("recommendations/{id:guid}/promotion")]
     public async Task<IActionResult> ApplyPromotion(Guid id, [FromBody] ApplyPromotionDto dto, CancellationToken ct)
         => HandleCreated(await applyPromotionUseCase.Execute(id, dto, UserId, ct));
+
+    [HttpPost("recommendations/{id:guid}/transfer")]
+    public async Task<IActionResult> ApplyTransfer(Guid id, [FromBody] ApplyTransferDto? dto, CancellationToken ct)
+        => HandleCreated(await applyTransferUseCase.Execute(id, dto, UserId, ct));
 
     [HttpPost("recommendations/{id:guid}/dismiss")]
     public async Task<IActionResult> Dismiss(Guid id, [FromBody] DismissRecommendationDto? dto, CancellationToken ct)

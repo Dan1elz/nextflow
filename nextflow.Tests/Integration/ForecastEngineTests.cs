@@ -185,7 +185,10 @@ public class ForecastEngineTests(DemoSeedFixture fixture)
         batches[1].ErrorMessage.ShouldNotBeNullOrEmpty();
         batches.Where(b => b.BatchNumber != 2).ShouldAllBe(b => b.Status == AiBatchStatusEnum.Completed);
         batches[1].ProductIds.ShouldAllBe(id => recommendations[id].Reason == recommendations[id].ReasonCalculated);
-        batches.Where(b => b.BatchNumber != 2).SelectMany(b => b.ProductIds).ShouldAllBe(id => recommendations[id].Reason.StartsWith("IA:"));
+        // "Transferir" substitui o "Manter" da IA com o motivo do cálculo (RN-DF29); os demais ficam com o motivo da IA.
+        batches.Where(b => b.BatchNumber != 2).SelectMany(b => b.ProductIds)
+            .Where(id => recommendations[id].Action != RecommendationActionEnum.Transfer)
+            .ShouldAllBe(id => recommendations[id].Reason.StartsWith("IA:"));
         seeded.Ai.Calls.Count(c => c.StartsWith("batch:")).ShouldBe(batches.Count); // o lote 3 saiu depois da falha do 2
     }
 
@@ -257,7 +260,8 @@ public class ForecastEngineTests(DemoSeedFixture fixture)
         buys.ShouldContain(b => b.Product.Variants.Count > 1, "ao menos um Comprar de produto com grade (rateio de verdade)");
 
         // Só Comprar tem itens.
-        (await context.Set<ForecastRecommendationItem>().CountAsync(i => i.Recommendation.ForecastRunId == outcome.RunId && i.Recommendation.Action != RecommendationActionEnum.Buy)).ShouldBe(0);
+        (await context.Set<ForecastRecommendationItem>().CountAsync(i => i.Recommendation.ForecastRunId == outcome.RunId && i.Recommendation.Action != RecommendationActionEnum.Buy
+            && i.Recommendation.Action != RecommendationActionEnum.Transfer)).ShouldBe(0); // "Transferir" também tem itens (F3.4b)
     }
 
     [Fact]

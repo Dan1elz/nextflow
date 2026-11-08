@@ -15,4 +15,11 @@ public interface IStockLedger
     /// <c>IResultFactory</c>; com falha, nada é alterado. Lista vazia = lançado.
     /// </summary>
     Task<List<ValidationFailure>> Post(StockDocumentDto document, IReadOnlyList<StockLineDto> lines, CancellationToken ct);
+
+    /// <summary>
+    /// Como <see cref="Post"/>, devolvendo também as linhas como foram lançadas: a saída sem lote escolhido sai repartida pelos
+    /// lotes do FEFO. A transferência (RN-CE62) usa isso para dar entrada no destino nos mesmos lotes que saíram da origem.
+    /// </summary>
+    Task<(List<ValidationFailure> Failures, List<StockLineDto> Posted)> PostResolved(
+        StockDocumentDto document, IReadOnlyList<StockLineDto> lines, CancellationToken ct);
 }

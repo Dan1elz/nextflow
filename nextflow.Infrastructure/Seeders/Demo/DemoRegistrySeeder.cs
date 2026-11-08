@@ -2,8 +2,11 @@ using Microsoft.Extensions.Configuration;
 using Nextflow.Domain.Dtos.Addresses;
 using Nextflow.Domain.Dtos.Clients;
 using Nextflow.Domain.Dtos.Contacts;
+using Nextflow.Domain.Dtos.Users;
 using Nextflow.Domain.Enums;
+using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Domain.Interfaces.Infrastructure.Repositories;
+using Nextflow.Domain.Interfaces.Infrastructure.Services;
 using Nextflow.Domain.Models;
 using Nextflow.Domain.ValueObjects;
 
@@ -11,9 +14,9 @@ namespace Nextflow.Infrastructure.Seeders.Demo;
 
 /// <summary>
 /// Cadastros do seed demo (só com <c>Seed:Demo:Enabled</c>): os clientes de <see cref="DemoRegistry"/> com telefone e
-/// endereço principais, e o endereço principal dos fornecedores do catálogo que ainda não têm nenhum. Roda depois do
-/// catálogo e antes do histórico, que liga parte das vendas a esses clientes. Cliente já cadastrado com o mesmo CPF é
-/// mantido.
+/// endereço principais, os vendedores de <see cref="DemoRegistry.Sellers"/> (só com o histórico ligado, vinculados às lojas) e o endereço principal
+/// dos fornecedores do catálogo que ainda não têm nenhum. Roda depois do catálogo e antes do histórico, que liga parte das
+/// vendas a esses clientes e reparte as vendas entre os vendedores. Cliente ou usuário já cadastrado com o mesmo CPF é mantido.
 /// </summary>
 public class DemoRegistrySeeder(
     IConfiguration configuration,
@@ -22,6 +25,9 @@ public class DemoRegistrySeeder(
     IAddressRepository addressRepository,
     IContactRepository contactRepository,
     ICityRepository cityRepository,
+    IUserRepository userRepository,
+    IPasswordHasher passwordHasher,
+    IStoreMembership storeMembership,
     IUnitOfWork unitOfWork) : ISeeder
 {
     public int Order => 55;
@@ -40,7 +46,36 @@ public class DemoRegistrySeeder(
 
         await SeedClients(cities, ct);
         await SeedSupplierAddresses(cities, ct);
+        if (DemoHistorySeeder.HistoryMonths(configuration) > 0)
+            await SeedSellers(ct);
         await unitOfWork.CommitAsync(ct);
+    }
+
+    /// <summary>
+    /// Vendedores com senha aleatória (ninguém loga com eles: o seed demo também roda no staging) e vinculados às lojas
+    /// ativas, como o <c>CreateUserUseCase</c>.
+    /// </summary>
+    private async Task SeedSellers(CancellationToken ct)
+    {
+        var documents = DemoRegistry.Sellers.Select(s => TaxDocument.ParseCpf(s.Cpf)).ToList();
+        var emails = DemoRegistry.Sellers.Select(s => s.Email).ToList();
+        var existing = await userRepository.GetAll(u => documents.Contains(u.Cpf) || emails.Contains(u.Email), 0, int.MaxValue, ct: ct);
+
+        foreach (var demo in DemoRegistry.Sellers.Where((s, i) => !existing.Any(u => u.Email == s.Email || u.Cpf.Value == documents[i].Value)))
+        {
+            var dto = new UserRequestDto
+            {
+                Name = demo.Name,
+                LastName = demo.LastName,
+                Cpf = demo.Cpf,
+                BirthDate = demo.BirthDate,
+                Email = demo.Email,
+                Password = Guid.NewGuid().ToString("N"),
+            };
+            var user = new User(dto, passwordHasher.Hash(dto.Password));
+            await userRepository.AddAsync(user, ct);
+            await storeMembership.LinkUser(user.Id, ct);
+        }
     }
 
     private async Task SeedClients(Dictionary<string, Guid> cities, CancellationToken ct)

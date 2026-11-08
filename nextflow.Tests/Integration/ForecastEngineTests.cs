@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Nextflow.Application.Forecast;
+using Nextflow.Application.Services.Forecast;
 using Nextflow.Domain.Dtos.Forecasts;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Application.Services;
@@ -286,6 +287,51 @@ public class ForecastEngineTests(DemoSeedFixture fixture)
 
         await Should.ThrowAsync<InvalidOperationException>(() => engine.RunAsync(outcome.RunId, CancellationToken.None));
         await Should.ThrowAsync<InvalidOperationException>(() => engine.RunAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-DF06")]
+    public async Task Should_ReadIncomingAndRealLeadTime_When_BuildingInputs()
+    {
+        var seeded = await Seed();
+        ForecastSourceData source;
+        using (var scope = seeded.Services.CreateScope())
+            source = await scope.ServiceProvider.GetRequiredService<ForecastInputBuilder>().LoadAsync(Anchor, CancellationToken.None);
+
+        await using var context = fixture.CreateContext(seeded.Connection);
+        var products = await context.Set<Product>()
+            .Include(p => p.Variants)
+            .Include(p => p.Suppliers).ThenInclude(s => s.Supplier)
+            .Where(p => p.IsActive)
+            .ToDictionaryAsync(p => p.Id);
+        var open = await context.Set<PurchaseItem>()
+            .Where(i => i.PurchaseOrder.Status == PurchaseStatusEnum.Budget || i.PurchaseOrder.Status == PurchaseStatusEnum.Pending)
+            .ToListAsync();
+        var received = await context.Set<PurchaseOrder>()
+            .Where(p => p.Status == PurchaseStatusEnum.Received && p.RealLeadTimeDays != null)
+            .ToListAsync();
+
+        source.Inputs.Count.ShouldBe(products.Count);
+        foreach (var input in source.Inputs)
+        {
+            var product = products[input.ProductId];
+            var variantIds = product.Variants.Where(v => v.IsActive && v.RemovedOn == null).Select(v => v.Id).ToHashSet();
+
+            // A chegar = itens de pedidos em Orçamento ou Pendente das variações ativas.
+            input.IncomingStock.ShouldBe(open.Where(i => variantIds.Contains(i.VariantId)).Sum(i => i.Quantity), input.Name);
+
+            // Prazo real = média dos 5 últimos recebimentos do fornecedor preferido (T-DF3, "History").
+            var link = product.Suppliers.OrderByDescending(s => s.IsPreferred).ThenBy(s => s.Supplier.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+            var samples = link == null ? [] : received.Where(p => p.SupplierId == link.SupplierId).OrderByDescending(p => p.ReceivedAt).Take(5).ToList();
+            if (samples.Count > 0)
+            {
+                input.LeadTimeSource.ShouldBe(LeadTimeSourceEnum.History, input.Name);
+                input.LeadTimeDays.ShouldBe((int)Math.Clamp(Math.Round(samples.Average(p => p.RealLeadTimeDays!.Value), MidpointRounding.AwayFromZero), 1, 180), input.Name);
+            }
+        }
+
+        source.Inputs.ShouldContain(i => i.IncomingStock > 0, "o seed tem pedidos pendentes");
+        source.Inputs.ShouldContain(i => i.LeadTimeSource == LeadTimeSourceEnum.History, "o seed tem recebimentos");
     }
 
     [Fact]

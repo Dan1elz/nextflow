@@ -111,6 +111,12 @@ services:
       Storage__SecretKey: ${STORAGE_SECRET_KEY:-nextflow-secret}
       Storage__Buckets__Public: ${STORAGE_BUCKET_PUBLIC:-nextflow-public}
       Storage__Buckets__Private: ${STORAGE_BUCKET_PRIVATE:-nextflow-private}
+      # IA (Previsão de demanda): sem AI_API_KEY a análise roda só com o cálculo
+      Ai__Provider: ${AI_PROVIDER:-Gemini}
+      Ai__ApiKey: ${AI_API_KEY:-}
+      Ai__Model: ${AI_MODEL:-gemini-flash-latest}
+      Ai__FallbackModel: ${AI_FALLBACK_MODEL:-gemini-flash-lite-latest}
+      Ai__TimeoutSeconds: ${AI_TIMEOUT_SECONDS:-60}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8081}:8080"
     networks:

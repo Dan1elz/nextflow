@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Nextflow.Domain.Dtos;
+using Nextflow.Domain.Dtos.Forecasts;
 using Nextflow.Domain.Enums;
 using Nextflow.Domain.Interfaces.Infrastructure.Repositories;
 using Nextflow.Domain.Models;
@@ -35,6 +36,22 @@ public class PurchaseOrderRepository(AppDbContext context) : BaseRepository<Purc
 
     public Task<List<Guid>> GetSupplierIdsWithPurchase(DateTime? since, CancellationToken ct = default)
         => Sent().Where(p => since == null || p.SentAt >= since).Select(p => p.SupplierId).Distinct().ToListAsync(ct);
+
+    public async Task<List<ReceivedLeadTimeDto>> GetReceivedLeadTimes(DateTime sinceUtc, CancellationToken ct = default)
+    {
+        var rows = await _context.Set<PurchaseOrder>().AsNoTracking()
+            .Where(p => p.Status == PurchaseStatusEnum.Received && p.RealLeadTimeDays != null && p.ReceivedAt != null && p.ReceivedAt >= sinceUtc)
+            .Select(p => new { p.SupplierId, Days = p.RealLeadTimeDays!.Value, ReceivedAt = p.ReceivedAt!.Value })
+            .ToListAsync(ct);
+        return rows.Select(r => new ReceivedLeadTimeDto(r.SupplierId, r.Days, r.ReceivedAt)).ToList();
+    }
+
+    public async Task<Dictionary<Guid, decimal>> GetIncomingByVariant(CancellationToken ct = default)
+        => await _context.Set<PurchaseItem>().AsNoTracking()
+            .Where(i => i.PurchaseOrder.Status == PurchaseStatusEnum.Budget || i.PurchaseOrder.Status == PurchaseStatusEnum.Pending)
+            .GroupBy(i => i.VariantId)
+            .Select(g => new { VariantId = g.Key, Quantity = g.Sum(i => i.Quantity) })
+            .ToDictionaryAsync(row => row.VariantId, row => row.Quantity, ct);
 
     public Task<List<Guid>> GetSupplierIdsWithPendingOrders(CancellationToken ct = default)
         => _context.Set<PurchaseOrder>().AsNoTracking()

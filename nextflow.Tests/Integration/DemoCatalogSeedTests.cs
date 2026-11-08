@@ -36,8 +36,25 @@ public sealed class DemoSeedFixture : IAsyncLifetime
         return new NpgsqlConnectionStringBuilder(_postgres.ConnectionString) { Database = name }.ConnectionString;
     }
 
-    /// <summary>Sobe a API sobre o banco: migrations e seeders rodam, como num restart.</summary>
-    public void StartApi(string connectionString, bool demoEnabled, int historyMonths = 0)
+    /// <summary>
+    /// Sobe a API sobre o banco: migrations e seeders rodam, como num restart. <paramref name="configureServices"/> troca serviços
+    /// (relógio e IA fake da previsão) e <paramref name="settings"/> acrescenta configuração.
+    /// </summary>
+    public IServiceProvider StartApi(
+        string connectionString,
+        bool demoEnabled,
+        int historyMonths = 0,
+        Action<IServiceCollection>? configureServices = null,
+        IReadOnlyDictionary<string, string>? settings = null)
+        => StartHost(connectionString, demoEnabled, historyMonths, configureServices, settings).Services;
+
+    /// <summary>Como <see cref="StartApi"/>, mas devolve o host para o teste chamar a API por HTTP.</summary>
+    public WebApplicationFactory<Program> StartHost(
+        string connectionString,
+        bool demoEnabled,
+        int historyMonths = 0,
+        Action<IServiceCollection>? configureServices = null,
+        IReadOnlyDictionary<string, string>? settings = null)
     {
         var host = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -47,10 +64,17 @@ public sealed class DemoSeedFixture : IAsyncLifetime
             builder.UseSetting("Seed:Admin:Password", AccessApiFixture.AdminPassword);
             builder.UseSetting("Seed:Demo:Enabled", demoEnabled ? "true" : "false");
             builder.UseSetting("Seed:Demo:HistoryMonths", historyMonths.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            builder.ConfigureTestServices(services => services.AddSingleton<IFileStorage>(new InMemoryFileStorage()));
+            foreach (var (key, value) in settings ?? new Dictionary<string, string>())
+                builder.UseSetting(key, value);
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddSingleton<IFileStorage>(new InMemoryFileStorage());
+                configureServices?.Invoke(services);
+            });
         });
         _ = host.Services; // constrói o host: roda Program.cs até o startup
         _hosts.Add(host);
+        return host;
     }
 
     public AppDbContext CreateContext(string connectionString)

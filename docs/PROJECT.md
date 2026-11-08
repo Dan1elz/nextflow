@@ -325,6 +325,7 @@ JWT_KEY=uma_senha_super_secreta_e_longa_para_o_token_!@#
 AI_PROVIDER=Gemini
 AI_API_KEY=            # vazio = modo sem IA (CompletedWithoutAi)
 AI_MODEL=gemini-flash-latest
+AI_FALLBACK_MODEL=gemini-flash-lite-latest
 AI_TIMEOUT_SECONDS=60
 STORAGE_ROOT_USER=nextflow-admin       # admin do storage (painel em :9001)
 STORAGE_ROOT_PASSWORD=nextflow-admin-secret
@@ -335,7 +336,7 @@ STORAGE_BUCKET_PRIVATE=nextflow-private
 STORAGE_PUBLIC_URL=http://localhost:9000
 ```
 
-Seção `Ai` (`Ai__Provider`, `Ai__ApiKey`, `Ai__Model`, `Ai__TimeoutSeconds`) é repassada pelos compose files a partir das variáveis `AI_*`.
+Seção `Ai` (`Ai__Provider`, `Ai__ApiKey`, `Ai__Model`, `Ai__FallbackModel`, `Ai__TimeoutSeconds`) é repassada pelos compose files a partir das variáveis `AI_*`.
 
 Seção `Storage` (`Storage__Endpoint`, `Storage__PublicUrl`, `Storage__AccessKey`, `Storage__SecretKey`, `Storage__Buckets__Public`, `Storage__Buckets__Private`) é repassada pelos compose files a partir das variáveis `STORAGE_*`. As credenciais de dev ficam em `appsettings.Development.json` (para `dotnet run` fora do Docker).
 

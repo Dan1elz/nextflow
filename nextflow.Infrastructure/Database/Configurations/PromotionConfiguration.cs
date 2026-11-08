@@ -23,6 +23,8 @@ public class PromotionConfiguration : IEntityTypeConfiguration<Promotion>
         builder.HasOne(p => p.Product).WithMany(product => product.Promotions).HasForeignKey(p => p.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(p => p.Variant).WithMany().HasForeignKey(p => p.VariantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(p => p.CreatedBy).WithMany().HasForeignKey(p => p.CreatedById).OnDelete(DeleteBehavior.Restrict);
+        // F3.4: a recomendação "Promover" que originou a promoção (T-DF6).
+        builder.HasOne<ForecastRecommendation>().WithMany().HasForeignKey(p => p.ForecastRecommendationId).OnDelete(DeleteBehavior.Restrict);
 
         // Sobreposição (RN-VD11) e preço efetivo procuram as ativas do produto pelo período.
         builder.HasIndex(p => new { p.ProductId, p.StartDate, p.EndDate }).HasFilter("is_active");

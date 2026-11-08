@@ -262,7 +262,10 @@ Implementação `GeminiAiClient` (`nextflow.Application/Services/Ai/`), registra
 | `Ai:Provider` | `AI_PROVIDER` → `Ai__Provider` | `Gemini` |
 | `Ai:ApiKey` | `AI_API_KEY` → `Ai__ApiKey` | vazio (→ modo sem IA) |
 | `Ai:Model` | `AI_MODEL` → `Ai__Model` | `gemini-flash-latest` |
-| `Ai:TimeoutSeconds` | `AI_TIMEOUT_SECONDS` → `Ai__TimeoutSeconds` | `60` |
+| `Ai:FallbackModel` | `AI_FALLBACK_MODEL` → `Ai__FallbackModel` | `gemini-flash-lite-latest` |
+| `Ai:TimeoutSeconds` | `AI_TIMEOUT_SECONDS` → `Ai__TimeoutSeconds` | `60` (por tentativa) |
+
+Cada modelo tem até 2 tentativas em sobrecarga (429/500/503). Se o principal seguir sobrecarregado, estourar o prazo ou não existir (404), a mesma chamada vai para o `FallbackModel`; só depois o lote cai para o cálculo. A análise registra o modelo que de fato respondeu.
 
 `.env.example` documenta as variáveis (sem valor real). `compose.development.yaml` e `compose.staging.yaml` repassam `Ai__*`. A chave **nunca** é logada nem retornada pela API.
 

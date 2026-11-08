@@ -75,6 +75,9 @@ public class Product : BaseModel, IDeletable
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Classe ABC calculada pela análise (RN-CE29). Dado derivado: não passa pelo formulário nem muda <c>UpdatedAt</c>.</summary>
+    public void ApplyAbcClass(AbcClassEnum abcClass) => AbcClass = abcClass;
+
     public void SetImage(string key)
     {
         ImageKey = key;

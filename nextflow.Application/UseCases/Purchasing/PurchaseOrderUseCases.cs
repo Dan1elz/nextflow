@@ -118,9 +118,14 @@ public class SendPurchaseOrderUseCase(
     }
 }
 
-/// <summary>Cancelar (T-CP5): Orçamento ou Pendente, nunca Recebido (RN-CP03). Não gera movimentação.</summary>
+/// <summary>
+/// Cancelar (T-CP5): Orçamento ou Pendente, nunca Recebido (RN-CP03). Não gera movimentação. Pedido gerado por "Comprar" da
+/// previsão (F3.4) devolve a recomendação a Pendente no mesmo commit (expirada, se já houver análise mais nova).
+/// </summary>
 public class CancelPurchaseOrderUseCase(
     IPurchaseOrderRepository repository,
+    IForecastRecommendationRepository recommendationRepository,
+    IForecastRunRepository runRepository,
     IOwnerDirectory ownerDirectory,
     IUnitOfWork unitOfWork,
     IValidator<CancelPurchaseOrderDto> validator,
@@ -142,7 +147,19 @@ public class CancelPurchaseOrderUseCase(
         if (!validation.IsValid)
             return resultFactory.Failure(validation, 422);
 
-        order.Cancel(dto.Reason, DateTime.UtcNow);
+        var utcNow = DateTime.UtcNow;
+        order.Cancel(dto.Reason, utcNow);
+
+        var applied = await recommendationRepository.GetAllForUpdate(r => r.AppliedPurchaseOrderId == id, ct);
+        if (applied.Count > 0)
+        {
+            var latestRun = (await runRepository.GetAll(
+                r => r.Status == ForecastRunStatusEnum.Completed || r.Status == ForecastRunStatusEnum.CompletedWithoutAi,
+                0, 1, orderBy: q => q.OrderByDescending(r => r.StartedAt), ct: ct)).FirstOrDefault();
+            foreach (var recommendation in applied)
+                recommendation.RevertPurchase(recommendation.ForecastRunId == latestRun?.Id, utcNow);
+        }
+
         await unitOfWork.CommitAsync(ct);
 
         return resultFactory.Success((await PurchaseOrderDetails.Load(repository, ownerDirectory, id, ct))!);

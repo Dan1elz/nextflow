@@ -108,7 +108,7 @@ public sealed class AccessApiFixture : IAsyncLifetime
         password,
     };
 
-    private static string ValidCpf(int nineDigits)
+    internal static string ValidCpf(int nineDigits)
     {
         var digits = nineDigits.ToString().Select(c => c - '0').ToList();
         for (var round = 0; round < 2; round++)

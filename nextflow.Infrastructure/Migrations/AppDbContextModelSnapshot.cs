@@ -906,6 +906,54 @@ namespace Nextflow.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AiBatchSize")
+                        .HasColumnType("integer")
+                        .HasColumnName("ai_batch_size");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("ScheduleEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("schedule_enabled");
+
+                    b.Property<TimeOnly>("Time")
+                        .HasColumnType("time")
+                        .HasColumnName("time");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<byte>("Weekday")
+                        .HasColumnType("smallint")
+                        .HasColumnName("weekday");
+
+                    b.HasKey("Id")
+                        .HasName("pk_forecast_settings");
+
+                    b.HasIndex("UpdatedById")
+                        .HasDatabaseName("ix_forecast_settings_updated_by_id");
+
+                    b.ToTable("forecast_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_forecast_settings_ai_batch_size", "ai_batch_size between 1 and 100");
+
+                            t.HasCheckConstraint("ck_forecast_settings_weekday", "weekday between 0 and 6");
+                        });
+                });
+
             modelBuilder.Entity("Nextflow.Domain.Models.Lot", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2661,6 +2709,17 @@ namespace Nextflow.Infrastructure.Migrations
                         .HasConstraintName("fk_forecast_runs_user_requested_by_id");
 
                     b.Navigation("RequestedBy");
+                });
+
+            modelBuilder.Entity("Nextflow.Domain.Models.ForecastSettings", b =>
+                {
+                    b.HasOne("Nextflow.Domain.Models.User", "UpdatedBy")
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_forecast_settings_user_updated_by_id");
+
+                    b.Navigation("UpdatedBy");
                 });
 
             modelBuilder.Entity("Nextflow.Domain.Models.Lot", b =>

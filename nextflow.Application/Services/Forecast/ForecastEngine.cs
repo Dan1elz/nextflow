@@ -31,17 +31,25 @@ public class ForecastEngine(
     IForecastRecommendationRepository recommendationRepository,
     IForecastProjectionRepository projectionRepository,
     IProductRepository productRepository,
+    IForecastSettingsRepository settingsRepository,
     IUnitOfWork unitOfWork,
     IBusinessClock clock,
     IConfiguration configuration,
     ILogger<ForecastEngine> logger) : IForecastEngine
 {
-    /// <summary>Chave opcional do tamanho do lote da IA; o padrão é o N inicial de 40 (RN-DF20).</summary>
+    /// <summary>Chave opcional do tamanho do lote da IA, usada enquanto ninguém salvou o agendamento (T-DF11); o padrão é 40 (RN-DF20).</summary>
     public const string AiBatchSizeKey = "Forecast:AiBatchSize";
 
     private const int MaxErrorLength = 1000;
 
-    private int AiBatchSize => int.TryParse(configuration[AiBatchSizeKey], out var size) && size > 0 ? size : ForecastAiOrchestrator.DefaultBatchSize;
+    /// <summary>Tamanho do lote: o salvo em <c>/settings/forecast</c> (T-DF11), senão a configuração, senão 40.</summary>
+    private async Task<int> AiBatchSizeAsync(CancellationToken ct)
+    {
+        var settings = await settingsRepository.Get(_ => true, ct: ct);
+        if (settings != null)
+            return settings.AiBatchSize;
+        return int.TryParse(configuration[AiBatchSizeKey], out var size) && size > 0 ? size : ForecastAiOrchestrator.DefaultBatchSize;
+    }
 
     public async Task<ForecastRunOutcomeDto> RunAsync(Guid runId, CancellationToken ct)
     {
@@ -99,7 +107,7 @@ public class ForecastEngine(
 
         // RN-DF20: lotes sequenciais só com os produtos com venda; sem chave não há lote (RN-DF13).
         var ordered = ForecastAiPrompt.OrderForAi(results);
-        var batches = aiOrchestrator.IsConfigured ? ForecastAiOrchestrator.Split(ordered, AiBatchSize) : [];
+        var batches = aiOrchestrator.IsConfigured ? ForecastAiOrchestrator.Split(ordered, await AiBatchSizeAsync(ct)) : [];
 
         run.BeginAnalysis((short)horizon, results.Count, batches.Sum(b => b.Count), batches.Count);
         var batchRows = new List<ForecastAiBatch>(batches.Count);

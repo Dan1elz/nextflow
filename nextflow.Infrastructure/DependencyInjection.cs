@@ -2,7 +2,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Nextflow.Domain.Interfaces.Infrastructure.Repositories;
 using Nextflow.Domain.Interfaces.Infrastructure.Services;
+using Nextflow.Domain.Interfaces.Application.Services;
 using Nextflow.Infrastructure.Services;
+using Nextflow.Infrastructure.Services.Forecast;
 using Nextflow.Infrastructure.Database;
 using Nextflow.Infrastructure.Repositories;
 using Nextflow.Infrastructure.Seeders;
@@ -31,6 +33,11 @@ public static class DependencyInjection
 
         // IA da previsão (ADR 0005): HttpClient tipado; sem Ai:ApiKey o cliente fica não configurado e a análise segue só com o cálculo.
         services.AddHttpClient<IAiClient, GeminiAiClient>();
+
+        // Análise em segundo plano (RN-DF23) e agendamento semanal (RN-DF18).
+        services.AddSingleton<IForecastQueue, ForecastQueue>();
+        services.AddHostedService<ForecastRunWorker>();
+        services.AddHostedService<ForecastScheduler>();
 
         services.Scan(scan => scan
             .FromAssemblyOf<UnitOfWork>()

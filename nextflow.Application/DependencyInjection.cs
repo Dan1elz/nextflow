@@ -25,6 +25,9 @@ public static class DependencyInjection
         services.AddScoped<IDerivedDataService, DerivedDataService>();
         services.AddScoped<ForecastInputBuilder>();
         services.AddScoped<ForecastAiOrchestrator>();
+        services.AddScoped<IForecastRunLauncher, ForecastRunLauncher>();
+        services.AddScoped<IForecastRunProcessor, ForecastRunProcessor>();
+        services.AddScoped<IForecastScheduleService, ForecastScheduleService>();
         services.AddScoped<IForecastEngine, ForecastEngine>();
 
         services.Scan(scan => scan

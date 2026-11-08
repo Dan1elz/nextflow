@@ -69,6 +69,7 @@ public sealed class DemoSeedFixture : IAsyncLifetime
             builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<IFileStorage>(new InMemoryFileStorage());
+                services.AddSingleton<IDemoPhotoSource>(new FakeDemoPhotoSource(available: false)); // seed sem rede
                 configureServices?.Invoke(services);
             });
         });

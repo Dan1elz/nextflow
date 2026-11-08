@@ -91,7 +91,8 @@ docker network create nextflow-staging-network & set DB_TIMEZONE=America/Sao_Pau
 | `AI_PROVIDER`       | Provedor de IA da previsão de demanda (default `Gemini`) → `Ai__Provider` |
 | `AI_API_KEY`        | Chave da API de IA (vazio = previsão só com o cálculo, status "Concluída sem IA") → `Ai__ApiKey` |
 | `AI_MODEL`          | Modelo (default `gemini-flash-latest`) → `Ai__Model` |
-| `AI_TIMEOUT_SECONDS`| Tempo máximo da chamada à IA em segundos (default `60`) → `Ai__TimeoutSeconds` |
+| `AI_FALLBACK_MODEL` | Modelo reserva quando o principal está sobrecarregado (503/429), estoura o tempo ou não existe (404); default `gemini-flash-lite-latest` → `Ai__FallbackModel` |
+| `AI_TIMEOUT_SECONDS`| Tempo máximo de cada tentativa de chamada à IA, em segundos (default `60`) → `Ai__TimeoutSeconds` |
 
 > As variáveis `AI_*` são opcionais e valem também para o ambiente de desenvolvimento (lidas do `.env`).
 > A chave de IA nunca deve ser versionada nem logada.

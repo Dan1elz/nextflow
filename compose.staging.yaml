@@ -97,6 +97,7 @@ services:
       Ai__Provider: ${AI_PROVIDER:-Gemini}
       Ai__ApiKey: ${AI_API_KEY:-}
       Ai__Model: ${AI_MODEL:-gemini-flash-latest}
+      Ai__FallbackModel: ${AI_FALLBACK_MODEL:-gemini-flash-lite-latest}
       Ai__TimeoutSeconds: ${AI_TIMEOUT_SECONDS:-60}
     # Sem "ports": quem recebe de fora é o proxy de borda (nextflow-api.zanni.tech)
     networks:

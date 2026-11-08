@@ -19,7 +19,7 @@ Opcional: **sem `.env` valem os padrões do compose**, e é assim que o dev roda
 - `STORAGE_PORT=9000`, `STORAGE_CONSOLE_PORT=9001` e `STORAGE_PUBLIC_URL=http://localhost:9000` do exemplo trocam as
   portas padrão do storage (9010/9011). Apague essas três linhas para manter os padrões.
 - `SEED_ADMIN_PASSWORD` **não tem efeito no dev**: o compose de dev não a repassa como `Seed__Admin__Password` (só o
-  `compose.staging.yaml` e o `compose.vm-dev.yaml` fazem isso). No dev vale a senha de desenvolvimento do `UsersSeeder`.
+  `compose.staging.yaml` e o `compose.homolog.yaml` fazem isso). No dev vale a senha de desenvolvimento do `UsersSeeder`.
 - Qualquer chave no formato .NET (ex.: `Seed__Demo__HistoryMonths=6`) no `.env` chega à API pelo `env_file`.
 - `.env` antigos do v1 (outra senha de Postgres e outras portas) não servem para este compose.
 

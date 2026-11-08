@@ -1,15 +1,14 @@
-# Ambiente DEV da API nova (feat/arquitetura-atrena) na VM, atrás do proxy de borda. Convive com o staging
+# Homologação da API nova (branch homolog) na VM, atrás do proxy de borda. Convive com o staging
 # (compose.staging.yaml, projeto nextflow-backend-staging): projeto, rede, volumes e aliases do proxy são próprios.
-#   dev-nextflow.zanni.tech      → front  (alias nextflow-dev-web:80)
 #   dev-nextflow-api.zanni.tech  → API    (alias nextflow-dev-api:8080)
 #   dev-nextflow-s3.zanni.tech   → Silo   (alias nextflow-dev-s3:9000)
-# Layout na VM: <pasta>/nextflow-v2 (este repo) e <pasta>/nextflow-front-v2 (front, irmão), com .env em <pasta>/nextflow-v2.
-#   docker compose -f compose.vm-dev.yaml up -d --build
-name: nextflow-dev
+# O front sobe pelo compose.homolog.yaml do nextflow-front (dev-nextflow.zanni.tech). .env nesta pasta.
+#   docker compose -f compose.homolog.yaml up -d --build
+name: nextflow-backend-homolog
 
 services:
   postgres:
-    image: nextflow-dev-postgres:latest
+    image: nextflow-backend-postgres:homolog
     build:
       context: .
       dockerfile: Dockerfile.postgres
@@ -22,9 +21,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
     volumes:
-      - nextflow_dev_postgres_data:/var/lib/postgresql/data
+      - nextflow_homolog_postgres_data:/var/lib/postgresql/data
     networks:
-      - nextflow-dev-network
+      - nextflow-homolog-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-nextflow_db}"]
       interval: 5s
@@ -42,9 +41,9 @@ services:
       MINIO_ROOT_PASSWORD: ${STORAGE_ROOT_PASSWORD:?defina STORAGE_ROOT_PASSWORD (mínimo 8 caracteres)}
     command: server /data --console-address ":9001"
     volumes:
-      - nextflow_dev_storage_data:/data
+      - nextflow_homolog_storage_data:/data
     networks:
-      nextflow-dev-network:
+      nextflow-homolog-network:
       proxy-net:
         aliases: [nextflow-dev-s3]
     healthcheck:
@@ -67,13 +66,13 @@ services:
       STORAGE_BUCKET_PUBLIC: ${STORAGE_BUCKET_PUBLIC:-nextflow-public}
       STORAGE_BUCKET_PRIVATE: ${STORAGE_BUCKET_PRIVATE:-nextflow-private}
     networks:
-      - nextflow-dev-network
+      - nextflow-homolog-network
     depends_on:
       storage:
         condition: service_healthy
 
   backend:
-    image: nextflow-dev-backend:latest
+    image: nextflow-backend:homolog
     build:
       context: .
       dockerfile: Dockerfile
@@ -98,7 +97,7 @@ services:
       Ai__Model: ${AI_MODEL:-gemini-flash-latest}
       Ai__TimeoutSeconds: ${AI_TIMEOUT_SECONDS:-60}
     networks:
-      nextflow-dev-network:
+      nextflow-homolog-network:
       proxy-net:
         aliases: [nextflow-dev-api]
     depends_on:
@@ -107,24 +106,11 @@ services:
       storage-initial-setup:
         condition: service_completed_successfully
 
-  frontend:
-    image: nextflow-dev-front:latest
-    build:
-      context: ../nextflow-front-v2
-      dockerfile: Dockerfile
-      args:
-        # Entra no build (fica embutida no JS): mudou, tem que reconstruir a imagem (--build)
-        VITE_API_URL: ${VITE_API_URL:-https://dev-nextflow-api.zanni.tech}
-    restart: unless-stopped
-    networks:
-      proxy-net:
-        aliases: [nextflow-dev-web]
-
 networks:
-  nextflow-dev-network:
+  nextflow-homolog-network:
   proxy-net:
     external: true
 
 volumes:
-  nextflow_dev_postgres_data:
-  nextflow_dev_storage_data:
+  nextflow_homolog_postgres_data:
+  nextflow_homolog_storage_data:

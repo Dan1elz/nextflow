@@ -41,6 +41,18 @@ public interface IGetForecastRecommendationsUseCase
         string? sort = null, string? order = null, Guid? storeId = null, CancellationToken ct = default);
 }
 
+/// <summary>Quanto comprar de uma variação num local, pela IA na hora (estoque baixo do painel, RN-DF30).</summary>
+public interface IGetPurchaseSuggestionUseCase
+{
+    Task<ResultDto<PurchaseSuggestionDto>> Execute(Guid variantId, Guid locationId, bool useAi, CancellationToken ct = default);
+}
+
+/// <summary>Desconto e dias para escoar um lote num local, pela IA na hora (lotes vencendo do painel, RN-DF30).</summary>
+public interface IGetLotPromotionSuggestionUseCase
+{
+    Task<ResultDto<PromotionSuggestionDto>> Execute(Guid lotId, Guid locationId, CancellationToken ct = default);
+}
+
 /// <summary>Sugestão de divisão de uma recomendação "Comprar" entre as lojas (RN-DF27, F3.9).</summary>
 public interface IGetRecommendationStoreSplitUseCase
 {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Nextflow.Application.Forecast;
 using Nextflow.Domain.Interfaces.Infrastructure.Services;
 
 namespace Nextflow.Tests.Support;
@@ -24,6 +25,14 @@ public sealed class FakeAiClient : IAiClient
 
     public bool FailSummary { get; set; }
 
+    /// <summary>Motivo devolvido na sugestão sob demanda (RN-DF30).</summary>
+    public const string OnDemandReason = "IA: sugestão sob demanda.";
+
+    /// <summary>Resposta da sugestão sob demanda; nulo usa a padrão, que pede valores fora dos limites para provar o corte.</summary>
+    public string? OnDemandResponse { get; set; }
+
+    public int OnDemandCalls => Calls.Count(c => c == "on-demand");
+
     /// <summary>Substitui a resposta de um lote: recebe o número do lote e os ids do payload e devolve o JSON.</summary>
     public Func<int, IReadOnlyList<Guid>, string?>? BatchResponse { get; set; }
 
@@ -38,6 +47,7 @@ public sealed class FakeAiClient : IAiClient
         FailBatches.Clear();
         FailSummary = false;
         BatchResponse = null;
+        OnDemandResponse = null;
         BatchProductIds.Clear();
         Calls.Clear();
         MaxConcurrentCalls = 0;
@@ -58,6 +68,13 @@ public sealed class FakeAiClient : IAiClient
                 if (FailSummary)
                     throw new InvalidOperationException("Falha simulada no resumo.");
                 return JsonSerializer.Serialize(new { resumoGeral = SummaryText });
+            }
+
+            if (userPrompt.StartsWith(OnDemandSuggestionPrompt.UserPromptPrefix, StringComparison.Ordinal))
+            {
+                Calls.Add("on-demand");
+                return OnDemandResponse
+                    ?? JsonSerializer.Serialize(new { quantidade = 1_000_000m, descontoPct = 99m, diasPromocao = 999, motivo = OnDemandReason });
             }
 
             var number = Interlocked.Increment(ref _batchCalls);

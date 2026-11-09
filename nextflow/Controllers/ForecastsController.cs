@@ -21,6 +21,8 @@ public class ForecastsController(
     IGetForecastRecommendationsUseCase recommendationsUseCase,
     IGetForecastRecommendationUseCase recommendationUseCase,
     IGetRecommendationStoreSplitUseCase storeSplitUseCase,
+    IGetPurchaseSuggestionUseCase purchaseSuggestionUseCase,
+    IGetLotPromotionSuggestionUseCase promotionSuggestionUseCase,
     IGetProductForecastUseCase productForecastUseCase,
     IApplyPurchaseRecommendationsUseCase applyPurchaseUseCase,
     IApplyPromotionRecommendationUseCase applyPromotionUseCase,
@@ -53,6 +55,19 @@ public class ForecastsController(
     [HttpGet("recommendations/{id:guid}")]
     public async Task<IActionResult> Recommendation(Guid id, [FromQuery] Guid? storeId, CancellationToken ct)
         => Handle(await recommendationUseCase.Execute(id, storeId, ct));
+
+    // ---------------------------------------------------------------- RN-DF30: sugestão da IA na hora (painel "ver mais")
+
+    /// <summary>Quanto comprar da variação no local; <c>ai=false</c> devolve só o cálculo (sem gastar cota).</summary>
+    [HttpGet("suggestions/purchase")]
+    public async Task<IActionResult> PurchaseSuggestion(
+        [FromQuery] Guid variantId, [FromQuery] Guid locationId, [FromQuery] bool ai = true, CancellationToken ct = default)
+        => Handle(await purchaseSuggestionUseCase.Execute(variantId, locationId, ai, ct));
+
+    /// <summary>Desconto e dias para escoar o lote no local.</summary>
+    [HttpGet("suggestions/promotion")]
+    public async Task<IActionResult> PromotionSuggestion([FromQuery] Guid lotId, [FromQuery] Guid locationId, CancellationToken ct = default)
+        => Handle(await promotionSuggestionUseCase.Execute(lotId, locationId, ct));
 
     [HttpGet("recommendations/{id:guid}/store-split")]
     public async Task<IActionResult> StoreSplit(Guid id, CancellationToken ct)

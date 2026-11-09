@@ -20,6 +20,9 @@ public interface IOrderRepository : IBaseRepository<Order>
     Task<Dictionary<Guid, decimal>> GetPaidQuantityByVariant(DateTime sinceUtc, CancellationToken ct = default);
 
     /// <summary>Quantidade vendida do produto (pedidos Pagos) por loja desde o instante: participação na divisão da compra (RN-DF27).</summary>
+    /// <summary>Quantidade vendida da variação (pedidos Pagos) na loja desde o instante: ritmo da sugestão sob demanda (RN-DF30).</summary>
+    Task<decimal> GetPaidQuantityOfVariant(Guid variantId, Guid storeId, DateTime sinceUtc, CancellationToken ct = default);
+
     Task<Dictionary<Guid, decimal>> GetPaidQuantityByStore(Guid productId, DateTime sinceUtc, CancellationToken ct = default);
 
     /// <summary>Quantidade vendida (pedidos Pagos) por produto × loja desde o instante: demanda de cada local no "Transferir" (RN-DF16).</summary>

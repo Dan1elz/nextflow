@@ -37,6 +37,12 @@ public class OrderRepository(AppDbContext context) : BaseRepository<Order>(conte
             .Select(g => new { VariantId = g.Key, Quantity = g.Sum(i => i.Quantity) })
             .ToDictionaryAsync(row => row.VariantId, row => row.Quantity, ct);
 
+    public async Task<decimal> GetPaidQuantityOfVariant(Guid variantId, Guid storeId, DateTime sinceUtc, CancellationToken ct = default)
+        => await _context.Set<OrderItem>().AsNoTracking()
+            .Where(i => i.VariantId == variantId && i.Order.StoreId == storeId && i.Order.Status == OrderStatusEnum.Paid
+                && i.Order.PaidAt != null && i.Order.PaidAt >= sinceUtc)
+            .SumAsync(i => (decimal?)i.Quantity, ct) ?? 0m;
+
     public async Task<Dictionary<Guid, decimal>> GetPaidQuantityByStore(Guid productId, DateTime sinceUtc, CancellationToken ct = default)
         => await _context.Set<OrderItem>().AsNoTracking()
             .Where(i => i.Variant.ProductId == productId && i.Order.Status == OrderStatusEnum.Paid && i.Order.PaidAt != null

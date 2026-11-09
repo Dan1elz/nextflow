@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Nextflow.Domain.Dtos.Dashboard;
 using Nextflow.Domain.Dtos.Forecasts;
 using Nextflow.Domain.Dtos.PurchaseOrders;
 using Nextflow.Domain.Enums;
@@ -386,6 +387,83 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
         promotion.VariantId.ShouldBeNull();
         promotion.DiscountPercent.ShouldBe(10m);
         (await check.Set<ForecastRecommendation>().SingleAsync(r => r.Id == recommendationId)).AppliedPromotionId.ShouldBe(promotion.Id);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-DF30")]
+    public async Task Should_SuggestPurchaseWithinAiLimits_When_LowStockAsksAi()
+    {
+        var seeded = await Seed();
+        using var scope = seeded.Services.CreateScope();
+        var ai = (FakeAiClient)Use<IAiClient>(scope);
+        var useCase = Use<IGetPurchaseSuggestionUseCase>(scope);
+        var rows = (await Use<IGetLowStockSummaryUseCase>(scope).Execute(null, 200)).Data!.Items;
+        rows.ShouldNotBeEmpty();
+
+        PurchaseSuggestionDto? calculated = null;
+        LowStockItemDto? row = null;
+        foreach (var candidate in rows)
+        {
+            var result = await useCase.Execute(candidate.VariantId, candidate.LocationId, useAi: false);
+            if (result.IsSuccess && result.Data!.CalculatedQuantity > 0)
+            {
+                (calculated, row) = (result.Data, candidate);
+                break;
+            }
+        }
+        calculated.ShouldNotBeNull();
+        calculated.FromAi.ShouldBeFalse();
+        calculated.Quantity.ShouldBe(calculated.CalculatedQuantity);
+        calculated.Quantity.ShouldBeGreaterThanOrEqualTo(row!.MinQuantity - Math.Max(row.Available, 0));
+        calculated.StoreId.ShouldBe(row.StoreId);
+
+        // A IA fake pede 1.000.000: fica em 1,5× do calculado, no múltiplo do fornecedor (RN-DF12).
+        var calls = ai.OnDemandCalls;
+        var withAi = (await useCase.Execute(row.VariantId, row.LocationId, useAi: true)).Data!;
+        ai.OnDemandCalls.ShouldBe(calls + 1);
+        withAi.FromAi.ShouldBeTrue();
+        withAi.Reason.ShouldBe(FakeAiClient.OnDemandReason);
+        withAi.Quantity.ShouldBe(Nextflow.Application.Forecast.OnDemandSuggestionCalculator.ClampAiQuantity(
+            1_000_000m, calculated.CalculatedQuantity, calculated.MinOrderQty, calculated.OrderMultiple));
+
+        // Sem IA configurada, fica o cálculo (RN-DF13).
+        ai.Configured = false;
+        try
+        {
+            var noAi = (await useCase.Execute(row.VariantId, row.LocationId, useAi: true)).Data!;
+            noAi.FromAi.ShouldBeFalse();
+            noAi.Quantity.ShouldBe(calculated.CalculatedQuantity);
+        }
+        finally
+        {
+            ai.Configured = true;
+        }
+
+        (await useCase.Execute(Guid.NewGuid(), row.LocationId, useAi: false)).ErrorCode.ShouldBe(404);
+    }
+
+    [Fact]
+    [Trait("Rule", "RN-DF30")]
+    public async Task Should_SuggestLotPromotionWithinMargin_When_ExpiringLotAsksAi()
+    {
+        var seeded = await Seed();
+        using var scope = seeded.Services.CreateScope();
+        var useCase = Use<IGetLotPromotionSuggestionUseCase>(scope);
+        var lot = (await Use<IGetExpiringLotsSummaryUseCase>(scope).Execute(null, 365, limit: 200)).Data!.Items
+            .OrderBy(i => i.DaysToExpire).First();
+
+        var suggestion = (await useCase.Execute(lot.LotId, lot.LocationId)).Data!;
+
+        // A IA fake pede 99% por 999 dias: o desconto para no máximo da margem e os dias no vencimento (RN-DF12).
+        suggestion.FromAi.ShouldBeTrue();
+        suggestion.Reason.ShouldBe(FakeAiClient.OnDemandReason);
+        suggestion.DiscountPercent.ShouldBe(Math.Max(5m, suggestion.MaxDiscountPercent));
+        suggestion.PromotionDays.ShouldBe(Nextflow.Application.Forecast.OnDemandSuggestionCalculator.PromotionDays(999, lot.DaysToExpire));
+        suggestion.CalculatedDiscountPercent.ShouldBeInRange(5m, Math.Max(5m, Math.Min(25m, suggestion.MaxDiscountPercent)));
+        suggestion.Quantity.ShouldBe(lot.Quantity);
+        suggestion.StoreId.ShouldBe(lot.StoreId);
+
+        (await useCase.Execute(lot.LotId, Guid.NewGuid())).ErrorCode.ShouldBe(404);
     }
 
     [Fact]

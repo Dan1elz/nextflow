@@ -38,6 +38,9 @@ public sealed class FakeAiClient : IAiClient
 
     public List<IReadOnlyList<Guid>> BatchProductIds { get; } = [];
     public List<string> Calls { get; } = [];
+
+    /// <summary>Prompts recebidos, na ordem: os testes de contrato conferem os campos enviados (LGPD).</summary>
+    public List<string> UserPrompts { get; } = [];
     public int MaxConcurrentCalls { get; private set; }
     public int SummaryCalls => Calls.Count(c => c == "summary");
 
@@ -50,12 +53,15 @@ public sealed class FakeAiClient : IAiClient
         OnDemandResponse = null;
         BatchProductIds.Clear();
         Calls.Clear();
+        UserPrompts.Clear();
         MaxConcurrentCalls = 0;
         _batchCalls = 0;
     }
 
     public async Task<string> GenerateJsonAsync(string systemPrompt, string userPrompt, object responseSchema, CancellationToken ct)
     {
+        lock (UserPrompts)
+            UserPrompts.Add(userPrompt);
         var inFlight = Interlocked.Increment(ref _inFlight);
         MaxConcurrentCalls = Math.Max(MaxConcurrentCalls, inFlight);
         try

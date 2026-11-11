@@ -422,6 +422,9 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
         var withAi = (await useCase.Execute(row.VariantId, row.LocationId, useAi: true)).Data!;
         ai.OnDemandCalls.ShouldBe(calls + 1);
         withAi.FromAi.ShouldBeTrue();
+        var sent = AiPayloadContract.PayloadOf(ai.UserPrompts[^1]);
+        AiPayloadContract.Keys(sent).ShouldBe(AiPayloadContract.OnDemandPurchase, ignoreOrder: true);
+        AiPayloadContract.PersonalDataKeys(sent).ShouldBeEmpty();
         withAi.Reason.ShouldBe(FakeAiClient.OnDemandReason);
         withAi.Quantity.ShouldBe(Nextflow.Application.Forecast.OnDemandSuggestionCalculator.ClampAiQuantity(
             1_000_000m, calculated.CalculatedQuantity, calculated.MinOrderQty, calculated.OrderMultiple));
@@ -448,6 +451,7 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
     {
         var seeded = await Seed();
         using var scope = seeded.Services.CreateScope();
+        var ai = (FakeAiClient)Use<IAiClient>(scope);
         var useCase = Use<IGetLotPromotionSuggestionUseCase>(scope);
         var lot = (await Use<IGetExpiringLotsSummaryUseCase>(scope).Execute(null, 365, limit: 200)).Data!.Items
             .OrderBy(i => i.DaysToExpire).First();
@@ -456,6 +460,9 @@ public class ForecastActionsTests(DemoSeedFixture fixture)
 
         // A IA fake pede 99% por 999 dias: o desconto para no máximo da margem e os dias no vencimento (RN-DF12).
         suggestion.FromAi.ShouldBeTrue();
+        var sent = AiPayloadContract.PayloadOf(ai.UserPrompts[^1]);
+        AiPayloadContract.Keys(sent).ShouldBe(AiPayloadContract.OnDemandPromotion, ignoreOrder: true);
+        AiPayloadContract.PersonalDataKeys(sent).ShouldBeEmpty();
         suggestion.Reason.ShouldBe(FakeAiClient.OnDemandReason);
         suggestion.DiscountPercent.ShouldBe(Math.Max(5m, suggestion.MaxDiscountPercent));
         suggestion.PromotionDays.ShouldBe(Nextflow.Application.Forecast.OnDemandSuggestionCalculator.PromotionDays(999, lot.DaysToExpire));
